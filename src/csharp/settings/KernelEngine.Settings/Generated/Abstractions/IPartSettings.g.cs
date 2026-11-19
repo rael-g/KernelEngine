@@ -39,4 +39,13 @@ public interface IPartSettings : IDisposable
     /// <param name="each">Called once per key.</param>
     /// <exception cref="Exception">The native call failed.</exception>
     void ForEachKey(SettingsKey? each);
+    /// <summary>Gives the settings nested under name, empty when nothing is.</summary>
+    /// <param name="name">The child's name.</param>
+    /// <returns>Receives the child, lent while these settings live.</returns>
+    /// <exception cref="Exception">The native call failed.</exception>
+    IPartSettings Child(string name);
+    /// <summary>Calls each once for every child that holds a key or a child of its own, in the order it was first written.</summary>
+    /// <param name="each">Called once per child, with its name.</param>
+    /// <exception cref="Exception">The native call failed.</exception>
+    void ForEachChild(SettingsKey? each);
 }

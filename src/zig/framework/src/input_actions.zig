@@ -1,10 +1,11 @@
 //! The input action maps: named actions grouped in prioritised maps, bound to keys and mouse
 //! buttons, evaluated once per frame against an input snapshot and polled by a game; the factory
-//! adds the maps a configuration describes through the same slots a program calls.
+//! adds the maps its settings describe through the same slots a program calls.
 
 const abi_input_actions = @import("abi_input_actions");
 const abi_framework_factory = @import("abi_framework_factory");
-const abi_configuration = @import("abi_configuration");
+const abi_settings = @import("abi_settings");
+const settings_schema = @import("settings_schema");
 const std = @import("std");
 
 const abi_input = @import("abi_input");
@@ -500,101 +501,104 @@ fn vtDestroy(self_in: ?*abi_input_actions.c.ke_input_actions) callconv(.c) void 
     heap.gpa.destroy(s);
 }
 
-/// What a walk of the configuration reads from and where it adds, and the first failure it met.
+/// Where a walk of the settings adds, and the first failure it met.
 const Reader = struct {
     api: *abi_input_actions.c.ke_input_actions,
-    cfg: *abi_configuration.c.ke_configuration,
     failure: ?R.Error = null,
 
     fn fail(r: *Reader, err: R.Error, comptime fmt: []const u8, args: anytype) void {
         log.warn(fmt, args);
         if (r.failure == null) r.failure = err;
     }
-
-    fn string(r: *Reader, section: [:0]const u8, key: [*:0]const u8) ?[*:0]const u8 {
-        const v = r.cfg.get_string.?(r.cfg, section.ptr, key, null);
-        return if (v == null) null else @ptrCast(v);
-    }
 };
 
-/// What one level of the walk lists the children of.
+/// One level of the walk: the settings whose children it lists, named for the log.
 const Walk = struct {
     reader: *Reader,
-    parent: [:0]const u8,
+    settings: *abi_settings.c.ke_settings,
     map: i32 = -1,
     action: i32 = -1,
 };
 
-fn listChildren(w: *Walk, comptime each: fn (*Walk, [:0]const u8) void) void {
-    if (w.reader.failure != null) return;
-    const Thunk = struct {
-        fn call(name: [*c]const u8, ctx: ?*anyopaque) callconv(.c) void {
-            const walk: *Walk = @ptrCast(@alignCast(ctx.?));
-            if (walk.reader.failure != null) return;
-            each(walk, std.mem.span(@as([*:0]const u8, @ptrCast(name))));
-        }
-    };
-    R.check(w.reader.cfg.for_each_child.?(w.reader.cfg, w.parent.ptr, Thunk.call, w)) catch |err|
-        w.reader.fail(err, "listing {s} failed: {t}", .{ w.parent, err });
+fn string(settings: *abi_settings.c.ke_settings, key: [*:0]const u8) ?[*:0]const u8 {
+    var v: ?[*:0]const u8 = null;
+    if (settings.get_string.?(settings, key, &v) != R.ok) return null;
+    return v;
 }
 
-fn childSection(w: *Walk, a: []const u8, b: []const u8) ?[:0]u8 {
-    return std.fmt.allocPrintSentinel(heap.gpa, "{s}.{s}{s}", .{ w.parent, a, b }, 0) catch {
-        w.reader.fail(error.OutOfMemory, "reading the input maps ran out of memory", .{});
+fn integer(settings: *abi_settings.c.ke_settings, key: [*:0]const u8, fallback: i64) i64 {
+    var v: i64 = fallback;
+    _ = settings.get_int.?(settings, key, &v);
+    return v;
+}
+
+fn boolean(settings: *abi_settings.c.ke_settings, key: [*:0]const u8, fallback: bool) bool {
+    var v: bool = fallback;
+    _ = settings.get_bool.?(settings, key, &v);
+    return v;
+}
+
+fn childOf(r: *Reader, settings: *abi_settings.c.ke_settings, name: [*:0]const u8) ?*abi_settings.c.ke_settings {
+    var out: ?*abi_settings.c.ke_settings = null;
+    R.check(settings.child.?(settings, name, &out)) catch |err| {
+        r.fail(err, "reading the input maps failed: {t}", .{err});
         return null;
     };
+    return out;
 }
 
-fn readMap(w: *Walk, name: [:0]const u8) void {
+fn listChildren(w: *Walk, comptime each: fn (*Walk, [:0]const u8, *abi_settings.c.ke_settings) void) void {
+    if (w.reader.failure != null) return;
+    const Thunk = struct {
+        fn call(name: ?[*:0]const u8, ctx: ?*anyopaque) callconv(.c) void {
+            const walk: *Walk = @ptrCast(@alignCast(ctx.?));
+            if (walk.reader.failure != null) return;
+            const child = childOf(walk.reader, walk.settings, name.?) orelse return;
+            each(walk, std.mem.span(name.?), child);
+        }
+    };
+    R.check(w.settings.for_each_child.?(w.settings, Thunk.call, w)) catch |err|
+        w.reader.fail(err, "listing the input maps failed: {t}", .{err});
+}
+
+fn readMap(w: *Walk, name: [:0]const u8, map_settings: *abi_settings.c.ke_settings) void {
     const r = w.reader;
-    const section = childSection(w, name, "") orelse return;
-    defer heap.gpa.free(section);
-    const priority = r.cfg.get_int.?(r.cfg, section.ptr, "priority", 0);
+    const priority = integer(map_settings, "priority", 0);
     const map = r.api.add_map.?(r.api, name.ptr, @intCast(std.math.clamp(priority, std.math.minInt(i32), std.math.maxInt(i32))));
     if (map < 0) return r.fail(error.InvalidArgument, "input map '{s}' could not be added", .{name});
-    if (!r.cfg.get_bool.?(r.cfg, section.ptr, "enabled", true)) _ = r.api.set_map_enabled.?(r.api, map, false);
-    const actions = std.fmt.allocPrintSentinel(heap.gpa, "{s}.action", .{section}, 0) catch
-        return r.fail(error.OutOfMemory, "reading the input maps ran out of memory", .{});
-    defer heap.gpa.free(actions);
-    var inner: Walk = .{ .reader = r, .parent = actions, .map = map };
+    if (!boolean(map_settings, "enabled", true)) _ = r.api.set_map_enabled.?(r.api, map, false);
+    var inner: Walk = .{ .reader = r, .settings = childOf(r, map_settings, "action") orelse return, .map = map };
     listChildren(&inner, readAction);
 }
 
-fn readAction(w: *Walk, name: [:0]const u8) void {
+fn readAction(w: *Walk, name: [:0]const u8, action_settings: *abi_settings.c.ke_settings) void {
     const r = w.reader;
-    const section = childSection(w, name, "") orelse return;
-    defer heap.gpa.free(section);
     var action_type: abi_input_actions.c.ke_action_type = abi_input_actions.c.KE_ACTION_TYPE_BUTTON;
-    if (r.string(section, "type")) |t| action_type = parseActionType(t) orelse
+    if (string(action_settings, "type")) |t| action_type = parseActionType(t) orelse
         return r.fail(error.InvalidArgument, "action '{s}': '{s}' is not an action type", .{ name, t });
     const action = r.api.add_action.?(r.api, w.map, name.ptr, action_type);
     if (action < 0) return r.fail(error.InvalidArgument, "action '{s}' could not be added", .{name});
-    const bindings = std.fmt.allocPrintSentinel(heap.gpa, "{s}.bindings", .{section}, 0) catch
-        return r.fail(error.OutOfMemory, "reading the input maps ran out of memory", .{});
-    defer heap.gpa.free(bindings);
-    var inner: Walk = .{ .reader = r, .parent = bindings, .map = w.map, .action = action };
+    var inner: Walk = .{ .reader = r, .settings = childOf(r, action_settings, "bindings") orelse return, .map = w.map, .action = action };
     listChildren(&inner, readBinding);
 }
 
-fn keyOf(r: *Reader, section: [:0]const u8, key: [*:0]const u8) ?abi_input.c.ke_key {
-    const name = r.string(section, key) orelse {
-        r.fail(error.InvalidArgument, "binding {s} has no {s}", .{ section, key });
+fn keyOf(r: *Reader, section: *abi_settings.c.ke_settings, key: [*:0]const u8) ?abi_input.c.ke_key {
+    const name = string(section, key) orelse {
+        r.fail(error.InvalidArgument, "a binding has no {s}", .{key});
         return null;
     };
     const code = lookupKey(name);
     if (code < 0) {
-        r.fail(error.InvalidArgument, "binding {s}: '{s}' is not a key name", .{ section, name });
+        r.fail(error.InvalidArgument, "a binding: '{s}' is not a key name", .{name});
         return null;
     }
     return @intCast(code);
 }
 
-fn readBinding(w: *Walk, index: [:0]const u8) void {
+fn readBinding(w: *Walk, index: [:0]const u8, section: *abi_settings.c.ke_settings) void {
     const r = w.reader;
-    const section = childSection(w, index, "") orelse return;
-    defer heap.gpa.free(section);
-    const kind = std.mem.span(r.string(section, "kind") orelse
-        return r.fail(error.InvalidArgument, "binding {s} has no kind", .{section}));
+    const kind = std.mem.span(string(section, "kind") orelse
+        return r.fail(error.InvalidArgument, "binding {s} has no kind", .{index}));
     const a = w.action;
     const result = if (std.mem.eql(u8, kind, "key"))
         r.api.bind_key.?(r.api, a, keyOf(r, section, "key") orelse return)
@@ -603,12 +607,12 @@ fn readBinding(w: *Walk, index: [:0]const u8) void {
     else if (std.mem.eql(u8, kind, "key_quad"))
         r.api.bind_key_quad.?(r.api, a, keyOf(r, section, "up") orelse return, keyOf(r, section, "down") orelse return, keyOf(r, section, "left") orelse return, keyOf(r, section, "right") orelse return)
     else if (std.mem.eql(u8, kind, "mouse")) blk: {
-        const name = r.string(section, "button") orelse return r.fail(error.InvalidArgument, "binding {s} has no button", .{section});
+        const name = string(section, "button") orelse return r.fail(error.InvalidArgument, "binding {s} has no button", .{index});
         const code = lookupMouseButton(name);
-        if (code < 0) return r.fail(error.InvalidArgument, "binding {s}: '{s}' is not a mouse button name", .{ section, name });
+        if (code < 0) return r.fail(error.InvalidArgument, "binding {s}: '{s}' is not a mouse button name", .{ index, name });
         break :blk r.api.bind_mouse_button.?(r.api, a, @intCast(code));
-    } else return r.fail(error.InvalidArgument, "binding {s}: '{s}' is not a binding kind", .{ section, kind });
-    R.check(result) catch |err| r.fail(err, "binding {s} could not be added: {t}", .{ section, err });
+    } else return r.fail(error.InvalidArgument, "binding {s}: '{s}' is not a binding kind", .{ index, kind });
+    R.check(result) catch |err| r.fail(err, "binding {s} could not be added: {t}", .{ index, err });
 }
 
 /// The system the module registers: it advances the input's frame and evaluates the maps against
@@ -685,16 +689,21 @@ export fn ke_input_actions_evaluation_create(
     return R.ok;
 }
 
-/// Factory. Builds an empty set of maps, then adds those the configuration describes through the
+/// The settings' own shape: no key, and the maps under the child `map`.
+const Settings = struct {
+    pub const children = .{"map"};
+};
+
+/// Factory. Builds an empty set of maps, then adds those the settings describe through the
 /// vtable's own slots; any failure frees what was built and leaves the handle zeroed.
 export fn ke_input_actions_create(
-    configuration: ?*abi_configuration.c.ke_configuration,
-    section_in: ?[*:0]const u8,
+    settings_in: ?*abi_settings.c.ke_settings,
     out_actions: ?*abi_input_actions.c.ke_input_actions_handle,
 ) callconv(.c) abi_result.c.ke_result {
     const out = out_actions orelse return R.code(error.InvalidArgument);
     out.* = std.mem.zeroes(abi_input_actions.c.ke_input_actions_handle);
-    const section = section_in orelse return R.code(error.InvalidArgument);
+    const settings = settings_in orelse return R.code(error.InvalidArgument);
+    _ = settings_schema.read(Settings, settings) catch |err| return R.code(err);
 
     const s = heap.gpa.create(State) catch |err| return R.code(err);
     s.* = .{ .api = std.mem.zeroes(abi_input_actions.c.ke_input_actions) };
@@ -717,20 +726,14 @@ export fn ke_input_actions_create(
     s.api.get_axis2d = vtGetAxis2d;
     s.api.get_axis3d = vtGetAxis3d;
 
-    if (configuration) |cfg| {
-        const section_name: [*:0]const u8 = section;
-        const maps = std.fmt.allocPrintSentinel(heap.gpa, "{s}.map", .{std.mem.span(section_name)}, 0) catch {
-            vtDestroy(&s.api);
-            return R.code(error.OutOfMemory);
-        };
-        defer heap.gpa.free(maps);
-        var reader: Reader = .{ .api = &s.api, .cfg = cfg };
-        var walk: Walk = .{ .reader = &reader, .parent = maps };
+    var reader: Reader = .{ .api = &s.api };
+    if (childOf(&reader, settings, "map")) |maps| {
+        var walk: Walk = .{ .reader = &reader, .settings = maps };
         listChildren(&walk, readMap);
-        if (reader.failure) |err| {
-            vtDestroy(&s.api);
-            return R.code(err);
-        }
+    }
+    if (reader.failure) |err| {
+        vtDestroy(&s.api);
+        return R.code(err);
     }
 
     out.* = .{ .ref = &s.api, .destroy = vtDestroy };
@@ -739,64 +742,101 @@ export fn ke_input_actions_create(
 
 const testing = std.testing;
 
-const FakeConfig = struct {
+/// A `ke_settings` tree over entries named by their full section, viewed from `input`.
+const FakeSettings = struct {
     const Value = union(enum) { str: [*:0]const u8, int: i64, boolean: bool };
     const Entry = struct { section: []const u8, key: []const u8, value: Value };
+    const View = struct { api: abi_settings.c.ke_settings, prefix: [128]u8 = undefined, len: usize = 0 };
 
     var entries: []const Entry = &.{};
+    var views: [64]View = undefined;
+    var view_count: usize = 0;
 
-    fn api(with: []const Entry) abi_configuration.c.ke_configuration {
+    fn root(with: []const Entry) *abi_settings.c.ke_settings {
         entries = with;
-        var cfg = std.mem.zeroes(abi_configuration.c.ke_configuration);
-        cfg.get_string = getString;
-        cfg.get_int = getInt;
-        cfg.get_bool = getBool;
-        cfg.for_each_child = forEachChild;
-        return cfg;
+        view_count = 0;
+        return make("input");
     }
 
-    fn find(section: [*c]const u8, key: [*c]const u8) ?Value {
+    fn make(prefix: []const u8) *abi_settings.c.ke_settings {
+        const v = &views[view_count];
+        view_count += 1;
+        v.* = .{ .api = std.mem.zeroes(abi_settings.c.ke_settings) };
+        v.api.get_string = getString;
+        v.api.get_int = getInt;
+        v.api.get_bool = getBool;
+        v.api.for_each_key = forEachKey;
+        v.api.child = child;
+        v.api.for_each_child = forEachChild;
+        @memcpy(v.prefix[0..prefix.len], prefix);
+        v.len = prefix.len;
+        return &v.api;
+    }
+
+    fn prefixOf(self: ?*abi_settings.c.ke_settings) []const u8 {
+        const v: *View = @fieldParentPtr("api", self.?);
+        return v.prefix[0..v.len];
+    }
+
+    fn find(self: ?*abi_settings.c.ke_settings, key: ?[*:0]const u8) ?Value {
         for (entries) |e| {
-            if (std.mem.eql(u8, e.section, std.mem.span(section)) and std.mem.eql(u8, e.key, std.mem.span(key))) return e.value;
+            if (std.mem.eql(u8, e.section, prefixOf(self)) and std.mem.eql(u8, e.key, std.mem.span(key.?))) return e.value;
         }
         return null;
     }
 
-    fn getString(_: [*c]abi_configuration.c.ke_configuration, section: [*c]const u8, key: [*c]const u8, fallback: [*c]const u8) callconv(.c) [*c]const u8 {
-        return if (find(section, key)) |v| switch (v) {
-            .str => |s| s,
-            else => fallback,
-        } else fallback;
+    fn getString(self: ?*abi_settings.c.ke_settings, key: ?[*:0]const u8, out: ?*?[*:0]const u8) callconv(.c) abi_result.c.ke_result {
+        const v = find(self, key) orelse return R.code(error.NotFound);
+        if (v != .str) return R.code(error.InvalidArgument);
+        out.?.* = v.str;
+        return R.ok;
     }
 
-    fn getInt(_: [*c]abi_configuration.c.ke_configuration, section: [*c]const u8, key: [*c]const u8, fallback: i64) callconv(.c) i64 {
-        return if (find(section, key)) |v| switch (v) {
-            .int => |i| i,
-            else => fallback,
-        } else fallback;
+    fn getInt(self: ?*abi_settings.c.ke_settings, key: ?[*:0]const u8, out: ?*i64) callconv(.c) abi_result.c.ke_result {
+        const v = find(self, key) orelse return R.code(error.NotFound);
+        if (v != .int) return R.code(error.InvalidArgument);
+        out.?.* = v.int;
+        return R.ok;
     }
 
-    fn getBool(_: [*c]abi_configuration.c.ke_configuration, section: [*c]const u8, key: [*c]const u8, fallback: bool) callconv(.c) bool {
-        return if (find(section, key)) |v| switch (v) {
-            .boolean => |b| b,
-            else => fallback,
-        } else fallback;
+    fn getBool(self: ?*abi_settings.c.ke_settings, key: ?[*:0]const u8, out: ?*bool) callconv(.c) abi_result.c.ke_result {
+        const v = find(self, key) orelse return R.code(error.NotFound);
+        if (v != .boolean) return R.code(error.InvalidArgument);
+        out.?.* = v.boolean;
+        return R.ok;
     }
 
-    fn forEachChild(_: [*c]abi_configuration.c.ke_configuration, section: [*c]const u8, each: abi_configuration.c.ke_configuration_child_func, ctx: ?*anyopaque) callconv(.c) abi_result.c.ke_result {
-        const parent = std.mem.span(section);
+    fn forEachKey(self: ?*abi_settings.c.ke_settings, each: abi_settings.c.ke_settings_key_func, ctx: ?*anyopaque) callconv(.c) abi_result.c.ke_result {
+        var buf: [64]u8 = undefined;
+        for (entries) |e| if (std.mem.eql(u8, e.section, prefixOf(self))) {
+            @memcpy(buf[0..e.key.len], e.key);
+            buf[e.key.len] = 0;
+            each.?(@ptrCast(&buf), ctx);
+        };
+        return R.ok;
+    }
+
+    fn child(self: ?*abi_settings.c.ke_settings, name: ?[*:0]const u8, out: ?*?*abi_settings.c.ke_settings) callconv(.c) abi_result.c.ke_result {
+        var buf: [128]u8 = undefined;
+        const full = std.fmt.bufPrint(&buf, "{s}.{s}", .{ prefixOf(self), std.mem.span(name.?) }) catch return R.code(error.OutOfMemory);
+        out.?.* = make(full);
+        return R.ok;
+    }
+
+    fn forEachChild(self: ?*abi_settings.c.ke_settings, each: abi_settings.c.ke_settings_key_func, ctx: ?*anyopaque) callconv(.c) abi_result.c.ke_result {
+        const parent = prefixOf(self);
         var seen: [16][]const u8 = undefined;
         var count: usize = 0;
         outer: for (entries) |e| {
             if (e.section.len <= parent.len + 1 or !std.mem.startsWith(u8, e.section, parent) or e.section[parent.len] != '.') continue;
             const rest = e.section[parent.len + 1 ..];
-            const child = rest[0 .. std.mem.indexOfScalar(u8, rest, '.') orelse rest.len];
-            for (seen[0..count]) |n| if (std.mem.eql(u8, n, child)) continue :outer;
-            seen[count] = child;
+            const name = rest[0 .. std.mem.indexOfScalar(u8, rest, '.') orelse rest.len];
+            for (seen[0..count]) |n| if (std.mem.eql(u8, n, name)) continue :outer;
+            seen[count] = name;
             count += 1;
             var buf: [64]u8 = undefined;
-            @memcpy(buf[0..child.len], child);
-            buf[child.len] = 0;
+            @memcpy(buf[0..name.len], name);
+            buf[name.len] = 0;
             each.?(@ptrCast(&buf), ctx);
         }
         return R.ok;
@@ -808,14 +848,13 @@ const Actions = struct {
 
     fn init() !Actions {
         var h = std.mem.zeroes(abi_input_actions.c.ke_input_actions_handle);
-        try testing.expectEqual(R.ok, ke_input_actions_create(null, "input", &h));
+        try testing.expectEqual(R.ok, ke_input_actions_create(FakeSettings.root(&.{}), &h));
         return .{ .handle = h };
     }
 
-    fn from(entries: []const FakeConfig.Entry) !Actions {
-        var cfg = FakeConfig.api(entries);
+    fn from(entries: []const FakeSettings.Entry) !Actions {
         var h = std.mem.zeroes(abi_input_actions.c.ke_input_actions_handle);
-        try R.check(ke_input_actions_create(&cfg, "input", &h));
+        try R.check(ke_input_actions_create(FakeSettings.root(entries), &h));
         return .{ .handle = h };
     }
 
@@ -977,16 +1016,15 @@ test "the maps, actions and bindings a configuration describes are added through
 }
 
 test "a misspelt key, an unknown kind or type, or a binding missing a key fails the create" {
-    const cases = [_][]const FakeConfig.Entry{
+    const cases = [_][]const FakeSettings.Entry{
         &.{ .{ .section = "input.map.G.action.J.bindings.0", .key = "kind", .value = .{ .str = "key" } }, .{ .section = "input.map.G.action.J.bindings.0", .key = "key", .value = .{ .str = "Spcae" } } },
         &.{.{ .section = "input.map.G.action.J.bindings.0", .key = "kind", .value = .{ .str = "chord" } }},
         &.{.{ .section = "input.map.G.action.J", .key = "type", .value = .{ .str = "Axis4D" } }},
         &.{.{ .section = "input.map.G.action.J.bindings.0", .key = "kind", .value = .{ .str = "key_pair" } }},
     };
     for (cases) |entries| {
-        var cfg = FakeConfig.api(entries);
         var h = std.mem.zeroes(abi_input_actions.c.ke_input_actions_handle);
-        try testing.expectError(error.InvalidArgument, R.check(ke_input_actions_create(&cfg, "input", &h)));
+        try testing.expectError(error.InvalidArgument, R.check(ke_input_actions_create(FakeSettings.root(entries), &h)));
         try testing.expect(h.ref == null);
     }
 }

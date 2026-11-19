@@ -7,9 +7,11 @@ const abi_result = @import("result");
 /// Receives one key the settings hold.
 pub const ke_settings_key_func = ?*const fn (?[*:0]const u8, ?*anyopaque) callconv(.c) void;
 
-/// The values one part is created with, each under a key and of one type. A part reads them
-/// once, when it is created; a value that changes afterwards is a slot of the part's own
-/// contract.
+/// The values one part is created with, each under a key and of one type, and the settings
+/// nested under it, each under a name. A list of values is a key per element, named by its index
+/// after a dot ("tint.0"); a list of tables is a child per element, named by its index ("0"). A
+/// part reads them once, when it is created; a value that changes afterwards is a slot of the
+/// part's own contract.
 pub const ke_settings = extern struct {
     handle: ?*anyopaque = std.mem.zeroes(?*anyopaque),
     /// Reads a boolean.
@@ -22,4 +24,9 @@ pub const ke_settings = extern struct {
     get_string: ?*const fn (?*ke_settings, ?[*:0]const u8, ?*?[*:0]const u8) callconv(.c) abi_result.c.ke_result = null,
     /// Calls each once for every key that holds a value, in no particular order.
     for_each_key: ?*const fn (?*ke_settings, ke_settings_key_func, ?*anyopaque) callconv(.c) abi_result.c.ke_result = null,
+    /// Gives the settings nested under name, empty when nothing is.
+    child: ?*const fn (?*ke_settings, ?[*:0]const u8, ?*?*ke_settings) callconv(.c) abi_result.c.ke_result = null,
+    /// Calls each once for every child that holds a key or a child of its own, in the order it was
+    /// first written.
+    for_each_child: ?*const fn (?*ke_settings, ke_settings_key_func, ?*anyopaque) callconv(.c) abi_result.c.ke_result = null,
 };

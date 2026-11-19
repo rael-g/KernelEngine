@@ -75,42 +75,60 @@ fn destroy(self: ?*c.ke_runner) callconv(.c) void {
     gpa.destroy(s);
 }
 
-/// The runner's settings, with this implementation's defaults.
+/// The runner's settings, with this implementation's defaults; the script is the child `script`.
 const Settings = struct {
     frames: u64 = 60,
     dt: f32 = 1.0 / 60.0,
-    script: [:0]const u8 = "",
 
     pub const ranges = .{ .frames = .{ 0, std.math.maxInt(i64) }, .dt = .{ std.math.floatMin(f64), std.math.floatMax(f64) } };
+    pub const children = .{"script"};
 };
 
-/// The entries of `text`, sorted by frame, those of one frame in the order written.
-fn parse(text: []const u8) R.Error![]Entry {
-    var entries: std.ArrayList(Entry) = .empty;
-    errdefer entries.deinit(gpa);
-    var each = std.mem.splitScalar(u8, text, ';');
-    while (each.next()) |raw| {
-        const entry = std.mem.trim(u8, raw, " \t\r\n");
-        if (entry.len == 0) continue;
-        var words = std.mem.tokenizeAny(u8, entry, " \t");
-        const frame_word = words.next() orelse return reject(error.InvalidArgument, "script entry '{s}' has no frame", .{entry});
-        const key_word = words.next() orelse return reject(error.InvalidArgument, "script entry '{s}' has no key", .{entry});
-        const action_word = words.next() orelse return reject(error.InvalidArgument, "script entry '{s}' has no action", .{entry});
-        if (words.next() != null) return reject(error.InvalidArgument, "script entry '{s}' has more than a frame, a key and an action", .{entry});
-        const frame = std.fmt.parseInt(u64, frame_word, 10) catch return reject(error.InvalidArgument, "script entry '{s}': '{s}' is not a frame", .{ entry, frame_word });
-        const key = input_names.key(key_word) orelse return reject(error.InvalidArgument, "script entry '{s}': '{s}' names no key", .{ entry, key_word });
-        const action: c_int = if (std.mem.eql(u8, action_word, "down"))
-            abi_input.c.KE_INPUT_ACTION_PRESS
-        else if (std.mem.eql(u8, action_word, "up"))
-            abi_input.c.KE_INPUT_ACTION_RELEASE
-        else
-            return reject(error.InvalidArgument, "script entry '{s}': '{s}' is neither down nor up", .{ entry, action_word });
-        try entries.append(gpa, .{ .frame = frame, .key = key, .action = action });
-    }
-    const sorted = try entries.toOwnedSlice(gpa);
+/// One entry of the script, as written.
+const Written = struct {
+    frame: ?u64 = null,
+    key: ?[:0]const u8 = null,
+    action: ?enum { down, up } = null,
+};
+
+/// The entries the children of `script` describe, sorted by frame, those of one frame in the order
+/// written.
+fn parse(script: *abi_settings.c.ke_settings) R.Error![]Entry {
+    const Collect = struct {
+        script: *abi_settings.c.ke_settings,
+        entries: std.ArrayList(Entry) = .empty,
+        failure: ?R.Error = null,
+
+        fn each(name: ?[*:0]const u8, ctx: ?*anyopaque) callconv(.c) void {
+            const self: *@This() = @ptrCast(@alignCast(ctx));
+            if (self.failure == null) self.add(name.?) catch |err| {
+                self.failure = err;
+            };
+        }
+
+        fn add(self: *@This(), name: [*:0]const u8) R.Error!void {
+            var child: ?*abi_settings.c.ke_settings = null;
+            try R.check(self.script.child.?(self.script, name, &child));
+            const w = try settings_schema.read(Written, child.?);
+            const frame = w.frame orelse return reject(error.InvalidArgument, "script entry {s} has no frame", .{name});
+            const key_name = w.key orelse return reject(error.InvalidArgument, "script entry {s} has no key", .{name});
+            const written = w.action orelse return reject(error.InvalidArgument, "script entry {s} has no action", .{name});
+            const key = input_names.key(key_name) orelse return reject(error.InvalidArgument, "script entry {s}: '{s}' names no key", .{ name, key_name });
+            const action: c_int = switch (written) {
+                .down => abi_input.c.KE_INPUT_ACTION_PRESS,
+                .up => abi_input.c.KE_INPUT_ACTION_RELEASE,
+            };
+            try self.entries.append(gpa, .{ .frame = frame, .key = key, .action = action });
+        }
+    };
+    var collect: Collect = .{ .script = script };
+    errdefer collect.entries.deinit(gpa);
+    try R.check(script.for_each_child.?(script, Collect.each, &collect));
+    if (collect.failure) |err| return err;
+    const sorted = try collect.entries.toOwnedSlice(gpa);
     std.sort.insertion(Entry, sorted, {}, struct {
-        fn lessThan(_: void, a: Entry, b: Entry) bool {
-            return a.frame < b.frame;
+        fn lessThan(_: void, a_: Entry, b_: Entry) bool {
+            return a_.frame < b_.frame;
         }
     }.lessThan);
     return sorted;
@@ -122,8 +140,11 @@ export fn ke_runner_headless_create(scheduler: ?*abi_scheduler.c.ke_scheduler, i
     out.* = .{};
     const sched = scheduler orelse return failed("ke_runner_headless_create", reject(error.InvalidArgument, "a runner needs a scheduler", .{}));
     const in = input orelse return failed("ke_runner_headless_create", reject(error.InvalidArgument, "a runner needs an input", .{}));
-    const cfg = settings_schema.read(Settings, settings orelse return failed("ke_runner_headless_create", reject(error.InvalidArgument, "a runner needs its settings", .{}))) catch |err| return failed("ke_runner_headless_create", err);
-    const script = parse(cfg.script) catch |err| return failed("ke_runner_headless_create", err);
+    const given = settings orelse return failed("ke_runner_headless_create", reject(error.InvalidArgument, "a runner needs its settings", .{}));
+    const cfg = settings_schema.read(Settings, given) catch |err| return failed("ke_runner_headless_create", err);
+    var script_settings: ?*abi_settings.c.ke_settings = null;
+    R.check(given.child.?(given, "script", &script_settings)) catch |err| return failed("ke_runner_headless_create", err);
+    const script = parse(script_settings.?) catch |err| return failed("ke_runner_headless_create", err);
     const s = gpa.create(State) catch |err| {
         gpa.free(script);
         return failed("ke_runner_headless_create", err);
@@ -185,13 +206,17 @@ const Rig = struct {
     handle: c.ke_runner_handle = undefined,
 
     fn init(r: *Rig, pairs: []const settings_schema.Pair) !void {
+        return r.initTree(pairs, &.{});
+    }
+
+    fn initTree(r: *Rig, pairs: []const settings_schema.Pair, children: []const settings_schema.Child) !void {
         seen = .{};
         try r.sched.init();
         try r.input.init();
         watched = &r.input;
         _ = r.sched.when(.tick).does(tickSeen);
         _ = r.sched.when(.exit_requested).does(exitSeen);
-        var settings = settings_schema.Fixed.init(pairs);
+        var settings = settings_schema.Fixed.tree(pairs, children);
         try R.check(ke_runner_headless_create(r.sched.api(), r.input.api(), &settings.api, &r.handle));
     }
 
@@ -217,7 +242,12 @@ test "a run ticks the scheduler the frames it was given, each with the dt it was
 
 test "each scripted transition reaches the input before its frame ticks, in the order written" {
     var rig: Rig = .{};
-    try rig.init(&.{ .{ .key = "frames", .value = .{ .int = 4 } }, .{ .key = "script", .value = .{ .string = "2 W up; 0 W down;0 Space down ; 3 Escape down" } } });
+    var e0 = entry(2, "W", "up");
+    var e1 = entry(0, "W", "down");
+    var e2 = entry(0, "Space", "down");
+    var e3 = entry(3, "Escape", "down");
+    var script = settings_schema.Fixed.tree(&.{}, &.{ .{ .name = "0", .settings = &e0 }, .{ .name = "1", .settings = &e1 }, .{ .name = "2", .settings = &e2 }, .{ .name = "3", .settings = &e3 } });
+    try rig.initTree(&.{.{ .key = "frames", .value = .{ .int = 4 } }}, &.{.{ .name = "script", .settings = &script }});
     defer rig.deinit();
     try R.check(rig.run());
     try testing.expectEqualSlices(usize, &.{ 2, 2, 3, 4 }, seen.keys_at[0..4]);
@@ -244,23 +274,34 @@ test "a tick that fails ends the run with its code" {
     try testing.expectEqual(@as(usize, 1), seen.ticks);
 }
 
-test "a malformed script entry, an unknown key, a dt not greater than zero or a missing dependency is refused and leaves the handle zeroed" {
+fn entry(comptime frame: i64, comptime key: [:0]const u8, comptime action: [:0]const u8) settings_schema.Fixed {
+    return settings_schema.Fixed.init(&.{ .{ .key = "frame", .value = .{ .int = frame } }, .{ .key = "key", .value = .{ .string = key } }, .{ .key = "action", .value = .{ .string = action } } });
+}
+
+test "a script entry missing a field, naming no key or action, or holding another key, a dt not greater than zero or a missing dependency is refused and leaves the handle zeroed" {
     var sched: zsub.For(abi_scheduler.c.ke_scheduler) = undefined;
     try sched.init();
     defer sched.deinit();
     var input: zsub.For(abi_input.c.ke_input) = undefined;
     try input.init();
     defer input.deinit();
+    var no_action = settings_schema.Fixed.init(&.{ .{ .key = "frame", .value = .{ .int = 0 } }, .{ .key = "key", .value = .{ .string = "W" } } });
+    var no_frame = settings_schema.Fixed.init(&.{ .{ .key = "key", .value = .{ .string = "W" } }, .{ .key = "action", .value = .{ .string = "down" } } });
+    var lower = entry(0, "w", "down");
+    var held = entry(0, "W", "held");
+    var extra = settings_schema.Fixed.init(&.{ .{ .key = "frame", .value = .{ .int = 0 } }, .{ .key = "key", .value = .{ .string = "W" } }, .{ .key = "action", .value = .{ .string = "down" } }, .{ .key = "speed", .value = .{ .int = 1 } } });
+    const bad = [_]*settings_schema.Fixed{ &no_action, &no_frame, &lower, &held, &extra };
+    var handle: c.ke_runner_handle = undefined;
+    for (bad) |one| {
+        var script = settings_schema.Fixed.tree(&.{}, &.{.{ .name = "0", .settings = one }});
+        var settings = settings_schema.Fixed.tree(&.{}, &.{.{ .name = "script", .settings = &script }});
+        try testing.expectEqual(R.code(error.InvalidArgument), ke_runner_headless_create(sched.api(), input.api(), &settings.api, &handle));
+        try testing.expectEqual(null, handle.ref);
+    }
     const refused = [_][]const settings_schema.Pair{
-        &.{.{ .key = "script", .value = .{ .string = "0 W" } }},
-        &.{.{ .key = "script", .value = .{ .string = "0 W down extra" } }},
-        &.{.{ .key = "script", .value = .{ .string = "x W down" } }},
-        &.{.{ .key = "script", .value = .{ .string = "0 w down" } }},
-        &.{.{ .key = "script", .value = .{ .string = "0 W held" } }},
         &.{.{ .key = "dt", .value = .{ .double = 0 } }},
         &.{.{ .key = "speed", .value = .{ .int = 1 } }},
     };
-    var handle: c.ke_runner_handle = undefined;
     for (refused) |pairs| {
         var settings = settings_schema.Fixed.init(pairs);
         try testing.expectEqual(R.code(error.InvalidArgument), ke_runner_headless_create(sched.api(), input.api(), &settings.api, &handle));

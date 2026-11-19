@@ -22,4 +22,10 @@ public unsafe partial struct ke_settings
 
     [NativeTypeName("ke_result (*)(ke_settings *, ke_settings_key_func, void *)")]
     public delegate* unmanaged[Cdecl]<ke_settings*, delegate* unmanaged[Cdecl]<sbyte*, void*, void>, void*, KernelEngine.Result.Native.Result> for_each_key;
+
+    [NativeTypeName("ke_result (*)(ke_settings *, const char *, ke_settings **)")]
+    public delegate* unmanaged[Cdecl]<ke_settings*, sbyte*, ke_settings**, KernelEngine.Result.Native.Result> child;
+
+    [NativeTypeName("ke_result (*)(ke_settings *, ke_settings_key_func, void *)")]
+    public delegate* unmanaged[Cdecl]<ke_settings*, delegate* unmanaged[Cdecl]<sbyte*, void*, void>, void*, KernelEngine.Result.Native.Result> for_each_child;
 }

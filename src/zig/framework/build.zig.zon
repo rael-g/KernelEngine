@@ -6,6 +6,8 @@
     .dependencies = .{
         .ke_io_pending_reads = .{ .path = "../io/pending_reads" },
         .ke_input_names = .{ .path = "../input/names" },
+        .ke_settings_schema = .{ .path = "../settings/schema" },
+        .abi_settings = .{ .path = "../abi/settings" },
         .abi_framework_components = .{ .path = "../abi/framework_components" },
         .abi_spatial_contract = .{ .path = "../abi/spatial_contract" },
         .abi_render_contract = .{ .path = "../abi/render_contract" },

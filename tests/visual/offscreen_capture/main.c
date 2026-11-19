@@ -114,7 +114,12 @@ static ke_result validation_keys(ke_settings *self, ke_settings_key_func each, v
     each(KE_GPU_DEVICE_SETTING_ENABLE_VALIDATION, ctx);
     return KE_OK;
 }
-static ke_settings validated = { NULL, validation_bool, validation_int, validation_double, validation_string, validation_keys };
+static ke_result nothing_bool(ke_settings *self, const char *key, bool *out) { (void)self; (void)key; (void)out; return KE_RESULT_NOT_FOUND; }
+static ke_result nothing_listed(ke_settings *self, ke_settings_key_func each, void *ctx) { (void)self; (void)each; (void)ctx; return KE_OK; }
+static ke_result nothing_child(ke_settings *self, const char *name, ke_settings **out);
+static ke_settings nothing = { NULL, nothing_bool, validation_int, validation_double, validation_string, nothing_listed, nothing_child, nothing_listed };
+static ke_result nothing_child(ke_settings *self, const char *name, ke_settings **out) { (void)self; (void)name; *out = &nothing; return KE_OK; }
+static ke_settings validated = { NULL, validation_bool, validation_int, validation_double, validation_string, validation_keys, nothing_child, nothing_listed };
 
 int main(int argc, char **argv)
 {

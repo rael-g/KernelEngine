@@ -53,7 +53,7 @@ public sealed unsafe partial class HeadlessRunner : KernelEngine.Runner.Runner
     /// <summary>Creates a runner with no window: each run ticks scheduler a fixed number of frames with a fixed dt, stopping early when the program is asked to end, and before each frame reports to input the key transitions a script gives that frame.</summary>
     /// <param name="scheduler">Ticked by run; must outlive the runner.</param>
     /// <param name="input">Receives the script's key transitions; must outlive the runner.</param>
-    /// <param name="settings">Read once. `frames`, an integer, the frames a run ticks, default 60; `dt`, a number greater than zero, the seconds each frame ticks, default 1/60; `script`, a string, entries separated by `;`, each a frame counted from zero, a key named as a project's input maps name it and `down` or `up`, separated by spaces, as "0 W down; 30 W up", default empty.</param>
+    /// <param name="settings">Read once. `frames`, an integer, the frames a run ticks, default 60; `dt`, a number greater than zero, the seconds each frame ticks, default 1/60. The child `script`, a list whose every entry holds `frame`, an integer counted from zero, `key`, a key named as a project's input maps name it, and `action`, `down` or `up`; none by default.</param>
     public HeadlessRunner(KernelEngine.Scheduler.INativeScheduler scheduler, KernelEngine.Input.INativeInput input, KernelEngine.Settings.IPartSettings settings) : base(Create(scheduler, input, settings))
     {
         Hold(scheduler.Owner);

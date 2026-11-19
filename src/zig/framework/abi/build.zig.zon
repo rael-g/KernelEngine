@@ -6,7 +6,6 @@
     .dependencies = .{
         .abi_asset_resolver = .{ .path = "../../abi/asset_resolver" },
         .abi_completion = .{ .path = "../../abi/completion" },
-        .abi_configuration = .{ .path = "../../abi/configuration" },
         .abi_ecs = .{ .path = "../../abi/ecs" },
         .abi_framework = .{ .path = "../../abi/framework" },
         .abi_image_loader = .{ .path = "../../abi/image_loader" },
@@ -19,6 +18,7 @@
         .abi_scene_tree = .{ .path = "../../abi/scene_tree" },
         .abi_schedule = .{ .path = "../../abi/schedule" },
         .abi_scheduler = .{ .path = "../../abi/scheduler" },
+        .abi_settings = .{ .path = "../../abi/settings" },
         .abi_text = .{ .path = "../../abi/text" },
     },
     .paths = .{"."},

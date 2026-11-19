@@ -2,7 +2,6 @@
 
 const abi_asset_resolver = @import("asset_resolver");
 const abi_completion = @import("completion");
-const abi_configuration = @import("configuration");
 const abi_ecs = @import("ecs");
 const abi_framework = @import("framework");
 const abi_image_loader = @import("image_loader");
@@ -15,6 +14,7 @@ const abi_result = @import("result");
 const abi_scene_tree = @import("scene_tree");
 const abi_schedule = @import("schedule");
 const abi_scheduler = @import("scheduler");
+const abi_settings = @import("settings");
 const abi_text = @import("text");
 
 /// The ABI as the headers declare it.
@@ -40,17 +40,16 @@ pub fn frameworkSetLogCallback(callback: c.ke_log_callback, ctx: ?*anyopaque) vo
     return c.ke_framework_set_log_callback(callback, ctx);
 }
 
-/// Creates the action maps, adding through the map's own slots every map the configuration
-/// describes under the section: ` <section >.map. <Map >` holds `priority` (default 0) and
-/// `enabled` (default true); ` <section >.map. <Map >.action. <Action >` holds `type` (Button,
-/// Axis1D, Axis2D or Axis3D, default Button); ` <section >.map. <Map >.action. <Action
-/// >.bindings. <n >` holds `kind` and its keys: `key` for key, `button` (Left, Right, Middle)
-/// for mouse, `negative` and `positive` for key_pair, `up`, `down`, `left` and `right` for
-/// key_quad, each a key name such as "Space" or "W". The input actions module evaluates the maps
-/// each tick.
-pub fn inputActionsCreate(configuration: ?*abi_configuration.c.ke_configuration, section: [:0]const u8) Error!abi_input_actions.c.ke_input_actions_handle {
+/// Creates the action maps, adding through the map's own slots every map settings describe: the
+/// child `map. <Map >` holds `priority` (default 0) and `enabled` (default true); `map. <Map
+/// >.action. <Action >` holds `type` (Button, Axis1D, Axis2D or Axis3D, default Button); `map.
+/// <Map >.action. <Action >.bindings. <n >` holds `kind` and its keys: `key` for key, `button`
+/// (Left, Right, Middle) for mouse, `negative` and `positive` for key_pair, `up`, `down`, `left`
+/// and `right` for key_quad, each a key name such as "Space" or "W". The input actions module
+/// evaluates the maps each tick.
+pub fn inputActionsCreate(settings: ?*abi_settings.c.ke_settings) Error!abi_input_actions.c.ke_input_actions_handle {
     var written: abi_input_actions.c.ke_input_actions_handle = undefined;
-    try checkResult(c.ke_input_actions_create(configuration, section.ptr, &written));
+    try checkResult(c.ke_input_actions_create(settings, &written));
     return written;
 }
 

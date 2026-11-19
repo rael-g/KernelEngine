@@ -5,7 +5,7 @@
 
 namespace KernelEngine.Configuration;
 
-/// <summary>Creates a configuration source that reads a TOML file through file_system, synchronously: each table becomes a section named by its path joined with dots, arrays are skipped, and every other key is written as an integer, a double, a boolean or a string, tried in that order. A parse error writes nothing.</summary>
+/// <summary>Creates a configuration source that reads a TOML file through file_system, synchronously: each table becomes a section named by its path joined with dots, an array of tables one section per element named by the array's key and the element's index, an array of values one key per element named the same way, and every other key is written as an integer, a double, a boolean or a string, tried in that order. A parse error writes nothing.</summary>
 public sealed unsafe partial class ConfigurationTomlConfigurationSource : KernelEngine.Configuration.ConfigurationSource
 {
 
@@ -50,7 +50,7 @@ public sealed unsafe partial class ConfigurationTomlConfigurationSource : Kernel
         }
     }
 
-    /// <summary>Creates a configuration source that reads a TOML file through file_system, synchronously: each table becomes a section named by its path joined with dots, arrays are skipped, and every other key is written as an integer, a double, a boolean or a string, tried in that order. A parse error writes nothing.</summary>
+    /// <summary>Creates a configuration source that reads a TOML file through file_system, synchronously: each table becomes a section named by its path joined with dots, an array of tables one section per element named by the array's key and the element's index, an array of values one key per element named the same way, and every other key is written as an integer, a double, a boolean or a string, tried in that order. A parse error writes nothing.</summary>
     /// <param name="fileSystem">The file system it reads through; borrowed for the lifetime of the source.</param>
     public ConfigurationTomlConfigurationSource(KernelEngine.FileSystem.INativeFileSystem fileSystem) : base(Create(fileSystem))
     {

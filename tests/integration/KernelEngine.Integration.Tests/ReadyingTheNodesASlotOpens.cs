@@ -69,7 +69,7 @@ public class ReadyingTheNodesASlotOpens
         var scheduler = loop.Scheduler;
         using var assets = new DefaultAssetResolver(null, null, io);
         using var tree = new DefaultSceneTree(ecs);
-        using var actions = new DefaultInputActions(config, "input");
+        using var actions = new DefaultInputActions(config.Section("input"));
         using var types = new DefaultNodeTypes(scheduler, ecs, tree, actions);
         using var nodeSystems = new NodeTypesSystemsModule(types);
         loop.Attach(nodeSystems);
@@ -101,7 +101,7 @@ public class ReadyingTheNodesASlotOpens
         var scheduler = loop.Scheduler;
         using var assets = new DefaultAssetResolver(null, null, io);
         using var tree = new DefaultSceneTree(ecs);
-        using var actions = new DefaultInputActions(config, "input");
+        using var actions = new DefaultInputActions(config.Section("input"));
         using var types = new DefaultNodeTypes(scheduler, ecs, tree, actions);
         using var nodeSystems = new NodeTypesSystemsModule(types);
         loop.Attach(nodeSystems);

@@ -200,7 +200,7 @@ static inline ke_result ke_sdk_ecs_flecs(ke_sdk_engine *e)
 static inline ke_result ke_sdk_gpu_device_webgpu(ke_sdk_engine *e)
 {
     ke_completion *ready = NULL;
-    ke_result made = ke_gpu_device_webgpu_create(NULL, ke_sdk_settings(e, "runtime.renderer.device"), &ready, &e->gpu_device);
+    ke_result made = ke_gpu_device_webgpu_create(NULL, ke_sdk_settings(e, "runtime.gpu"), &ready, &e->gpu_device);
     if (made == KE_OK) made = ke_sdk_await(e, ready);
     return made;
 }
@@ -254,7 +254,7 @@ static inline ke_result ke_sdk_render_service(ke_sdk_engine *e)
     if (made == KE_OK) made = ke_render_scene_resolve_systems_create(r->scene.ref, &r->scene_systems);
     if (made == KE_OK) made = ke_sdk_add_module(e, r->scene_systems.ref);
     if (made == KE_OK) made = ke_render_frame_create(e->render_world.ref, r->graph.ref, r->service.ref, r->camera.ref, r->scene.ref,
-        ke_sdk_settings(e, "render"), &r->frame);
+        ke_sdk_settings(e, "render.frame"), &r->frame);
     if (made == KE_OK) made = ke_render_frame_systems_create(r->frame.ref, &r->frame_systems);
     if (made == KE_OK) made = ke_sdk_add_module(e, r->frame_systems.ref);
     if (made != KE_OK) return made;
@@ -351,7 +351,7 @@ static inline ke_result ke_sdk_audio_miniaudio(ke_sdk_engine *e)
 /** The action maps of the configuration's `input` section, and the module evaluating them each tick. */
 static inline ke_result ke_sdk_actions(ke_sdk_engine *e)
 {
-    ke_result made = ke_input_actions_create(e->configuration.ref, "input", &e->actions);
+    ke_result made = ke_input_actions_create(ke_sdk_settings(e, "input"), &e->actions);
     if (made == KE_OK) made = ke_input_actions_evaluation_create(e->actions.ref, e->input.ref, &e->action_evaluation);
     if (made == KE_OK) made = ke_sdk_add_module(e, e->action_evaluation.ref);
     return made;

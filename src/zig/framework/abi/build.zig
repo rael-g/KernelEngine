@@ -7,7 +7,6 @@ pub fn build(b: *std.Build) void {
     const abi = b.addModule("abi", .{ .root_source_file = b.path("framework_factory.zig") });
     abi.addImport("asset_resolver", b.dependency("abi_asset_resolver", .{}).module("abi"));
     abi.addImport("completion", b.dependency("abi_completion", .{}).module("abi"));
-    abi.addImport("configuration", b.dependency("abi_configuration", .{}).module("abi"));
     abi.addImport("ecs", b.dependency("abi_ecs", .{}).module("abi"));
     abi.addImport("framework", b.dependency("abi_framework", .{}).module("abi"));
     abi.addImport("image_loader", b.dependency("abi_image_loader", .{}).module("abi"));
@@ -20,6 +19,7 @@ pub fn build(b: *std.Build) void {
     abi.addImport("scene_tree", b.dependency("abi_scene_tree", .{}).module("abi"));
     abi.addImport("schedule", b.dependency("abi_schedule", .{}).module("abi"));
     abi.addImport("scheduler", b.dependency("abi_scheduler", .{}).module("abi"));
+    abi.addImport("settings", b.dependency("abi_settings", .{}).module("abi"));
     abi.addImport("text", b.dependency("abi_text", .{}).module("abi"));
 
     const headers = b.addWriteFiles().add("layout.h",
@@ -37,7 +37,6 @@ pub fn build(b: *std.Build) void {
     translated.addIncludePath(b.path("../../../c/asset"));
     translated.addIncludePath(b.path("../../../c/async"));
     translated.addIncludePath(b.path("../../../c/completion"));
-    translated.addIncludePath(b.path("../../../c/configuration"));
     translated.addIncludePath(b.path("../../../c/ecs"));
     translated.addIncludePath(b.path("../../../c/file_system"));
     translated.addIncludePath(b.path("../../../c/framework"));
@@ -73,7 +72,6 @@ pub fn build(b: *std.Build) void {
     tests.root_module.addIncludePath(b.path("../../../c/asset"));
     tests.root_module.addIncludePath(b.path("../../../c/async"));
     tests.root_module.addIncludePath(b.path("../../../c/completion"));
-    tests.root_module.addIncludePath(b.path("../../../c/configuration"));
     tests.root_module.addIncludePath(b.path("../../../c/ecs"));
     tests.root_module.addIncludePath(b.path("../../../c/file_system"));
     tests.root_module.addIncludePath(b.path("../../../c/framework"));

@@ -27,7 +27,7 @@ test "every record is laid out as the header lays it out" {
     if (@hasDecl(c, "ke_settings_key_func")) try expectSameLayout(abi.c.ke_settings_key_func, c.ke_settings_key_func);
 }
 
-extern const layout_values: [8]c_ulonglong;
+extern const layout_values: [10]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
@@ -39,6 +39,8 @@ test "every size and offset is the one C computes" {
         @offsetOf(abi.c.ke_settings, "get_double"),
         @offsetOf(abi.c.ke_settings, "get_string"),
         @offsetOf(abi.c.ke_settings, "for_each_key"),
+        @offsetOf(abi.c.ke_settings, "child"),
+        @offsetOf(abi.c.ke_settings, "for_each_child"),
     };
     for (expected, 0..) |value, at| try std.testing.expectEqual(layout_values[at], value);
 }

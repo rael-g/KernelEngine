@@ -14,7 +14,7 @@ present_mode = "fifo"
 gravity_x = 0.0
 gravity_y = 0.0
 
-[render]
+[render.frame]
 clear_color = [0.04, 0.04, 0.08, 1.0]
 
 [input.map.Pong.action.PaddleLeftMove]

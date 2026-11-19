@@ -27,12 +27,13 @@ extern "C"
  * @param scheduler [borrowed] Ticked by run; must outlive the runner.
  * @param input [borrowed] Receives the script's key transitions; must outlive the runner.
  * @param settings [borrowed] Read once. `frames`, an integer, the frames a run ticks, default 60; `dt`, a number
- *        greater than zero, the seconds each frame ticks, default 1/60; `script`, a string, entries
- *        separated by `;`, each a frame counted from zero, a key named as a project's input maps name it and `down`
- *        or `up`, separated by spaces, as "0 W down; 30 W up", default empty.
+ *        greater than zero, the seconds each frame ticks, default 1/60. The child `script`, a list whose
+ *        every entry holds `frame`, an integer counted from zero, `key`, a key named as a project's input
+ *        maps name it, and `action`, `down` or `up`; none by default.
  * @param out_runner [out] Receives the runner; left zeroed on failure.
  * @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null argument, or a setting unknown, of another type, out of range
- *         or a script entry that is malformed or names no key; KE_RESULT_OUT_OF_MEMORY.
+ *         or a script entry missing one of its keys, holding another or naming no key or action;
+ *         KE_RESULT_OUT_OF_MEMORY.
  */
 KE_RUNNER_HEADLESS_API ke_result ke_runner_headless_create(ke_scheduler *scheduler, ke_input *input,
                                                            ke_settings *settings, ke_runner_handle *out_runner);

@@ -1319,13 +1319,15 @@ ke_completion size=32 align=8
   release 24
 
 [settings]
-ke_settings size=48 align=8
+ke_settings size=64 align=8
   handle 0
   get_bool 8
   get_int 16
   get_double 24
   get_string 32
   for_each_key 40
+  child 48
+  for_each_child 56
 
 [job]
 ke_job_ctx size=16 align=8

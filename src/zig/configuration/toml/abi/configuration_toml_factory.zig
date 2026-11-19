@@ -13,9 +13,10 @@ const checkResult = abi_result.checkResult;
 const resultOf = abi_result.resultOf;
 
 /// Creates a configuration source that reads a TOML file through file_system, synchronously:
-/// each table becomes a section named by its path joined with dots, arrays are skipped, and
-/// every other key is written as an integer, a double, a boolean or a string, tried in that
-/// order. A parse error writes nothing.
+/// each table becomes a section named by its path joined with dots, an array of tables one
+/// section per element named by the array's key and the element's index, an array of values one
+/// key per element named the same way, and every other key is written as an integer, a double, a
+/// boolean or a string, tried in that order. A parse error writes nothing.
 pub fn configurationTomlCreate(file_system: ?*abi_file_system.c.ke_file_system) Error!abi_configuration.c.ke_configuration_source_handle {
     var written: abi_configuration.c.ke_configuration_source_handle = undefined;
     try checkResult(c.ke_configuration_toml_create(file_system, &written));

@@ -61,13 +61,13 @@ public static class DefaultCore
         services.TryAddSingleton<Func<Schedule.Schedule>>(sp => () => new DefaultSchedule(Get<Ecs.EcsRegistry>(sp), Get<Job.JobSystem>(sp), Get<Configuration.Configuration>(sp).Section("schedule")));
         services.TryAddSingleton<Scheduler.Scheduler>(sp => new DefaultScheduler(Get<Job.JobSystem>(sp), Get<Async.Async>(sp), Get<Configuration.Configuration>(sp).Section("scheduler")));
 
-        services.TryAddSingleton<Render.Gpu.GpuDevice>(sp => new WebgpuGpuDevice(null, Get<Configuration.Configuration>(sp).Section("runtime.renderer.device")));
+        services.TryAddSingleton<Render.Gpu.GpuDevice>(sp => new WebgpuGpuDevice(null, Get<Configuration.Configuration>(sp).Section("runtime.gpu")));
         services.AddSingleton(sp => new EngineReadiness(Get<Render.Gpu.GpuDevice>(sp) is WebgpuGpuDevice device ? device.Ready : 0));
         services.TryAddSingleton<Render.Gpu.GpuRenderTarget>(sp => new WebgpuWindowGpuRenderTarget(Get<Render.Gpu.GpuDevice>(sp), Get<Window.Window>(sp), Get<Configuration.Configuration>(sp).Section("runtime.renderer")));
         services.TryAddSingleton<Text.FontLoader>(sp => new StbFontLoader(Get<Io.Io>(sp)));
         services.TryAddSingleton<AssetResolver>(sp => new DefaultAssetResolver(null, Get<Text.FontLoader>(sp), Get<Io.Io>(sp)));
         services.TryAddSingleton<SceneTree>(sp => new DefaultSceneTree(Get<Ecs.EcsRegistry>(sp)));
-        services.TryAddSingleton<InputActions>(sp => new DefaultInputActions(Get<Configuration.Configuration>(sp), "input"));
+        services.TryAddSingleton<InputActions>(sp => new DefaultInputActions(Get<Configuration.Configuration>(sp).Section("input")));
         services.TryAddSingleton<NodeTypes>(sp => new DefaultNodeTypes(Get<Scheduler.Scheduler>(sp), Get<Ecs.EcsRegistry>(sp), Get<SceneTree>(sp), Get<InputActions>(sp)));
         services.TryAddSingleton<SceneFiles>(sp => new DefaultSceneFiles(Get<Ecs.EcsRegistry>(sp), Get<NodeTypes>(sp), Get<AssetResolver>(sp), Get<Io.Io>(sp)));
         services.TryAddSingleton<Physics.Physics2D>(sp => new Box2DPhysics2D(Get<Job.JobSystem>(sp), Get<Configuration.Configuration>(sp).Section("runtime.physics_2d")));
@@ -92,7 +92,7 @@ public static class DefaultCore
         services.TryAddSingleton<RenderCamera>(sp => new DefaultRenderCamera(Get<ViewSpace>(sp), Get<Render.Gpu.GpuDevice>(sp)));
         services.TryAddSingleton<RenderSceneResolve>(sp => new DefaultRenderSceneResolve(Get<Ecs.EcsRegistry>(sp), RenderWorld(sp), Get<Extraction.Extraction>(sp), Get<RenderService>(sp)));
         services.TryAddSingleton<Render.Frame.RenderFrame>(sp => new DefaultRenderFrame(RenderWorld(sp), Get<RenderGraph.RenderGraph>(sp), Get<RenderService>(sp), Get<RenderCamera>(sp), Get<RenderSceneResolve>(sp),
-            Get<Configuration.Configuration>(sp).Section("render")));
+            Get<Configuration.Configuration>(sp).Section("render.frame")));
         services.TryAddSingleton<RenderUi>(sp => new DefaultRenderUi(RenderWorld(sp), Get<Ecs.EcsRegistry>(sp), Get<Extraction.Extraction>(sp), Get<RenderService>(sp), Get<Render.Gpu.GpuDevice>(sp), Get<ViewSpace>(sp), Get<RenderCamera>(sp), Get<RenderSceneResolve>(sp), Get<Render.Frame.RenderFrame>(sp)));
 
         void Pass<T>(Func<IServiceProvider, T> make) where T : Module.Module => services.TryAddEnumerable(ServiceDescriptor.Singleton<Module.Module, T>(make));

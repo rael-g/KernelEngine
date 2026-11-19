@@ -2,7 +2,6 @@
 
 const abi_asset_resolver = @import("asset_resolver");
 const abi_completion = @import("completion");
-const abi_configuration = @import("configuration");
 const abi_ecs = @import("ecs");
 const abi_framework = @import("framework");
 const abi_image_loader = @import("image_loader");
@@ -15,6 +14,7 @@ const abi_result = @import("result");
 const abi_scene_tree = @import("scene_tree");
 const abi_schedule = @import("schedule");
 const abi_scheduler = @import("scheduler");
+const abi_settings = @import("settings");
 const abi_text = @import("text");
 
 pub const ke_component_id = u32;
@@ -56,9 +56,6 @@ pub const ke_log_callback = ?*const fn (?*anyopaque, abi_logger.c.ke_log_level, 
 /// Receives one key the settings hold.
 pub const ke_settings_key_func = ?*const fn (?[*:0]const u8, ?*anyopaque) callconv(.c) void;
 
-/// Receives one child section of the section being listed.
-pub const ke_configuration_child_func = ?*const fn (?[*:0]const u8, ?*anyopaque) callconv(.c) void;
-
 /// A structural operation applied when the queue holding it is drained. `user` points at the
 /// copy of the payload passed to defer; `ecs` is the live world. A failure is returned, and the
 /// queue stops there: the operations recorded after it are dropped.
@@ -91,15 +88,14 @@ pub extern fn ke_asset_resolver_create(image_loader: ?*abi_image_loader.c.ke_ima
 /// stderr, where they go until this is called. Called once, before the library logs.
 pub extern fn ke_framework_set_log_callback(callback: ke_log_callback, ctx: ?*anyopaque) void;
 
-/// Creates the action maps, adding through the map's own slots every map the configuration
-/// describes under the section: ` <section >.map. <Map >` holds `priority` (default 0) and
-/// `enabled` (default true); ` <section >.map. <Map >.action. <Action >` holds `type` (Button,
-/// Axis1D, Axis2D or Axis3D, default Button); ` <section >.map. <Map >.action. <Action
-/// >.bindings. <n >` holds `kind` and its keys: `key` for key, `button` (Left, Right, Middle)
-/// for mouse, `negative` and `positive` for key_pair, `up`, `down`, `left` and `right` for
-/// key_quad, each a key name such as "Space" or "W". The input actions module evaluates the maps
-/// each tick.
-pub extern fn ke_input_actions_create(configuration: ?*abi_configuration.c.ke_configuration, section: ?[*:0]const u8, out_actions: ?*abi_input_actions.c.ke_input_actions_handle) abi_result.c.ke_result;
+/// Creates the action maps, adding through the map's own slots every map settings describe: the
+/// child `map. <Map >` holds `priority` (default 0) and `enabled` (default true); `map. <Map
+/// >.action. <Action >` holds `type` (Button, Axis1D, Axis2D or Axis3D, default Button); `map.
+/// <Map >.action. <Action >.bindings. <n >` holds `kind` and its keys: `key` for key, `button`
+/// (Left, Right, Middle) for mouse, `negative` and `positive` for key_pair, `up`, `down`, `left`
+/// and `right` for key_quad, each a key name such as "Space" or "W". The input actions module
+/// evaluates the maps each tick.
+pub extern fn ke_input_actions_create(settings: ?*abi_settings.c.ke_settings, out_actions: ?*abi_input_actions.c.ke_input_actions_handle) abi_result.c.ke_result;
 
 /// Creates the module that evaluates actions each tick: attaching it registers the exclusive
 /// system "input.actions" in the pre_update schedule's pre_update set, which advances input's

@@ -20,9 +20,10 @@ pub const ke_configuration_child_func = ?*const fn (?[*:0]const u8, ?*anyopaque)
 pub const ke_log_callback = ?*const fn (?*anyopaque, abi_logger.c.ke_log_level, ?[*:0]const u8, ?[*:0]const u8) callconv(.c) void;
 
 /// Creates a configuration source that reads a TOML file through file_system, synchronously:
-/// each table becomes a section named by its path joined with dots, arrays are skipped, and
-/// every other key is written as an integer, a double, a boolean or a string, tried in that
-/// order. A parse error writes nothing.
+/// each table becomes a section named by its path joined with dots, an array of tables one
+/// section per element named by the array's key and the element's index, an array of values one
+/// key per element named the same way, and every other key is written as an integer, a double, a
+/// boolean or a string, tried in that order. A parse error writes nothing.
 pub extern fn ke_configuration_toml_create(file_system: ?*abi_file_system.c.ke_file_system, out_source: ?*abi_configuration.c.ke_configuration_source_handle) abi_result.c.ke_result;
 
 /// Sends every line ke_configuration_toml logs to callback, with ctx; a NULL callback sends them

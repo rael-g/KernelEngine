@@ -1955,7 +1955,7 @@
     },
     {
       "name": "ke_settings",
-      "doc": "The values one part is created with, each under a key and of one type. A part reads them once, when it is created; a value that changes afterwards is a slot of the part\u0027s own contract.",
+      "doc": "The values one part is created with, each under a key and of one type, and the settings nested under it, each under a name. A list of values is a key per element, named by its index after a dot (\u0022tint.0\u0022); a list of tables is a child per element, named by its index (\u00220\u0022). A part reads them once, when it is created; a value that changes afterwards is a slot of the part\u0027s own contract.",
       "tags": [
         "lent"
       ],
@@ -2087,6 +2087,56 @@
                 "closure:ctx"
               ],
               "doc": "Called once per key."
+            },
+            {
+              "name": "ctx",
+              "type": "void *",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "ke_settings *"
+        },
+        {
+          "name": "child",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Gives the settings nested under name, empty when nothing is.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a null argument; KE_RESULT_OUT_OF_MEMORY.",
+          "params": [
+            {
+              "name": "name",
+              "type": "const char *",
+              "tags": [
+                "utf8"
+              ],
+              "doc": "The child\u0027s name."
+            },
+            {
+              "name": "out_settings",
+              "type": "ke_settings **",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the child, lent while these settings live."
+            }
+          ],
+          "receiver": "ke_settings *"
+        },
+        {
+          "name": "for_each_child",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Calls each once for every child that holds a key or a child of its own, in the order it was first written.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a null each; KE_RESULT_OUT_OF_MEMORY.",
+          "params": [
+            {
+              "name": "each",
+              "type": "ke_settings_key_func",
+              "tags": [
+                "closure:ctx"
+              ],
+              "doc": "Called once per child, with its name."
             },
             {
               "name": "ctx",
