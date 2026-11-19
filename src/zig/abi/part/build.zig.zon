@@ -1,0 +1,15 @@
+.{
+    .name = .abi_part,
+    .version = "0.1.0",
+    .fingerprint = 0x98b98bd2b4c83248,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .abi_completion = .{ .path = "../completion" },
+        .abi_ecs = .{ .path = "../ecs" },
+        .abi_logger = .{ .path = "../logger" },
+        .abi_result = .{ .path = "../result" },
+        .abi_schedule = .{ .path = "../schedule" },
+        .abi_settings = .{ .path = "../settings" },
+    },
+    .paths = .{"."},
+}

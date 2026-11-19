@@ -1033,6 +1033,69 @@
       "usings": ["KernelEngine.Schedule", "KernelEngine.Schedule.Native", "KernelEngine.Ecs", "KernelEngine.Ecs.Native"]
     },
     {
+      "name": "part",
+      "headers": [
+        "src/c/part/kernel_engine/part/part.h"
+      ],
+      "auxHeaders": [
+        "src/c/schedule/kernel_engine/schedule/schedule.h"
+      ],
+      "includeDirs": [
+        "src/c/part",
+        "src/c/settings",
+        "src/c/schedule",
+        "src/c/completion",
+        "src/c/job",
+        "src/c/ecs",
+        "src/c/math",
+        "src/c/logger",
+        "src/zig/common/include",
+        "src/c/result"
+      ],
+      "apiJson": "src/csharp/part/ke_api.json",
+      "namespace": "KernelEngine.Part",
+      "nativeNamespace": "KernelEngine.Part.Native",
+      "outDir": "src/csharp/part/KernelEngine.Part/Generated",
+      "abstractionsOutDir": "src/csharp/part/KernelEngine.Part/Generated/Abstractions",
+      "usings": [
+        "KernelEngine.Schedule",
+        "KernelEngine.Schedule.Native",
+        "KernelEngine.Completion",
+        "KernelEngine.Completion.Native"
+      ]
+    },
+    {
+      "name": "assembly",
+      "headers": [
+        "src/c/assembly/kernel_engine/assembly/assembly.h"
+      ],
+      "auxHeaders": [
+        "src/c/part/kernel_engine/part/part.h"
+      ],
+      "includeDirs": [
+        "src/c/assembly",
+        "src/c/part",
+        "src/c/settings",
+        "src/c/schedule",
+        "src/c/completion",
+        "src/c/job",
+        "src/c/ecs",
+        "src/c/math",
+        "src/c/logger",
+        "src/zig/common/include",
+        "src/c/result"
+      ],
+      "apiJson": "src/csharp/assembly/ke_api.json",
+      "namespace": "KernelEngine.Assembly",
+      "nativeNamespace": "KernelEngine.Assembly.Native",
+      "outDir": "src/csharp/assembly/KernelEngine.Assembly/Generated",
+      "abstractionsOutDir": "src/csharp/assembly/KernelEngine.Assembly/Generated/Abstractions",
+      "usings": [
+        "KernelEngine.Part",
+        "KernelEngine.Part.Native"
+      ]
+    },
+    {
       "name": "completion",
       "headers": [
         "src/c/completion/kernel_engine/completion/completion.h"
@@ -1861,6 +1924,26 @@
       ],
       "library": "ke_physics_body2d",
       "output": "Generated/Module/"
+    },
+    {
+      "name": "Part",
+      "project": "src/csharp/part/KernelEngine.Part",
+      "namespace": "KernelEngine.Part.Native",
+      "headers": [
+        "src/c/part/kernel_engine/part/part.h"
+      ],
+      "library": "ke_scheduler",
+      "output": "Generated/Part/"
+    },
+    {
+      "name": "Assembly",
+      "project": "src/csharp/assembly/KernelEngine.Assembly",
+      "namespace": "KernelEngine.Assembly.Native",
+      "headers": [
+        "src/c/assembly/kernel_engine/assembly/assembly.h"
+      ],
+      "library": "ke_scheduler",
+      "output": "Generated/Assembly/"
     },
     {
       "name": "Completion",

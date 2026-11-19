@@ -1248,6 +1248,60 @@ ke_module_handle size=16 align=8
   ref 0
   destroy 8
 
+[part]
+ke_part_slot size=24 align=8
+  name 0
+  contract 8
+  cardinality 16
+ke_part_hook size=16 align=8
+  name 0
+  default_set 8
+ke_part_set size=24 align=8
+  name 0
+  hook 8
+  after 16
+ke_part_bound size=16 align=8
+  instances 0
+  count 8
+ke_part_hooked size=16 align=8
+  schedule 0
+  set 8
+ke_part_instance size=16 align=8
+  ref 0
+  destroy 8
+ke_part size=96 align=8
+  name 0
+  provides 8
+  slots 16
+  slot_count 24
+  hooks 32
+  hook_count 40
+  sets 48
+  set_count 56
+  create 64
+  ready 72
+  pump 80
+  set_log 88
+
+[assembly]
+ke_assembly size=104 align=8
+  handle 0
+  add_part 8
+  add_instance 16
+  add_external 24
+  bind 32
+  hook 40
+  order 48
+  add_set 56
+  order_set 64
+  set_default 72
+  resolve 80
+  advance 88
+  get 96
+ke_assembly_handle size=16 align=8
+  ref 0
+  destroy 8
+
 [completion]
 ke_completion size=32 align=8
   handle 0

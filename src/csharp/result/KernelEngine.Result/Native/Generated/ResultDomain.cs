@@ -21,4 +21,5 @@ public enum ResultDomain : uint
     Text = 15,
     View = 16,
     Window = 17,
+    Assembly = 18,
 }

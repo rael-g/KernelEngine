@@ -105,6 +105,11 @@
           "name": "KE_RESULT_DOMAIN_WINDOW",
           "value": 17,
           "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_ASSEMBLY",
+          "value": 18,
+          "doc": null
         }
       ],
       "external": true

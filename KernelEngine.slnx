@@ -34,6 +34,8 @@
     <Project Path="src/csharp/completion/KernelEngine.Completion/KernelEngine.Completion.csproj" />
     <Project Path="src/csharp/settings/KernelEngine.Settings/KernelEngine.Settings.csproj" />
     <Project Path="src/csharp/module/KernelEngine.Module/KernelEngine.Module.csproj" />
+    <Project Path="src/csharp/part/KernelEngine.Part/KernelEngine.Part.csproj" />
+    <Project Path="src/csharp/assembly/KernelEngine.Assembly/KernelEngine.Assembly.csproj" />
     <Project Path="src/csharp/extraction/KernelEngine.Extraction/KernelEngine.Extraction.csproj" />
     <Project Path="src/csharp/render_graph/KernelEngine.RenderGraph/KernelEngine.RenderGraph.csproj" />
     <Project Path="src/csharp/render_graph/KernelEngine.RenderGraph.Simple/KernelEngine.RenderGraph.Simple.csproj" />

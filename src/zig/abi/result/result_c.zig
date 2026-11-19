@@ -19,6 +19,7 @@ pub const KE_RESULT_DOMAIN_SPATIAL: ke_result_domain = 14;
 pub const KE_RESULT_DOMAIN_TEXT: ke_result_domain = 15;
 pub const KE_RESULT_DOMAIN_VIEW: ke_result_domain = 16;
 pub const KE_RESULT_DOMAIN_WINDOW: ke_result_domain = 17;
+pub const KE_RESULT_DOMAIN_ASSEMBLY: ke_result_domain = 18;
 
 /// What a fallible call returns: `KE_OK`, or the code of the failure. The detail of a failure
 /// goes to the failing library's log, never into the code. A caller treats a code it does not

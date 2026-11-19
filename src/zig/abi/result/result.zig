@@ -57,6 +57,7 @@ pub const ResultDomain = enum(c.ke_result_domain) {
     text = 15,
     view = 16,
     window = 17,
+    assembly = 18,
     _,
 };
 

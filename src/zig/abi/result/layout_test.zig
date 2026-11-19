@@ -43,6 +43,7 @@ test "every enum value is the header's value" {
     try std.testing.expectEqual(@as(i64, c.KE_RESULT_DOMAIN_TEXT), @as(i64, abi.c.KE_RESULT_DOMAIN_TEXT));
     try std.testing.expectEqual(@as(i64, c.KE_RESULT_DOMAIN_VIEW), @as(i64, abi.c.KE_RESULT_DOMAIN_VIEW));
     try std.testing.expectEqual(@as(i64, c.KE_RESULT_DOMAIN_WINDOW), @as(i64, abi.c.KE_RESULT_DOMAIN_WINDOW));
+    try std.testing.expectEqual(@as(i64, c.KE_RESULT_DOMAIN_ASSEMBLY), @as(i64, abi.c.KE_RESULT_DOMAIN_ASSEMBLY));
     try std.testing.expectEqual(@as(i64, c.KE_OK), @as(i64, abi.c.KE_OK));
     try std.testing.expectEqual(@as(i64, c.KE_RESULT_GENERAL), @as(i64, abi.c.KE_RESULT_GENERAL));
     try std.testing.expectEqual(@as(i64, c.KE_RESULT_NOT_FOUND), @as(i64, abi.c.KE_RESULT_NOT_FOUND));
