@@ -7,6 +7,8 @@ const std = @import("std");
 
 pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @import("log").Destination("ke_render_binder_grouped").logFn };
 
+const abi_settings = @import("abi_settings");
+const settings_schema = @import("settings_schema");
 const abi_io = @import("abi_io");
 const abi_render = @import("abi_render");
 const abi_render_binder_grouped_factory = @import("abi_render_binder_grouped_factory");
@@ -475,15 +477,21 @@ fn destroyBinder(self: [*c]abi_render_gpu.c.ke_render_resource_binder) callconv(
     gpa.destroy(st);
 }
 
-/// The factory: copies the shader directory, keeps the borrowed io, reads the material block from the embedded
+/// The binder's settings, with this implementation's defaults: the directory, under the file
+/// system's root, its shaders' reflection is read from.
+const Settings = struct {
+    shader_dir: [:0]const u8 = "shaders",
+};
+
+/// The factory: copies the shader directory its settings name, keeps the borrowed io, reads the material block from the embedded
 /// reflection for the vertex and fragment stages and builds the material layout on the device.
-export fn ke_render_resource_binder_grouped_create(device: ?*abi_render_gpu.c.ke_gpu_device, io: ?*abi_io.c.ke_io, shader_dir: ?[*:0]const u8, out_binder: [*c]abi_render_gpu.c.ke_render_resource_binder_handle) callconv(.c) abi_result.c.ke_result {
+export fn ke_render_resource_binder_grouped_create(device: ?*abi_render_gpu.c.ke_gpu_device, io: ?*abi_io.c.ke_io, settings: ?*abi_settings.c.ke_settings, out_binder: [*c]abi_render_gpu.c.ke_render_resource_binder_handle) callconv(.c) abi_result.c.ke_result {
     const out = out_binder orelse return R.code(error.InvalidArgument);
     out.* = .{ .ref = null, .destroy = null };
     const dev = device orelse return R.code(error.InvalidArgument);
     const reader = io orelse return R.code(error.InvalidArgument);
-    const dir = shader_dir orelse return R.code(error.InvalidArgument);
-    const st = newBinder(dev, reader, dir) catch |err| return R.code(err);
+    const values = settings_schema.read(Settings, settings orelse return R.code(error.InvalidArgument)) catch |err| return R.code(err);
+    const st = newBinder(dev, reader, values.shader_dir.ptr) catch |err| return R.code(err);
     out.* = .{ .ref = &st.api, .destroy = destroyBinder };
     return R.ok;
 }
@@ -637,9 +645,11 @@ const Rig = struct {
         _ = self.io.when(.wait).does(waitReflection);
     }
 
+    var no_settings = settings_schema.Fixed.init(&.{});
+
     fn binder(self: *Rig) !abi_render_gpu.c.ke_render_resource_binder_handle {
         var h: abi_render_gpu.c.ke_render_resource_binder_handle = undefined;
-        try R.check(ke_render_resource_binder_grouped_create(self.dev.api(), self.io.api(), "shaders", &h));
+        try R.check(ke_render_resource_binder_grouped_create(self.dev.api(), self.io.api(), &no_settings.api, &h));
         return h;
     }
 

@@ -166,6 +166,8 @@ static inline ke_result ke_sdk_configuration_toml(ke_sdk_engine *e)
     char project_file[KE_SDK_ENGINE_PATH_CAPACITY + 16];
     snprintf(project_file, sizeof project_file, "%s/Project", e->project_dir);
     ke_result made = ke_configuration_create(&e->configuration);
+    if (made == KE_OK) made = e->configuration.ref->set_string(e->configuration.ref, "render.binder", "shader_dir", e->shader_dir);
+    if (made == KE_OK) made = e->configuration.ref->set_string(e->configuration.ref, "render.service", "shader_dir", e->shader_dir);
     if (made == KE_OK) made = ke_configuration_toml_create(e->file_system.ref, &e->configuration_source);
     if (made == KE_OK) made = e->configuration_source.ref->load(e->configuration_source.ref, e->configuration.ref, project_file);
     return made;
@@ -242,8 +244,8 @@ static inline ke_result ke_sdk_render_service(ke_sdk_engine *e)
     memset(r, 0, sizeof *r);
     e->release_extra = ke_sdk_renderer_release;
     ke_gpu_device *gpu = e->gpu_device.ref;
-    ke_result made = ke_render_resource_binder_grouped_create(gpu, e->io.ref, e->shader_dir, &r->binder);
-    if (made == KE_OK) made = ke_render_service_create(gpu, e->render_target.ref, e->io.ref, r->binder.ref, e->shader_dir, &r->service);
+    ke_result made = ke_render_resource_binder_grouped_create(gpu, e->io.ref, ke_sdk_settings(e, "render.binder"), &r->binder);
+    if (made == KE_OK) made = ke_render_service_create(gpu, e->render_target.ref, e->io.ref, r->binder.ref, ke_sdk_settings(e, "render.service"), &r->service);
     if (made == KE_OK) made = ke_render_graph_simple_create(gpu, &r->graph);
     if (made == KE_OK) made = ke_view_space_rh_create(&r->view_space);
     if (made == KE_OK) made = ke_render_camera_create(r->view_space.ref, gpu, &r->camera);

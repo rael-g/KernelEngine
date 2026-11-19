@@ -13,6 +13,8 @@
         .abi_asset_resolver = .{ .path = "../../abi/asset_resolver" },
         .abi_ecs = .{ .path = "../../abi/ecs" },
         .abi_io = .{ .path = "../../abi/io" },
+        .abi_settings = .{ .path = "../../abi/settings" },
+        .ke_settings_schema = .{ .path = "../../settings/schema" },
         .abi_render = .{ .path = "../../abi/render" },
         .abi_resource_cache_default_factory = .{ .path = "../../resource_cache/default/abi" },
         .abi_result = .{ .path = "../../abi/result" },

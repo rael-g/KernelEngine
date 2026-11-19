@@ -5,6 +5,7 @@ const abi_logger = @import("logger");
 const abi_render = @import("render");
 const abi_render_gpu = @import("render_gpu");
 const abi_result = @import("result");
+const abi_settings = @import("settings");
 
 /// The ABI as the headers declare it.
 pub const c = @import("render_service_factory_c.zig");
@@ -14,9 +15,9 @@ const checkResult = abi_result.checkResult;
 const resultOf = abi_result.resultOf;
 
 /// Creates a render service whose frames draw into target.
-pub fn renderServiceCreate(device: ?*abi_render_gpu.c.ke_gpu_device, target: ?*abi_render_gpu.c.ke_gpu_render_target, io: ?*abi_io.c.ke_io, binder: ?*abi_render_gpu.c.ke_render_resource_binder, shader_dir: [:0]const u8) Error!abi_render.c.ke_render_service_handle {
+pub fn renderServiceCreate(device: ?*abi_render_gpu.c.ke_gpu_device, target: ?*abi_render_gpu.c.ke_gpu_render_target, io: ?*abi_io.c.ke_io, binder: ?*abi_render_gpu.c.ke_render_resource_binder, settings: ?*abi_settings.c.ke_settings) Error!abi_render.c.ke_render_service_handle {
     var written: abi_render.c.ke_render_service_handle = undefined;
-    try checkResult(c.ke_render_service_create(device, target, io, binder, shader_dir.ptr, &written));
+    try checkResult(c.ke_render_service_create(device, target, io, binder, settings, &written));
     return written;
 }
 

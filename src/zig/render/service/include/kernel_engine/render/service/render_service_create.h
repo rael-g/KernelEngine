@@ -4,6 +4,7 @@
 #include <kernel_engine/math/math.h>
 #include <kernel_engine/result/result.h>
 #include <kernel_engine/io/io.h>
+#include <kernel_engine/settings/settings.h>
 #include <kernel_engine/render/gpu/gpu_device.h>
 #include <kernel_engine/render/gpu/gpu_render_target.h>
 #include <kernel_engine/render/service/render_service.h>
@@ -32,14 +33,15 @@ extern "C"
  * @param io [provider] Borrowed, must outlive the service; the shaders are read through it.
  * @param binder Borrowed, must outlive the service; it holds the service's materials and is given
  *        the parameters every shader shares.
- * @param shader_dir [borrowed,utf8] Directory the shaders are loaded from; copied.
+ * @param settings [borrowed] Read once. `shader_dir`, a string, default "shaders": the directory,
+ *        under the root of the io's file system, the shaders are loaded from.
  * @param out_service [out] Receives the handle; left zeroed on failure.
  * @return KE_OK, or on failure; KE_RESULT_INVALID_ARGUMENT when @p device, @p target,
- *         @p io, @p binder or @p shader_dir is NULL.
+ *         @p io, @p binder or @p settings is NULL or a setting is refused.
  */
 KE_RENDER_CORE_API ke_result
 ke_render_service_create(ke_gpu_device *device, ke_gpu_render_target *target, ke_io *io,
-                         ke_render_resource_binder *binder, const char *shader_dir,
+                         ke_render_resource_binder *binder, ke_settings *settings,
                          ke_render_service_handle *out_service);
 
 #ifdef __cplusplus

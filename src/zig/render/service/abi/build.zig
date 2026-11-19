@@ -11,6 +11,7 @@ pub fn build(b: *std.Build) void {
     abi.addImport("render", b.dependency("abi_render", .{}).module("abi"));
     abi.addImport("render_gpu", b.dependency("abi_render_gpu", .{}).module("abi"));
     abi.addImport("result", b.dependency("abi_result", .{}).module("abi"));
+    abi.addImport("settings", b.dependency("abi_settings", .{}).module("abi"));
 
     const headers = b.addWriteFiles().add("layout.h",
         \\#include <kernel_engine/render/service/render_service_create.h>
@@ -27,6 +28,7 @@ pub fn build(b: *std.Build) void {
     translated.addIncludePath(b.path("../include"));
     translated.addIncludePath(b.path("../../../common/include"));
     translated.addIncludePath(b.path("../../../../c/result"));
+    translated.addIncludePath(b.path("../../../../c/settings"));
     translated.addIncludePath(b.path("../../../../c/spatial"));
     const tests = b.addTest(.{ .root_module = b.createModule(.{
         .root_source_file = b.path("layout_test.zig"),
@@ -49,6 +51,7 @@ pub fn build(b: *std.Build) void {
     tests.root_module.addIncludePath(b.path("../include"));
     tests.root_module.addIncludePath(b.path("../../../common/include"));
     tests.root_module.addIncludePath(b.path("../../../../c/result"));
+    tests.root_module.addIncludePath(b.path("../../../../c/settings"));
     tests.root_module.addIncludePath(b.path("../../../../c/spatial"));
     b.step("test", "Check the render_service_factory ABI against its headers").dependOn(&b.addRunArtifact(tests).step);
 }

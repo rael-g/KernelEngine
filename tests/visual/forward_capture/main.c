@@ -162,8 +162,8 @@ static ke_settings *clear;
 
 static void renderer_compose(renderer *r, ke_ecs *main_world, ke_ecs *render_world, ke_extraction *extraction, ke_schedule *schedule, ke_gpu_device *gpu, ke_gpu_render_target *target, ke_io *io)
 {
-    check("resource binder", ke_render_resource_binder_grouped_create(gpu, io, "shaders", &r->binder));
-    check("render service", ke_render_service_create(gpu, target, io, r->binder.ref, "shaders", &r->service));
+    check("resource binder", ke_render_resource_binder_grouped_create(gpu, io, unset, &r->binder));
+    check("render service", ke_render_service_create(gpu, target, io, r->binder.ref, unset, &r->service));
     ke_render_service *core = r->service.ref;
     check("render graph", ke_render_graph_simple_create(gpu, &r->graph));
     check("view space", ke_view_space_rh_create(&r->view_space));

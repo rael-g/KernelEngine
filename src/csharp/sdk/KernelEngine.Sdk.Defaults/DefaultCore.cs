@@ -48,6 +48,9 @@ public static class DefaultCore
         services.TryAddSingleton<Configuration.Configuration>(sp =>
         {
             var config = new DefaultConfiguration();
+            var shaders = Path.Combine(AppContext.BaseDirectory, "shaders");
+            config.SetString("render.binder", "shader_dir", shaders);
+            config.SetString("render.service", "shader_dir", shaders);
             Get<ConfigurationSource>(sp).Load(config, Path.Combine(root, "Project"));
             return config;
         });
@@ -83,11 +86,10 @@ public static class DefaultCore
         services.TryAddEnumerable(ServiceDescriptor.Singleton<Module.Module, Extraction.ExtractionHistoryModule>(sp => new Extraction.ExtractionHistoryModule(Get<Extraction.Extraction>(sp))));
         services.TryAddEnumerable(ServiceDescriptor.Singleton<Module.Module, NodeTypesSystemsModule>(sp => new NodeTypesSystemsModule(Get<NodeTypes>(sp))));
 
-        var shaderDir = Path.Combine(AppContext.BaseDirectory, "shaders");
         var defaultFont = Path.Combine(AppContext.BaseDirectory, "assets", "fonts", "LiberationSans-Regular.ttf");
         Ecs.EcsRegistry RenderWorld(IServiceProvider sp) => sp.GetRequiredKeyedService<Ecs.EcsRegistry>("render");
-        services.TryAddSingleton<Render.Gpu.RenderResourceBinder>(sp => new GroupedRenderResourceBinder(Get<Render.Gpu.GpuDevice>(sp), Get<Io.Io>(sp), shaderDir));
-        services.TryAddSingleton<RenderService>(sp => new DefaultRenderService(Get<Render.Gpu.GpuDevice>(sp), Get<Render.Gpu.GpuRenderTarget>(sp), Get<Io.Io>(sp), Get<Render.Gpu.RenderResourceBinder>(sp), shaderDir));
+        services.TryAddSingleton<Render.Gpu.RenderResourceBinder>(sp => new GroupedRenderResourceBinder(Get<Render.Gpu.GpuDevice>(sp), Get<Io.Io>(sp), Get<Configuration.Configuration>(sp).Section("render.binder")));
+        services.TryAddSingleton<RenderService>(sp => new DefaultRenderService(Get<Render.Gpu.GpuDevice>(sp), Get<Render.Gpu.GpuRenderTarget>(sp), Get<Io.Io>(sp), Get<Render.Gpu.RenderResourceBinder>(sp), Get<Configuration.Configuration>(sp).Section("render.service")));
         services.TryAddSingleton<RenderGraph.RenderGraph>(sp => new RenderGraph.Simple.SimpleRenderGraph(Get<Render.Gpu.GpuDevice>(sp)));
         services.TryAddSingleton<ViewSpace>(sp => new RhViewSpace());
         services.TryAddSingleton<RenderCamera>(sp => new DefaultRenderCamera(Get<ViewSpace>(sp), Get<Render.Gpu.GpuDevice>(sp)));
