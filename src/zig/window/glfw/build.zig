@@ -5,8 +5,8 @@ pub fn build(b: *std.Build) void {
     _ = ke_build.plugin(b, .{
         .name = "ke_window_glfw",
         .root = "src/window_glfw.zig",
-        .abi = &.{ "abi_input", "abi_result", "abi_window", "abi_window_glfw_factory", "abi_settings" },
-        .packages = &.{.{ .name = "settings_schema", .dependency = "ke_settings_schema", .module = "settings_schema" }},
+        .abi = &.{ "abi_part", "abi_input", "abi_result", "abi_window", "abi_window_glfw_factory", "abi_settings" },
+        .packages = &.{ .{ .name = "part", .dependency = "ke_part", .module = "part" }, .{ .name = "settings_schema", .dependency = "ke_settings_schema", .module = "settings_schema" }},
         .common = &.{"heap"},
         .translations = &.{.{ .name = "c", .header = "src/c.h" }},
         .third_party = thirdParty,

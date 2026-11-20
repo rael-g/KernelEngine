@@ -20,6 +20,7 @@ pub fn build(b: *std.Build) void {
         \\#include <kernel_engine/render/frame/frame_create.h>
         \\#include <kernel_engine/render/frame/frame_systems_create.h>
         \\#include <kernel_engine/render/frame/render_frame_log.h>
+        \\#include <kernel_engine/render/frame/render_frame_parts.h>
     );
     const translated = b.addTranslateC(.{ .root_source_file = headers, .target = target, .optimize = optimize });
     translated.addIncludePath(b.path("../../../../c/completion"));

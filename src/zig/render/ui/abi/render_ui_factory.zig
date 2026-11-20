@@ -43,3 +43,11 @@ pub fn renderUiSystemsCreate(ui: ?*abi_render_ui.c.ke_render_ui, render_prepare:
     try checkResult(c.ke_render_ui_systems_create(ui, render_prepare, render_prepare_set, render_queue, render_queue_set, &written));
     return written;
 }
+
+/// Gives the parts ke_render_ui contains, each named after its factory and with its slots named
+/// after the factory's parameters: `render_ui` (ke_render_ui; `main`, `render`, `extraction`,
+/// `service`, `device` and `frame`); `render_ui_systems` (nothing; `ui`, `render_prepare` and
+/// `render_queue`).
+pub fn renderUiParts(out_count: ?*usize) ?*const abi_part.c.ke_part {
+    return c.ke_render_ui_parts(out_count);
+}

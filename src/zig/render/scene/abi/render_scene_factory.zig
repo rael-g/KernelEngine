@@ -51,3 +51,13 @@ pub fn renderSceneResolveSystemsCreate(scene: ?*abi_render.c.ke_render_scene_res
     try checkResult(c.ke_render_scene_resolve_systems_create(scene, update, update_set, post_update, post_update_set, &written));
     return written;
 }
+
+/// Gives the parts ke_render_scene contains, each named after its factory and with its slots
+/// named after the factory's parameters: `render_scene_resolve` (ke_render_scene_resolve;
+/// `main`, `render`, `extraction`, `service` and `resolver`, optional);
+/// `render_scene_resolve_systems` (nothing; `scene`, `update` and `post_update`);
+/// `render_label_resolve` (nothing; `service`, `scene`, `ui`, `resolver`, optional, and
+/// `update`).
+pub fn renderSceneParts(out_count: ?*usize) ?*const abi_part.c.ke_part {
+    return c.ke_render_scene_parts(out_count);
+}

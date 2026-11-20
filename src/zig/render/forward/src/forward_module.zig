@@ -14,6 +14,7 @@ pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @imp
 const zm = @import("zmath");
 const abi_ecs = @import("abi_ecs");
 const abi_part = @import("abi_part");
+const part = @import("part");
 const abi_render = @import("abi_render");
 const abi_render_forward_factory = @import("abi_render_forward_factory");
 const abi_render_frame = @import("abi_render_frame");
@@ -442,6 +443,16 @@ export fn ke_render_forward_create(
     return R.ok;
 }
 
+pub const parts = [_]abi_part.c.ke_part{
+    part.of(ke_render_forward_create, .{ .name = "render_forward", .slots = &.{"service", "device", "frame", "scene"}, .hooks = &.{"render_queue"}, .set_log = @ptrCast(&@import("log").Destination("ke_render_forward").setLogCallback) }),
+};
+
+/// The library's parts.
+export fn ke_render_forward_parts(out_count: ?*usize) callconv(.c) ?*const abi_part.c.ke_part {
+    if (out_count) |n| n.* = parts.len;
+    return &parts[0];
+}
+
 const testing = std.testing;
 
 const test_ids = std.mem.zeroInit(abi_render.c.ke_render_scene_component_ids, .{ .mesh = 1, .camera = 2, .directional_light = 3, .point_light = 4, .spot_light = 5, .ambient_light = 6, .skybox = 7, .sprite2d = 8, .label = 9, .world_transform = 10 });
@@ -832,4 +843,12 @@ test "a forward pass missing its scene is refused" {
 
 test "creating and destroying forward passes leaves no block allocated" {
     try heap.expectNoLeaks();
+}
+
+test "the library's parts name render_forward and their slots" {
+    var count: usize = 0;
+    const all = ke_render_forward_parts(&count).?;
+    try std.testing.expectEqual(@as(usize, 1), count);
+    try std.testing.expectEqualStrings("render_forward", std.mem.span(@as([*]const abi_part.c.ke_part, @ptrCast(all))[0].name.?));
+    try std.testing.expectEqual(@as(usize, 5), @as([*]const abi_part.c.ke_part, @ptrCast(all))[0].slot_count);
 }

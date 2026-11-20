@@ -4,6 +4,8 @@
 const abi_asset_resolver = @import("abi_asset_resolver");
 const abi_render_gpu = @import("abi_render_gpu");
 const std = @import("std");
+const abi_part = @import("abi_part");
+const part = @import("part");
 
 pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @import("log").Destination("ke_render_binder_grouped").logFn };
 
@@ -485,7 +487,7 @@ const Settings = struct {
 
 /// The factory: copies the shader directory its settings name, keeps the borrowed io, reads the material block from the embedded
 /// reflection for the vertex and fragment stages and builds the material layout on the device.
-export fn ke_render_resource_binder_grouped_create(device: ?*abi_render_gpu.c.ke_gpu_device, io: ?*abi_io.c.ke_io, settings: ?*abi_settings.c.ke_settings, out_binder: [*c]abi_render_gpu.c.ke_render_resource_binder_handle) callconv(.c) abi_result.c.ke_result {
+export fn ke_render_resource_binder_grouped_create(device: ?*abi_render_gpu.c.ke_gpu_device, io: ?*abi_io.c.ke_io, settings: ?*abi_settings.c.ke_settings, out_binder: ?*abi_render_gpu.c.ke_render_resource_binder_handle) callconv(.c) abi_result.c.ke_result {
     const out = out_binder orelse return R.code(error.InvalidArgument);
     out.* = .{ .ref = null, .destroy = null };
     const dev = device orelse return R.code(error.InvalidArgument);
@@ -535,6 +537,16 @@ fn newBinder(device: *abi_render_gpu.c.ke_gpu_device, io: *abi_io.c.ke_io, shade
     }
     st.material_layout = try reflection.createLayout(st.device, &st.material_group, "binder.material_layout");
     return st;
+}
+
+pub const parts = [_]abi_part.c.ke_part{
+    part.of(ke_render_resource_binder_grouped_create, .{ .name = "render_binder_grouped", .slots = &.{"device", "io"}, .set_log = @ptrCast(&@import("log").Destination("ke_render_binder_grouped").setLogCallback) }),
+};
+
+/// The library's parts.
+export fn ke_render_binder_grouped_parts(out_count: ?*usize) callconv(.c) ?*const abi_part.c.ke_part {
+    if (out_count) |n| n.* = parts.len;
+    return &parts[0];
 }
 
 const testing = std.testing;
@@ -832,4 +844,12 @@ test "creating a binder and everything it hands out, then destroying them, leave
     h.destroy.?(b);
     try expectReleased(&rig.dev);
     try heap.expectNoLeaks();
+}
+
+test "the library's parts name render_binder_grouped and their slots" {
+    var count: usize = 0;
+    const all = ke_render_binder_grouped_parts(&count).?;
+    try std.testing.expectEqual(@as(usize, 1), count);
+    try std.testing.expectEqualStrings("render_binder_grouped", std.mem.span(@as([*]const abi_part.c.ke_part, @ptrCast(all))[0].name.?));
+    try std.testing.expectEqual(@as(usize, 2), @as([*]const abi_part.c.ke_part, @ptrCast(all))[0].slot_count);
 }

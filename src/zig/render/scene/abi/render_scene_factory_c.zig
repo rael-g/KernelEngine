@@ -101,3 +101,11 @@ pub extern fn ke_render_scene_resolve_create(main: ?*abi_ecs.c.ke_ecs, render: ?
 /// post_update_set of post_update, after it. Every argument but out_systems must outlive the
 /// systems.
 pub extern fn ke_render_scene_resolve_systems_create(scene: ?*abi_render.c.ke_render_scene_resolve, update: ?*abi_schedule.c.ke_schedule, update_set: ke_schedule_set_id, post_update: ?*abi_schedule.c.ke_schedule, post_update_set: ke_schedule_set_id, out_systems: ?*abi_part.c.ke_owner) abi_result.c.ke_result;
+
+/// Gives the parts ke_render_scene contains, each named after its factory and with its slots
+/// named after the factory's parameters: `render_scene_resolve` (ke_render_scene_resolve;
+/// `main`, `render`, `extraction`, `service` and `resolver`, optional);
+/// `render_scene_resolve_systems` (nothing; `scene`, `update` and `post_update`);
+/// `render_label_resolve` (nothing; `service`, `scene`, `ui`, `resolver`, optional, and
+/// `update`).
+pub extern fn ke_render_scene_parts(out_count: ?*usize) ?*const abi_part.c.ke_part;

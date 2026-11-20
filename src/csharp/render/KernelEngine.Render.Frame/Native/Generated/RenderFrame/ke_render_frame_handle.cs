@@ -4,6 +4,7 @@ using global::KernelEngine.Ecs;
 using global::KernelEngine.Render;
 using global::KernelEngine.RenderGraph;
 
+using KernelEngine.Part.Native;
 using KernelEngine.RenderGraph.Native;
 using KernelEngine.Result.Native;
 

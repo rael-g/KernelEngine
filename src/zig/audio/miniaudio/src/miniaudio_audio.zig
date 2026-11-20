@@ -2,6 +2,8 @@
 //! each loaded sound lives.
 
 const std = @import("std");
+const abi_part = @import("abi_part");
+const part = @import("part");
 
 pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @import("log").Destination("ke_audio_miniaudio").logFn };
 
@@ -298,6 +300,16 @@ fn create(io: *abi_io.c.ke_io) R.Error!abi_audio.c.ke_audio_handle {
     return .{ .ref = api, .destroy = &audioDestroy };
 }
 
+pub const parts = [_]abi_part.c.ke_part{
+    part.of(ke_audio_miniaudio_create, .{ .name = "audio_miniaudio", .slots = &.{"io"}, .set_log = @ptrCast(&@import("log").Destination("ke_audio_miniaudio").setLogCallback) }),
+};
+
+/// The library's parts.
+export fn ke_audio_miniaudio_parts(out_count: ?*usize) callconv(.c) ?*const abi_part.c.ke_part {
+    if (out_count) |n| n.* = parts.len;
+    return &parts[0];
+}
+
 const testing = std.testing;
 
 const zsub = @import("zsub");
@@ -508,4 +520,12 @@ test "creating and destroying the audio backend leaves no block allocated" {
     if (h.ref == null) return error.SkipZigTest;
     h.destroy.?(h.ref);
     try heap.expectNoLeaks();
+}
+
+test "the library's parts name audio_miniaudio and their slots" {
+    var count: usize = 0;
+    const all = ke_audio_miniaudio_parts(&count).?;
+    try std.testing.expectEqual(@as(usize, 1), count);
+    try std.testing.expectEqualStrings("audio_miniaudio", std.mem.span(@as([*]const abi_part.c.ke_part, @ptrCast(all))[0].name.?));
+    try std.testing.expectEqual(@as(usize, 1), @as([*]const abi_part.c.ke_part, @ptrCast(all))[0].slot_count);
 }

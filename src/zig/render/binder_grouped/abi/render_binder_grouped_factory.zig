@@ -2,6 +2,7 @@
 
 const abi_io = @import("io");
 const abi_logger = @import("logger");
+const abi_part = @import("part");
 const abi_render_gpu = @import("render_gpu");
 const abi_result = @import("result");
 const abi_settings = @import("settings");
@@ -26,4 +27,10 @@ pub fn renderResourceBinderGroupedCreate(device: ?*abi_render_gpu.c.ke_gpu_devic
     var written: abi_render_gpu.c.ke_render_resource_binder_handle = undefined;
     try checkResult(c.ke_render_resource_binder_grouped_create(device, io, settings, &written));
     return written;
+}
+
+/// Gives the parts ke_render_binder_grouped contains: `render_binder_grouped`, providing
+/// ke_render_resource_binder, with the slots `device` and `io`.
+pub fn renderBinderGroupedParts(out_count: ?*usize) ?*const abi_part.c.ke_part {
+    return c.ke_render_binder_grouped_parts(out_count);
 }

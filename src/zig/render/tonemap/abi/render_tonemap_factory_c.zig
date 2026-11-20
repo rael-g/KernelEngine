@@ -83,3 +83,8 @@ pub extern fn ke_render_tonemap_set_log_callback(callback: ke_log_callback, ctx:
 /// KE_RENDER_STAGE_TONEMAP the pass that writes the frame's color, tonemapped, into the frame's
 /// output, which becomes the frame's color. Every argument but out_pass must outlive the pass.
 pub extern fn ke_render_tonemap_create(service: ?*abi_render.c.ke_render_service, device: ?*abi_render_gpu.c.ke_gpu_device, frame: ?*abi_render_frame.c.ke_render_frame, render_queue: ?*abi_schedule.c.ke_schedule, render_queue_set: ke_schedule_set_id, out_pass: ?*abi_part.c.ke_owner) abi_result.c.ke_result;
+
+/// Gives the parts ke_render_tonemap contains: `render_tonemap`, providing nothing, with the
+/// slots `service`, `device`, `frame` and `render_queue`, `render_queue` the ke_schedule_set its
+/// systems join.
+pub extern fn ke_render_tonemap_parts(out_count: ?*usize) ?*const abi_part.c.ke_part;

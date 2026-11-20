@@ -6,6 +6,8 @@ const abi_asset_resolver = @import("abi_asset_resolver");
 const abi_render_gpu = @import("abi_render_gpu");
 const abi_render_handles = @import("abi_render_handles");
 const std = @import("std");
+const abi_part = @import("abi_part");
+const part = @import("part");
 
 pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @import("log").Destination("ke_render_service").logFn };
 
@@ -323,7 +325,7 @@ export fn ke_render_service_create(
     io: ?*abi_io.c.ke_io,
     binder: ?*abi_render_gpu.c.ke_render_resource_binder,
     settings: ?*abi_settings.c.ke_settings,
-    out_service: [*c]abi_render.c.ke_render_service_handle,
+    out_service: ?*abi_render.c.ke_render_service_handle,
 ) callconv(.c) abi_result.c.ke_result {
     const out = out_service orelse return R.code(error.InvalidArgument);
     out.* = .{ .ref = null, .destroy = null };
@@ -357,6 +359,16 @@ fn prepare(core: *abi_render.c.ke_render_service) R.Error!void {
 
     st.api = core;
     try st.blit.prepare(core, st.binder);
+}
+
+pub const parts = [_]abi_part.c.ke_part{
+    part.of(ke_render_service_create, .{ .name = "render_service", .slots = &.{"device", "target", "io", "binder"}, .set_log = @ptrCast(&@import("log").Destination("ke_render_service").setLogCallback) }),
+};
+
+/// The library's parts.
+export fn ke_render_service_parts(out_count: ?*usize) callconv(.c) ?*const abi_part.c.ke_part {
+    if (out_count) |n| n.* = parts.len;
+    return &parts[0];
 }
 
 const testing = std.testing;
@@ -907,4 +919,12 @@ test "a pipeline is keyed by its vertex layout's content, not by where the layou
     h.destroy.?(h.ref);
     try gpu.expectReleased();
     try heap.expectNoLeaks();
+}
+
+test "the library's parts name render_service and their slots" {
+    var count: usize = 0;
+    const all = ke_render_service_parts(&count).?;
+    try std.testing.expectEqual(@as(usize, 1), count);
+    try std.testing.expectEqualStrings("render_service", std.mem.span(@as([*]const abi_part.c.ke_part, @ptrCast(all))[0].name.?));
+    try std.testing.expectEqual(@as(usize, 4), @as([*]const abi_part.c.ke_part, @ptrCast(all))[0].slot_count);
 }

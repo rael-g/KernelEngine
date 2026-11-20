@@ -8,6 +8,7 @@ pub fn build(b: *std.Build) void {
     abi.addImport("async", b.dependency("abi_async", .{}).module("abi"));
     abi.addImport("completion", b.dependency("abi_completion", .{}).module("abi"));
     abi.addImport("logger", b.dependency("abi_logger", .{}).module("abi"));
+    abi.addImport("part", b.dependency("abi_part", .{}).module("abi"));
     abi.addImport("render_gpu", b.dependency("abi_render_gpu", .{}).module("abi"));
     abi.addImport("result", b.dependency("abi_result", .{}).module("abi"));
     abi.addImport("settings", b.dependency("abi_settings", .{}).module("abi"));
@@ -17,6 +18,7 @@ pub fn build(b: *std.Build) void {
         \\#include <kernel_engine/render/webgpu/gpu_device_webgpu_create.h>
         \\#include <kernel_engine/render/webgpu/gpu_device_webgpu_log.h>
         \\#include <kernel_engine/render/webgpu/gpu_render_target_webgpu_window_create.h>
+        \\#include <kernel_engine/render/webgpu/gpu_device_webgpu_parts.h>
     );
     const translated = b.addTranslateC(.{ .root_source_file = headers, .target = target, .optimize = optimize });
     translated.addIncludePath(b.path("../../../../c/async"));
@@ -24,6 +26,7 @@ pub fn build(b: *std.Build) void {
     translated.addIncludePath(b.path("../include"));
     translated.addIncludePath(b.path("../../../common/include"));
     translated.addIncludePath(b.path("../../../../c/logger"));
+    translated.addIncludePath(b.path("../../../../c/part"));
     translated.addIncludePath(b.path("../../../../c/render"));
     translated.addIncludePath(b.path("../../../../c/result"));
     translated.addIncludePath(b.path("../../../../c/settings"));
@@ -44,6 +47,7 @@ pub fn build(b: *std.Build) void {
     tests.root_module.addIncludePath(b.path("../include"));
     tests.root_module.addIncludePath(b.path("../../../common/include"));
     tests.root_module.addIncludePath(b.path("../../../../c/logger"));
+    tests.root_module.addIncludePath(b.path("../../../../c/part"));
     tests.root_module.addIncludePath(b.path("../../../../c/render"));
     tests.root_module.addIncludePath(b.path("../../../../c/result"));
     tests.root_module.addIncludePath(b.path("../../../../c/settings"));

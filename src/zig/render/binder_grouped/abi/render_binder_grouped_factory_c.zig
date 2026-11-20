@@ -2,6 +2,7 @@
 
 const abi_io = @import("io");
 const abi_logger = @import("logger");
+const abi_part = @import("part");
 const abi_render_gpu = @import("render_gpu");
 const abi_result = @import("result");
 const abi_settings = @import("settings");
@@ -47,3 +48,7 @@ pub extern fn ke_render_binder_grouped_set_log_callback(callback: ke_log_callbac
 /// Creates a resource binder that gives every group of a shader one bind group and every
 /// material one bind group of its own.
 pub extern fn ke_render_resource_binder_grouped_create(device: ?*abi_render_gpu.c.ke_gpu_device, io: ?*abi_io.c.ke_io, settings: ?*abi_settings.c.ke_settings, out_binder: ?*abi_render_gpu.c.ke_render_resource_binder_handle) abi_result.c.ke_result;
+
+/// Gives the parts ke_render_binder_grouped contains: `render_binder_grouped`, providing
+/// ke_render_resource_binder, with the slots `device` and `io`.
+pub extern fn ke_render_binder_grouped_parts(out_count: ?*usize) ?*const abi_part.c.ke_part;

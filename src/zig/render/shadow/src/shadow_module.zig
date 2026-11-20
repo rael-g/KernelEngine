@@ -13,6 +13,7 @@ const zm = @import("zmath");
 const abi_ecs = @import("abi_ecs");
 const abi_math = @import("abi_math");
 const abi_part = @import("abi_part");
+const part = @import("part");
 const abi_render = @import("abi_render");
 const abi_render_frame = @import("abi_render_frame");
 const abi_render_graph = @import("abi_render_graph");
@@ -387,6 +388,16 @@ export fn ke_render_shadow_create(
     return R.ok;
 }
 
+pub const parts = [_]abi_part.c.ke_part{
+    part.of(ke_render_shadow_create, .{ .name = "render_shadow", .slots = &.{"service", "device", "frame", "scene", "view_space"}, .hooks = &.{"render_prepare", "render_queue"}, .set_log = @ptrCast(&@import("log").Destination("ke_render_shadow").setLogCallback) }),
+};
+
+/// The library's parts.
+export fn ke_render_shadow_parts(out_count: ?*usize) callconv(.c) ?*const abi_part.c.ke_part {
+    if (out_count) |n| n.* = parts.len;
+    return &parts[0];
+}
+
 const testing = std.testing;
 const zsub = @import("zsub");
 
@@ -536,4 +547,12 @@ test "a shadow pass whose shader fails to load releases what it had created" {
 
 test "creating and destroying shadow passes leaves no block allocated" {
     try heap.expectNoLeaks();
+}
+
+test "the library's parts name render_shadow and their slots" {
+    var count: usize = 0;
+    const all = ke_render_shadow_parts(&count).?;
+    try std.testing.expectEqual(@as(usize, 1), count);
+    try std.testing.expectEqualStrings("render_shadow", std.mem.span(@as([*]const abi_part.c.ke_part, @ptrCast(all))[0].name.?));
+    try std.testing.expectEqual(@as(usize, 7), @as([*]const abi_part.c.ke_part, @ptrCast(all))[0].slot_count);
 }

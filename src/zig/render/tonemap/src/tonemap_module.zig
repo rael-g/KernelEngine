@@ -10,6 +10,7 @@ pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @imp
 
 const abi_ecs = @import("abi_ecs");
 const abi_part = @import("abi_part");
+const part = @import("part");
 const abi_render = @import("abi_render");
 const abi_render_frame = @import("abi_render_frame");
 const abi_render_graph = @import("abi_render_graph");
@@ -196,6 +197,16 @@ export fn ke_render_tonemap_create(
     return R.ok;
 }
 
+pub const parts = [_]abi_part.c.ke_part{
+    part.of(ke_render_tonemap_create, .{ .name = "render_tonemap", .slots = &.{"service", "device", "frame"}, .hooks = &.{"render_queue"}, .set_log = @ptrCast(&@import("log").Destination("ke_render_tonemap").setLogCallback) }),
+};
+
+/// The library's parts.
+export fn ke_render_tonemap_parts(out_count: ?*usize) callconv(.c) ?*const abi_part.c.ke_part {
+    if (out_count) |n| n.* = parts.len;
+    return &parts[0];
+}
+
 const testing = std.testing;
 
 const zsub = @import("zsub");
@@ -326,4 +337,12 @@ test "a tonemap pass missing its device is refused as an invalid argument" {
 
 test "creating and destroying tonemap passes leaves no block allocated" {
     try heap.expectNoLeaks();
+}
+
+test "the library's parts name render_tonemap and their slots" {
+    var count: usize = 0;
+    const all = ke_render_tonemap_parts(&count).?;
+    try std.testing.expectEqual(@as(usize, 1), count);
+    try std.testing.expectEqualStrings("render_tonemap", std.mem.span(@as([*]const abi_part.c.ke_part, @ptrCast(all))[0].name.?));
+    try std.testing.expectEqual(@as(usize, 4), @as([*]const abi_part.c.ke_part, @ptrCast(all))[0].slot_count);
 }

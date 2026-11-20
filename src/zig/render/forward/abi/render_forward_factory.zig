@@ -33,3 +33,10 @@ pub fn renderForwardCreate(service: ?*abi_render.c.ke_render_service, device: ?*
 pub fn renderForwardSetLogCallback(callback: c.ke_log_callback, ctx: ?*anyopaque) void {
     return c.ke_render_forward_set_log_callback(callback, ctx);
 }
+
+/// Gives the parts ke_render_forward contains: `render_forward`, providing nothing, with the
+/// slots `service`, `device`, `frame`, `scene` and `render_queue`, `render_queue` the
+/// ke_schedule_set its systems join.
+pub fn renderForwardParts(out_count: ?*usize) ?*const abi_part.c.ke_part {
+    return c.ke_render_forward_parts(out_count);
+}

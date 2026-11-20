@@ -31,3 +31,10 @@ pub fn renderSkyboxCreate(service: ?*abi_render.c.ke_render_service, device: ?*a
     try checkResult(c.ke_render_skybox_create(service, device, frame, scene, camera, render_queue, render_queue_set, &written));
     return written;
 }
+
+/// Gives the parts ke_render_skybox contains: `render_skybox`, providing nothing, with the slots
+/// `service`, `device`, `frame`, `scene`, `camera` and `render_queue`, `render_queue` the
+/// ke_schedule_set its systems join.
+pub fn renderSkyboxParts(out_count: ?*usize) ?*const abi_part.c.ke_part {
+    return c.ke_render_skybox_parts(out_count);
+}

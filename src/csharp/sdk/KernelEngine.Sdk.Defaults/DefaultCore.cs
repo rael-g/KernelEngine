@@ -79,7 +79,7 @@ public static class DefaultCore
             return new SceneHierarchy(Get<Ecs.EcsRegistry>(sp), schedules.Update, sets.PostUpdate);
         });
         services.AddSingleton<Func<EngineSchedules, EngineSets, IDisposable>>(sp => (schedules, sets) => new Physics.PhysicsBody2D(Get<Ecs.EcsRegistry>(sp), Get<Physics.Physics2D>(sp), Get<SceneTree>(sp), schedules.Fixed, sets.FixedPostUpdate));
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<Module.Module, Audio.SoundModule>(sp => new Audio.SoundModule(Get<Ecs.EcsRegistry>(sp), Get<Audio.Audio>(sp))));
+        services.AddSingleton<Func<EngineSchedules, EngineSets, IDisposable>>(sp => (schedules, sets) => new Audio.Sound(Get<Ecs.EcsRegistry>(sp), Get<Audio.Audio>(sp), schedules.Update, sets.PostUpdate));
         services.AddSingleton<Func<EngineSchedules, EngineSets, IDisposable>>(sp => (schedules, sets) => new InputActionsEvaluation(Get<InputActions>(sp), Get<Input.Input>(sp), schedules.PreUpdate, sets.PreUpdate));
         services.AddSingleton<Func<EngineSchedules, EngineSets, IDisposable>>(sp => (schedules, sets) => new Extraction.ExtractionHistory(Get<Extraction.Extraction>(sp), schedules.Fixed, sets.FixedPreUpdate));
         services.AddSingleton<Func<EngineSchedules, EngineSets, IDisposable>>(sp => (schedules, sets) => new NodeTypesSystems(Get<NodeTypes>(sp), schedules.PreUpdate, sets.PreUpdate, schedules.Fixed, sets.FixedUpdate, schedules.Update, sets.Update, schedules.Update, sets.PostUpdate));

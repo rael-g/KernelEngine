@@ -5,6 +5,8 @@ const abi_render_contract = @import("abi_render_contract");
 const abi_render_components = @import("abi_render_components");
 const abi_render_gpu = @import("abi_render_gpu");
 const std = @import("std");
+const abi_part = @import("abi_part");
+const part = @import("part");
 
 pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @import("log").Destination("ke_render_camera").logFn };
 
@@ -142,7 +144,7 @@ fn destroy(self_in: ?*abi_render.c.ke_render_camera) callconv(.c) void {
 export fn ke_render_camera_create(
     view_space: ?*abi_view.c.ke_view_space,
     device: ?*abi_render_gpu.c.ke_gpu_device,
-    out_camera: [*c]abi_render.c.ke_render_camera_handle,
+    out_camera: ?*abi_render.c.ke_render_camera_handle,
 ) callconv(.c) abi_result.c.ke_result {
     const out = out_camera orelse return R.code(error.InvalidArgument);
     out.* = std.mem.zeroes(abi_render.c.ke_render_camera_handle);
@@ -160,6 +162,16 @@ export fn ke_render_camera_create(
 
     out.* = .{ .ref = &s.api, .destroy = destroy };
     return R.ok;
+}
+
+pub const parts = [_]abi_part.c.ke_part{
+    part.of(ke_render_camera_create, .{ .name = "render_camera", .slots = &.{"view_space", "device"}, .set_log = @ptrCast(&@import("log").Destination("ke_render_camera").setLogCallback) }),
+};
+
+/// The library's parts.
+export fn ke_render_camera_parts(out_count: ?*usize) callconv(.c) ?*const abi_part.c.ke_part {
+    if (out_count) |n| n.* = parts.len;
+    return &parts[0];
 }
 
 const testing = std.testing;
@@ -383,4 +395,12 @@ test "creating and destroying a camera leaves no block allocated" {
     f.init();
     f.deinit();
     try heap.expectNoLeaks();
+}
+
+test "the library's parts name render_camera and their slots" {
+    var count: usize = 0;
+    const all = ke_render_camera_parts(&count).?;
+    try std.testing.expectEqual(@as(usize, 1), count);
+    try std.testing.expectEqualStrings("render_camera", std.mem.span(@as([*]const abi_part.c.ke_part, @ptrCast(all))[0].name.?));
+    try std.testing.expectEqual(@as(usize, 2), @as([*]const abi_part.c.ke_part, @ptrCast(all))[0].slot_count);
 }

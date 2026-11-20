@@ -105,7 +105,7 @@ typedef struct ke_sdk_engine
     ke_physics_2d_handle           physics;
     ke_owner                       bodies;
     ke_audio_handle                audio;
-    ke_module_handle               sounds;
+    ke_owner                       sounds;
     ke_input_actions_handle        actions;
     ke_owner                       action_evaluation;
     ke_node_types_handle           node_types;

@@ -31,3 +31,10 @@ pub fn renderTonemapCreate(service: ?*abi_render.c.ke_render_service, device: ?*
     try checkResult(c.ke_render_tonemap_create(service, device, frame, render_queue, render_queue_set, &written));
     return written;
 }
+
+/// Gives the parts ke_render_tonemap contains: `render_tonemap`, providing nothing, with the
+/// slots `service`, `device`, `frame` and `render_queue`, `render_queue` the ke_schedule_set its
+/// systems join.
+pub fn renderTonemapParts(out_count: ?*usize) ?*const abi_part.c.ke_part {
+    return c.ke_render_tonemap_parts(out_count);
+}

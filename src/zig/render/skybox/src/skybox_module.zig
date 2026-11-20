@@ -19,6 +19,7 @@ const abi_render_skybox_factory = @import("abi_render_skybox_factory");
 const abi_result = @import("abi_result");
 const abi_schedule = @import("abi_schedule");
 const abi_part = @import("abi_part");
+const part = @import("part");
 const abi_render_frame = @import("abi_render_frame");
 const abi_render_graph = @import("abi_render_graph");
 const hooked_systems = @import("hooked_systems");
@@ -279,6 +280,16 @@ export fn ke_render_skybox_create(
     return R.ok;
 }
 
+pub const parts = [_]abi_part.c.ke_part{
+    part.of(ke_render_skybox_create, .{ .name = "render_skybox", .slots = &.{"service", "device", "frame", "scene", "camera"}, .hooks = &.{"render_queue"}, .set_log = @ptrCast(&@import("log").Destination("ke_render_skybox").setLogCallback) }),
+};
+
+/// The library's parts.
+export fn ke_render_skybox_parts(out_count: ?*usize) callconv(.c) ?*const abi_part.c.ke_part {
+    if (out_count) |n| n.* = parts.len;
+    return &parts[0];
+}
+
 const testing = std.testing;
 const zsub = @import("zsub");
 
@@ -432,4 +443,12 @@ test "a skybox pass missing its camera is refused as an invalid argument" {
 
 test "creating and destroying skybox passes leaves no block allocated" {
     try heap.expectNoLeaks();
+}
+
+test "the library's parts name render_skybox and their slots" {
+    var count: usize = 0;
+    const all = ke_render_skybox_parts(&count).?;
+    try std.testing.expectEqual(@as(usize, 1), count);
+    try std.testing.expectEqualStrings("render_skybox", std.mem.span(@as([*]const abi_part.c.ke_part, @ptrCast(all))[0].name.?));
+    try std.testing.expectEqual(@as(usize, 6), @as([*]const abi_part.c.ke_part, @ptrCast(all))[0].slot_count);
 }

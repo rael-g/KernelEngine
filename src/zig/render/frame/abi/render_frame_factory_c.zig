@@ -90,3 +90,9 @@ pub extern fn ke_render_frame_systems_create(frame: ?*abi_render_frame.c.ke_rend
 /// Sends every line ke_render_frame logs to callback, with ctx; a NULL callback sends them back
 /// to stderr, where they go until this is called. Called once, before the library logs.
 pub extern fn ke_render_frame_set_log_callback(callback: ke_log_callback, ctx: ?*anyopaque) void;
+
+/// Gives the parts ke_render_frame contains, each named after its factory and with its slots
+/// named after the factory's parameters: `render_frame` (ke_render_frame; `ecs`, `graph`,
+/// `service`, `camera` and `scene`); `render_frame_systems` (nothing; `frame`, `render_begin`
+/// and `render_submit`).
+pub extern fn ke_render_frame_parts(out_count: ?*usize) ?*const abi_part.c.ke_part;

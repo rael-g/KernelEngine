@@ -5,8 +5,8 @@
 
 namespace KernelEngine.Audio;
 
-/// <summary>Creates the module that loads, plays and releases the clip of every ke_sound_component; attaching it registers its system in the update schedule's post_update set. Destroying the module stops every voice and releases every clip it holds.</summary>
-public sealed unsafe partial class SoundModule : KernelEngine.Module.Module
+/// <summary>Creates the module that loads, plays and releases the clip of every ke_sound_component, its system registered in post_update_set of post_update. Destroying the module unregisters the system, stops every voice and releases every clip it holds.</summary>
+public sealed unsafe partial class Sound : IDisposable
 {
 
     /// <summary>Turns a result code into the exception that carries it, and back.</summary>
@@ -50,21 +50,49 @@ public sealed unsafe partial class SoundModule : KernelEngine.Module.Module
         }
     }
 
-    /// <summary>Creates the module that loads, plays and releases the clip of every ke_sound_component; attaching it registers its system in the update schedule's post_update set. Destroying the module stops every voice and releases every clip it holds.</summary>
+    /// <summary>Creates the module that loads, plays and releases the clip of every ke_sound_component, its system registered in post_update_set of post_update. Destroying the module unregisters the system, stops every voice and releases every clip it holds.</summary>
     /// <param name="ecs">Resolves the component id.</param>
     /// <param name="audio">Loads the clips and plays their voices; must outlive the module.</param>
-    public SoundModule(KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Audio.INativeAudio audio) : base(Create(ecs, audio))
+    /// <param name="postUpdate">Runs the system; must outlive the module.</param>
+    /// <param name="postUpdateSet"></param>
+    public Sound(KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Audio.INativeAudio audio, KernelEngine.Schedule.INativeSchedule postUpdate, uint postUpdateSet) : this(Create(ecs, audio, postUpdate, postUpdateSet))
     {
         Hold(ecs.Owner);
         Hold(audio.Owner);
+        Hold(postUpdate.Owner);
     }
 
-    private static KernelEngine.Module.Native.ke_module_handle Create(KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Audio.INativeAudio audio)
+    private KernelEngine.Part.Native.ke_owner _handle;
+
+    private readonly List<global::System.Runtime.InteropServices.SafeHandle> _held = new();
+
+    private Sound(KernelEngine.Part.Native.ke_owner handle) => _handle = handle;
+
+    private void Hold(global::System.Runtime.InteropServices.SafeHandle? owner)
+    {
+        if (owner is null) return;
+        var added = false;
+        owner.DangerousAddRef(ref added);
+        _held.Add(owner);
+    }
+
+    /// <summary>Releases the native object, then what it held.</summary>
+    public void Dispose()
+    {
+        if (_handle.@ref == null) return;
+        _handle.destroy(_handle.@ref);
+        _handle = default;
+        foreach (var held in _held) held.DangerousRelease();
+        _held.Clear();
+    }
+
+    private static KernelEngine.Part.Native.ke_owner Create(KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Audio.INativeAudio audio, KernelEngine.Schedule.INativeSchedule postUpdate, uint postUpdateSet)
     {
         ArgumentNullException.ThrowIfNull(ecs);
         ArgumentNullException.ThrowIfNull(audio);
-        KernelEngine.Module.Native.ke_module_handle handle;
-        NativeResult.ThrowIfFailed(KernelEngine.Audio.Native.NativeMethods.sound_create(ecs.Native, audio.Native, &handle), "ke_sound_create");
+        ArgumentNullException.ThrowIfNull(postUpdate);
+        KernelEngine.Part.Native.ke_owner handle;
+        NativeResult.ThrowIfFailed(KernelEngine.Audio.Native.NativeMethods.sound_create(ecs.Native, audio.Native, postUpdate.Native, postUpdateSet, &handle), "ke_sound_create");
         return handle;
     }
 }

@@ -3,7 +3,7 @@
 const abi_audio = @import("audio");
 const abi_ecs = @import("ecs");
 const abi_logger = @import("logger");
-const abi_module = @import("module");
+const abi_part = @import("part");
 const abi_result = @import("result");
 const abi_schedule = @import("schedule");
 
@@ -20,11 +20,17 @@ pub fn audioModuleSetLogCallback(callback: c.ke_log_callback, ctx: ?*anyopaque) 
     return c.ke_audio_module_set_log_callback(callback, ctx);
 }
 
-/// Creates the module that loads, plays and releases the clip of every ke_sound_component;
-/// attaching it registers its system in the update schedule's post_update set. Destroying the
-/// module stops every voice and releases every clip it holds.
-pub fn soundCreate(ecs: ?*abi_ecs.c.ke_ecs, audio: ?*abi_audio.c.ke_audio) Error!abi_module.c.ke_module_handle {
-    var written: abi_module.c.ke_module_handle = undefined;
-    try checkResult(c.ke_sound_create(ecs, audio, &written));
+/// Creates the module that loads, plays and releases the clip of every ke_sound_component, its
+/// system registered in post_update_set of post_update. Destroying the module unregisters the
+/// system, stops every voice and releases every clip it holds.
+pub fn soundCreate(ecs: ?*abi_ecs.c.ke_ecs, audio: ?*abi_audio.c.ke_audio, post_update: ?*abi_schedule.c.ke_schedule, post_update_set: c.ke_schedule_set_id) Error!abi_part.c.ke_owner {
+    var written: abi_part.c.ke_owner = undefined;
+    try checkResult(c.ke_sound_create(ecs, audio, post_update, post_update_set, &written));
     return written;
+}
+
+/// Gives the parts ke_audio_module contains: `sound`, providing nothing, with the slots `ecs`,
+/// `audio` and `post_update`, `post_update` the ke_schedule_set its systems join.
+pub fn audioModuleParts(out_count: ?*usize) ?*const abi_part.c.ke_part {
+    return c.ke_audio_module_parts(out_count);
 }

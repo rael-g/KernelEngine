@@ -84,3 +84,8 @@ pub extern fn ke_render_gbuffer_create(service: ?*abi_render.c.ke_render_service
 /// Sends every line ke_render_gbuffer logs to callback, with ctx; a NULL callback sends them
 /// back to stderr, where they go until this is called. Called once, before the library logs.
 pub extern fn ke_render_gbuffer_set_log_callback(callback: ke_log_callback, ctx: ?*anyopaque) void;
+
+/// Gives the parts ke_render_gbuffer contains: `render_gbuffer`, providing nothing, with the
+/// slots `service`, `device`, `frame`, `scene`, `render_prepare` and `render_queue`,
+/// `render_prepare` and `render_queue` the ke_schedule_sets its systems join.
+pub extern fn ke_render_gbuffer_parts(out_count: ?*usize) ?*const abi_part.c.ke_part;

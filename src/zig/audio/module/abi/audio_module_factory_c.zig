@@ -3,7 +3,7 @@
 const abi_audio = @import("audio");
 const abi_ecs = @import("ecs");
 const abi_logger = @import("logger");
-const abi_module = @import("module");
+const abi_part = @import("part");
 const abi_result = @import("result");
 const abi_schedule = @import("schedule");
 
@@ -23,6 +23,9 @@ pub const ke_schedule_system_id = u64;
 /// thread logged.
 pub const ke_log_callback = ?*const fn (?*anyopaque, abi_logger.c.ke_log_level, ?[*:0]const u8, ?[*:0]const u8) callconv(.c) void;
 
+/// Receives one key the settings hold.
+pub const ke_settings_key_func = ?*const fn (?[*:0]const u8, ?*anyopaque) callconv(.c) void;
+
 /// A structural operation applied when the queue holding it is drained. `user` points at the
 /// copy of the payload passed to defer; `ecs` is the live world. A failure is returned, and the
 /// queue stops there: the operations recorded after it are dropped.
@@ -41,7 +44,11 @@ pub const ke_schedule_condition_fn = ?*const fn (?*anyopaque, ?*bool) callconv(.
 /// to stderr, where they go until this is called. Called once, before the library logs.
 pub extern fn ke_audio_module_set_log_callback(callback: ke_log_callback, ctx: ?*anyopaque) void;
 
-/// Creates the module that loads, plays and releases the clip of every ke_sound_component;
-/// attaching it registers its system in the update schedule's post_update set. Destroying the
-/// module stops every voice and releases every clip it holds.
-pub extern fn ke_sound_create(ecs: ?*abi_ecs.c.ke_ecs, audio: ?*abi_audio.c.ke_audio, out_module: ?*abi_module.c.ke_module_handle) abi_result.c.ke_result;
+/// Creates the module that loads, plays and releases the clip of every ke_sound_component, its
+/// system registered in post_update_set of post_update. Destroying the module unregisters the
+/// system, stops every voice and releases every clip it holds.
+pub extern fn ke_sound_create(ecs: ?*abi_ecs.c.ke_ecs, audio: ?*abi_audio.c.ke_audio, post_update: ?*abi_schedule.c.ke_schedule, post_update_set: ke_schedule_set_id, out_module: ?*abi_part.c.ke_owner) abi_result.c.ke_result;
+
+/// Gives the parts ke_audio_module contains: `sound`, providing nothing, with the slots `ecs`,
+/// `audio` and `post_update`, `post_update` the ke_schedule_set its systems join.
+pub extern fn ke_audio_module_parts(out_count: ?*usize) ?*const abi_part.c.ke_part;

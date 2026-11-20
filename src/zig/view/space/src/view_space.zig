@@ -4,6 +4,8 @@
 
 const abi_render_gpu = @import("abi_render_gpu");
 const std = @import("std");
+const abi_part = @import("abi_part");
+const part = @import("part");
 const zm = @import("zmath");
 
 pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @import("log").Destination("ke_view_space").logFn };
@@ -244,6 +246,17 @@ export fn ke_view_space_rh_create(out_view_space: ?*abi_view.c.ke_view_space_han
 /// Creates a left-handed view space through `create`.
 export fn ke_view_space_lh_create(out_view_space: ?*abi_view.c.ke_view_space_handle) callconv(.c) abi_result.c.ke_result {
     return create(.left, out_view_space);
+}
+
+pub const parts = [_]abi_part.c.ke_part{
+    part.of(ke_view_space_rh_create, .{ .name = "view_space_rh", .slots = &.{}, .set_log = @ptrCast(&@import("log").Destination("ke_view_space").setLogCallback) }),
+    part.of(ke_view_space_lh_create, .{ .name = "view_space_lh", .slots = &.{}, .set_log = @ptrCast(&@import("log").Destination("ke_view_space").setLogCallback) }),
+};
+
+/// The library's parts.
+export fn ke_view_space_parts(out_count: ?*usize) callconv(.c) ?*const abi_part.c.ke_part {
+    if (out_count) |n| n.* = parts.len;
+    return &parts[0];
 }
 
 const testing = std.testing;
@@ -529,4 +542,14 @@ test "creating and destroying both view spaces leaves no block allocated" {
     rh.destroy.?(rh.ref);
     lh.destroy.?(lh.ref);
     try heap.expectNoLeaks();
+}
+
+test "the library's parts name view_space_rh, view_space_lh and their slots" {
+    var count: usize = 0;
+    const all = ke_view_space_parts(&count).?;
+    try std.testing.expectEqual(@as(usize, 2), count);
+    try std.testing.expectEqualStrings("view_space_rh", std.mem.span(@as([*]const abi_part.c.ke_part, @ptrCast(all))[0].name.?));
+    try std.testing.expectEqual(@as(usize, 0), @as([*]const abi_part.c.ke_part, @ptrCast(all))[0].slot_count);
+    try std.testing.expectEqualStrings("view_space_lh", std.mem.span(@as([*]const abi_part.c.ke_part, @ptrCast(all))[1].name.?));
+    try std.testing.expectEqual(@as(usize, 0), @as([*]const abi_part.c.ke_part, @ptrCast(all))[1].slot_count);
 }

@@ -86,3 +86,8 @@ pub extern fn ke_render_shadow_set_log_callback(callback: ke_log_callback, ctx: 
 /// casters into the map in render_queue_set of render_queue. Every argument but out_pass must
 /// outlive the pass.
 pub extern fn ke_render_shadow_create(service: ?*abi_render.c.ke_render_service, device: ?*abi_render_gpu.c.ke_gpu_device, frame: ?*abi_render_frame.c.ke_render_frame, scene: ?*abi_render.c.ke_render_scene_resolve, view_space: ?*abi_view.c.ke_view_space, render_prepare: ?*abi_schedule.c.ke_schedule, render_prepare_set: ke_schedule_set_id, render_queue: ?*abi_schedule.c.ke_schedule, render_queue_set: ke_schedule_set_id, settings: ?*abi_settings.c.ke_settings, out_pass: ?*abi_part.c.ke_owner) abi_result.c.ke_result;
+
+/// Gives the parts ke_render_shadow contains: `render_shadow`, providing nothing, with the slots
+/// `service`, `device`, `frame`, `scene`, `view_space`, `render_prepare` and `render_queue`,
+/// `render_prepare` and `render_queue` the ke_schedule_sets its systems join.
+pub extern fn ke_render_shadow_parts(out_count: ?*usize) ?*const abi_part.c.ke_part;

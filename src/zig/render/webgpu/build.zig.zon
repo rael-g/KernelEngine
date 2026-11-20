@@ -5,6 +5,8 @@
     .minimum_zig_version = "0.14.0",
 
     .dependencies = .{
+        .ke_part = .{ .path = "../../part" },
+        .abi_part = .{ .path = "../../abi/part" },
         .abi_settings = .{ .path = "../../abi/settings" },
         .ke_settings_schema = .{ .path = "../../settings/schema" },
         .abi_render_gpu = .{ .path = "../../abi/render_gpu" },

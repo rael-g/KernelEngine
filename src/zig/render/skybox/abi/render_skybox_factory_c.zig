@@ -83,3 +83,8 @@ pub extern fn ke_render_skybox_set_log_callback(callback: ke_log_callback, ctx: 
 /// KE_RENDER_STAGE_SKY the pass that draws the sky over the frame's color where the frame's
 /// depth is at the far plane. Every argument but out_pass must outlive the pass.
 pub extern fn ke_render_skybox_create(service: ?*abi_render.c.ke_render_service, device: ?*abi_render_gpu.c.ke_gpu_device, frame: ?*abi_render_frame.c.ke_render_frame, scene: ?*abi_render.c.ke_render_scene_resolve, camera: ?*abi_render.c.ke_render_camera, render_queue: ?*abi_schedule.c.ke_schedule, render_queue_set: ke_schedule_set_id, out_pass: ?*abi_part.c.ke_owner) abi_result.c.ke_result;
+
+/// Gives the parts ke_render_skybox contains: `render_skybox`, providing nothing, with the slots
+/// `service`, `device`, `frame`, `scene`, `camera` and `render_queue`, `render_queue` the
+/// ke_schedule_set its systems join.
+pub extern fn ke_render_skybox_parts(out_count: ?*usize) ?*const abi_part.c.ke_part;

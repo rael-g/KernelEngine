@@ -34,3 +34,10 @@ pub fn renderShadowCreate(service: ?*abi_render.c.ke_render_service, device: ?*a
     try checkResult(c.ke_render_shadow_create(service, device, frame, scene, view_space, render_prepare, render_prepare_set, render_queue, render_queue_set, settings, &written));
     return written;
 }
+
+/// Gives the parts ke_render_shadow contains: `render_shadow`, providing nothing, with the slots
+/// `service`, `device`, `frame`, `scene`, `view_space`, `render_prepare` and `render_queue`,
+/// `render_prepare` and `render_queue` the ke_schedule_sets its systems join.
+pub fn renderShadowParts(out_count: ?*usize) ?*const abi_part.c.ke_part {
+    return c.ke_render_shadow_parts(out_count);
+}

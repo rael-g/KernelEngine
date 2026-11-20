@@ -12,6 +12,7 @@ pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @imp
 const abi_completion = @import("abi_completion");
 const abi_ecs = @import("abi_ecs");
 const abi_part = @import("abi_part");
+const part = @import("part");
 const hooked_systems = @import("hooked_systems");
 const abi_render = @import("abi_render");
 const abi_render_frame_factory = @import("abi_render_frame_factory");
@@ -424,6 +425,17 @@ export fn ke_render_frame_systems_create(
     return R.ok;
 }
 
+pub const parts = [_]abi_part.c.ke_part{
+    part.of(ke_render_frame_create, .{ .name = "render_frame", .slots = &.{"ecs", "graph", "service", "camera", "scene"}, .set_log = @ptrCast(&@import("log").Destination("ke_render_frame").setLogCallback) }),
+    part.of(ke_render_frame_systems_create, .{ .name = "render_frame_systems", .slots = &.{"frame"}, .hooks = &.{"render_begin", "render_submit"}, .set_log = @ptrCast(&@import("log").Destination("ke_render_frame").setLogCallback) }),
+};
+
+/// The library's parts.
+export fn ke_render_frame_parts(out_count: ?*usize) callconv(.c) ?*const abi_part.c.ke_part {
+    if (out_count) |n| n.* = parts.len;
+    return &parts[0];
+}
+
 const testing = std.testing;
 const zsub = @import("zsub");
 
@@ -674,4 +686,14 @@ test "a frame missing a part or given an invalid format is refused as an invalid
 
 test "creating and destroying frames leaves no block allocated" {
     try heap.expectNoLeaks();
+}
+
+test "the library's parts name render_frame, render_frame_systems and their slots" {
+    var count: usize = 0;
+    const all = ke_render_frame_parts(&count).?;
+    try std.testing.expectEqual(@as(usize, 2), count);
+    try std.testing.expectEqualStrings("render_frame", std.mem.span(@as([*]const abi_part.c.ke_part, @ptrCast(all))[0].name.?));
+    try std.testing.expectEqual(@as(usize, 5), @as([*]const abi_part.c.ke_part, @ptrCast(all))[0].slot_count);
+    try std.testing.expectEqualStrings("render_frame_systems", std.mem.span(@as([*]const abi_part.c.ke_part, @ptrCast(all))[1].name.?));
+    try std.testing.expectEqual(@as(usize, 3), @as([*]const abi_part.c.ke_part, @ptrCast(all))[1].slot_count);
 }

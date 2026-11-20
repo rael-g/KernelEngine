@@ -23,6 +23,7 @@ pub fn build(b: *std.Build) void {
         \\#include <kernel_engine/render/scene/render_scene_log.h>
         \\#include <kernel_engine/render/scene/scene_resolve_create.h>
         \\#include <kernel_engine/render/scene/scene_resolve_systems_create.h>
+        \\#include <kernel_engine/render/scene/render_scene_parts.h>
     );
     const translated = b.addTranslateC(.{ .root_source_file = headers, .target = target, .optimize = optimize });
     translated.addIncludePath(b.path("../../../../c/asset"));

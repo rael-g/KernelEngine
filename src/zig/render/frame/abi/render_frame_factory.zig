@@ -42,3 +42,11 @@ pub fn renderFrameSystemsCreate(frame: ?*abi_render_frame.c.ke_render_frame, ren
 pub fn renderFrameSetLogCallback(callback: c.ke_log_callback, ctx: ?*anyopaque) void {
     return c.ke_render_frame_set_log_callback(callback, ctx);
 }
+
+/// Gives the parts ke_render_frame contains, each named after its factory and with its slots
+/// named after the factory's parameters: `render_frame` (ke_render_frame; `ecs`, `graph`,
+/// `service`, `camera` and `scene`); `render_frame_systems` (nothing; `frame`, `render_begin`
+/// and `render_submit`).
+pub fn renderFrameParts(out_count: ?*usize) ?*const abi_part.c.ke_part {
+    return c.ke_render_frame_parts(out_count);
+}

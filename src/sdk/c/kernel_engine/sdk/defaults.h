@@ -343,8 +343,7 @@ static inline ke_result ke_sdk_physics_box2d(ke_sdk_engine *e)
 static inline ke_result ke_sdk_audio_miniaudio(ke_sdk_engine *e)
 {
     ke_result made = ke_audio_miniaudio_create(e->io.ref, &e->audio);
-    if (made == KE_OK) made = ke_sound_create(e->ecs.ref, e->audio.ref, &e->sounds);
-    if (made == KE_OK) made = ke_sdk_add_module(e, e->sounds.ref);
+    if (made == KE_OK) made = ke_sound_create(e->ecs.ref, e->audio.ref, e->schedules.update.ref, e->sets.post_update, &e->sounds);
     return made;
 }
 

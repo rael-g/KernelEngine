@@ -13,6 +13,7 @@ pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @imp
 
 const abi_ecs = @import("abi_ecs");
 const abi_part = @import("abi_part");
+const part = @import("part");
 const abi_render = @import("abi_render");
 const abi_render_deferred_lighting_factory = @import("abi_render_deferred_lighting_factory");
 const abi_render_frame = @import("abi_render_frame");
@@ -273,6 +274,16 @@ export fn ke_render_deferred_lighting_create(
     return R.ok;
 }
 
+pub const parts = [_]abi_part.c.ke_part{
+    part.of(ke_render_deferred_lighting_create, .{ .name = "render_deferred_lighting", .slots = &.{"service", "device", "frame", "scene"}, .hooks = &.{"render_queue"}, .set_log = @ptrCast(&@import("log").Destination("ke_render_deferred_lighting").setLogCallback) }),
+};
+
+/// The library's parts.
+export fn ke_render_deferred_lighting_parts(out_count: ?*usize) callconv(.c) ?*const abi_part.c.ke_part {
+    if (out_count) |n| n.* = parts.len;
+    return &parts[0];
+}
+
 const testing = std.testing;
 const zsub = @import("zsub");
 
@@ -414,4 +425,12 @@ test "a deferred lighting pass without a config is refused as an invalid argumen
 
 test "creating and destroying deferred lighting passes leaves no block allocated" {
     try heap.expectNoLeaks();
+}
+
+test "the library's parts name render_deferred_lighting and their slots" {
+    var count: usize = 0;
+    const all = ke_render_deferred_lighting_parts(&count).?;
+    try std.testing.expectEqual(@as(usize, 1), count);
+    try std.testing.expectEqualStrings("render_deferred_lighting", std.mem.span(@as([*]const abi_part.c.ke_part, @ptrCast(all))[0].name.?));
+    try std.testing.expectEqual(@as(usize, 5), @as([*]const abi_part.c.ke_part, @ptrCast(all))[0].slot_count);
 }

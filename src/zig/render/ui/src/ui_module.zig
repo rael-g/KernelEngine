@@ -19,6 +19,7 @@ const abi_render_ui = @import("abi_render_ui");
 const abi_result = @import("abi_result");
 const abi_schedule = @import("abi_schedule");
 const abi_part = @import("abi_part");
+const part = @import("part");
 const hooked_systems = @import("hooked_systems");
 const abi_render_frame = @import("abi_render_frame");
 const abi_render_graph = @import("abi_render_graph");
@@ -616,6 +617,17 @@ export fn ke_render_ui_systems_create(
     return R.ok;
 }
 
+pub const parts = [_]abi_part.c.ke_part{
+    part.of(ke_render_ui_create, .{ .name = "render_ui", .slots = &.{"main", "render", "extraction", "service", "device", "frame"}, .set_log = @ptrCast(&@import("log").Destination("ke_render_ui").setLogCallback) }),
+    part.of(ke_render_ui_systems_create, .{ .name = "render_ui_systems", .slots = &.{"ui"}, .hooks = &.{"render_prepare", "render_queue"}, .set_log = @ptrCast(&@import("log").Destination("ke_render_ui").setLogCallback) }),
+};
+
+/// The library's parts.
+export fn ke_render_ui_parts(out_count: ?*usize) callconv(.c) ?*const abi_part.c.ke_part {
+    if (out_count) |n| n.* = parts.len;
+    return &parts[0];
+}
+
 const testing = std.testing;
 const zsub = @import("zsub");
 
@@ -788,4 +800,14 @@ test "a ui pass missing its frame is refused" {
 
 test "creating and destroying ui passes leaves no block allocated" {
     try heap.expectNoLeaks();
+}
+
+test "the library's parts name render_ui, render_ui_systems and their slots" {
+    var count: usize = 0;
+    const all = ke_render_ui_parts(&count).?;
+    try std.testing.expectEqual(@as(usize, 2), count);
+    try std.testing.expectEqualStrings("render_ui", std.mem.span(@as([*]const abi_part.c.ke_part, @ptrCast(all))[0].name.?));
+    try std.testing.expectEqual(@as(usize, 6), @as([*]const abi_part.c.ke_part, @ptrCast(all))[0].slot_count);
+    try std.testing.expectEqualStrings("render_ui_systems", std.mem.span(@as([*]const abi_part.c.ke_part, @ptrCast(all))[1].name.?));
+    try std.testing.expectEqual(@as(usize, 3), @as([*]const abi_part.c.ke_part, @ptrCast(all))[1].slot_count);
 }

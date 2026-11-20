@@ -86,3 +86,8 @@ pub extern fn ke_render_deferred_lighting_create(service: ?*abi_render.c.ke_rend
 /// sends them back to stderr, where they go until this is called. Called once, before the
 /// library logs.
 pub extern fn ke_render_deferred_lighting_set_log_callback(callback: ke_log_callback, ctx: ?*anyopaque) void;
+
+/// Gives the parts ke_render_deferred_lighting contains: `render_deferred_lighting`, providing
+/// nothing, with the slots `service`, `device`, `frame`, `scene` and `render_queue`,
+/// `render_queue` the ke_schedule_set its systems join.
+pub extern fn ke_render_deferred_lighting_parts(out_count: ?*usize) ?*const abi_part.c.ke_part;

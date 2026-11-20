@@ -19,6 +19,7 @@ pub fn build(b: *std.Build) void {
     const headers = b.addWriteFiles().add("layout.h",
         \\#include <kernel_engine/render/deferred_lighting/deferred_lighting_create.h>
         \\#include <kernel_engine/render/deferred_lighting/render_deferred_lighting_log.h>
+        \\#include <kernel_engine/render/deferred_lighting/render_deferred_lighting_parts.h>
     );
     const translated = b.addTranslateC(.{ .root_source_file = headers, .target = target, .optimize = optimize });
     translated.addIncludePath(b.path("../../../../c/completion"));

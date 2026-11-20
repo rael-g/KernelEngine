@@ -2,6 +2,7 @@
 
 const abi_io = @import("io");
 const abi_logger = @import("logger");
+const abi_part = @import("part");
 const abi_render = @import("render");
 const abi_render_gpu = @import("render_gpu");
 const abi_result = @import("result");
@@ -25,4 +26,10 @@ pub fn renderServiceCreate(device: ?*abi_render_gpu.c.ke_gpu_device, target: ?*a
 /// back to stderr, where they go until this is called. Called once, before the library logs.
 pub fn renderServiceSetLogCallback(callback: c.ke_log_callback, ctx: ?*anyopaque) void {
     return c.ke_render_service_set_log_callback(callback, ctx);
+}
+
+/// Gives the parts ke_render_service contains: `render_service`, providing ke_render_service,
+/// with the slots `device`, `target`, `io` and `binder`.
+pub fn renderServiceParts(out_count: ?*usize) ?*const abi_part.c.ke_part {
+    return c.ke_render_service_parts(out_count);
 }

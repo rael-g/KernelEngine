@@ -34,3 +34,10 @@ pub fn renderDeferredLightingCreate(service: ?*abi_render.c.ke_render_service, d
 pub fn renderDeferredLightingSetLogCallback(callback: c.ke_log_callback, ctx: ?*anyopaque) void {
     return c.ke_render_deferred_lighting_set_log_callback(callback, ctx);
 }
+
+/// Gives the parts ke_render_deferred_lighting contains: `render_deferred_lighting`, providing
+/// nothing, with the slots `service`, `device`, `frame`, `scene` and `render_queue`,
+/// `render_queue` the ke_schedule_set its systems join.
+pub fn renderDeferredLightingParts(out_count: ?*usize) ?*const abi_part.c.ke_part {
+    return c.ke_render_deferred_lighting_parts(out_count);
+}

@@ -4,7 +4,8 @@
 #include <kernel_engine/audio/audio.h>
 #include <kernel_engine/ecs/ecs.h>
 #include <kernel_engine/result/result.h>
-#include <kernel_engine/module/module.h>
+#include <kernel_engine/part/part.h>
+#include <kernel_engine/schedule/schedule.h>
 
 #ifndef KE_AUDIO_MODULE_API
 #  if defined(_WIN32) || defined(__CYGWIN__)
@@ -25,18 +26,20 @@ extern "C" {
 #endif
 
 /**
- * @brief Creates the module that loads, plays and releases the clip of every ke_sound_component;
- *        attaching it registers its system in the update schedule's post_update set. Destroying the
- *        module stops every voice and releases every clip it holds.
+ * @brief Creates the module that loads, plays and releases the clip of every ke_sound_component, its system
+ *        registered in @p post_update_set of @p post_update. Destroying the module unregisters the system, stops
+ *        every voice and releases every clip it holds.
  * @param ecs [borrowed] Resolves the component id.
  * @param audio [borrowed] Loads the clips and plays their voices; must outlive the module.
+ * @param post_update [borrowed] Runs the system; must outlive the module.
  * @param out_module [out] Receives the module; left zeroed on failure.
- * @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null @p ecs, @p audio or
- *         @p out_module; KE_RESULT_OUT_OF_MEMORY; the ECS's code when it refuses the component.
+ * @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null @p ecs, @p audio, @p post_update or @p out_module;
+ *         KE_RESULT_OUT_OF_MEMORY; the ECS's code when it refuses the component, or the schedule's when it
+ *         refuses the system.
  */
 KE_AUDIO_MODULE_API ke_result ke_sound_create(
-    ke_ecs *ecs, ke_audio *audio,
-    ke_module_handle *out_module);
+    ke_ecs *ecs, ke_audio *audio, ke_schedule *post_update, ke_schedule_set_id post_update_set,
+    ke_owner *out_module);
 
 #ifdef __cplusplus
 }

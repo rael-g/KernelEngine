@@ -97,3 +97,9 @@ pub extern fn ke_render_ui_create(main: ?*abi_ecs.c.ke_ecs, render: ?*abi_ecs.c.
 /// declares, at KE_RENDER_STAGE_OVERLAY, the pass drawing the quads and the labels over the
 /// frame's colour. Every argument but out_systems must outlive the systems.
 pub extern fn ke_render_ui_systems_create(ui: ?*abi_render_ui.c.ke_render_ui, render_prepare: ?*abi_schedule.c.ke_schedule, render_prepare_set: ke_schedule_set_id, render_queue: ?*abi_schedule.c.ke_schedule, render_queue_set: ke_schedule_set_id, out_systems: ?*abi_part.c.ke_owner) abi_result.c.ke_result;
+
+/// Gives the parts ke_render_ui contains, each named after its factory and with its slots named
+/// after the factory's parameters: `render_ui` (ke_render_ui; `main`, `render`, `extraction`,
+/// `service`, `device` and `frame`); `render_ui_systems` (nothing; `ui`, `render_prepare` and
+/// `render_queue`).
+pub extern fn ke_render_ui_parts(out_count: ?*usize) ?*const abi_part.c.ke_part;

@@ -13,6 +13,7 @@ const feature_bindings = @import("feature_bindings");
 const cluster_buffers = feature_bindings.cluster_buffers;
 const abi_ecs = @import("abi_ecs");
 const abi_part = @import("abi_part");
+const part = @import("part");
 const abi_render = @import("abi_render");
 const abi_render_cluster_factory = @import("abi_render_cluster_factory");
 const abi_render_frame = @import("abi_render_frame");
@@ -484,6 +485,16 @@ export fn ke_render_cluster_create(
     return R.ok;
 }
 
+pub const parts = [_]abi_part.c.ke_part{
+    part.of(ke_render_cluster_create, .{ .name = "render_cluster", .slots = &.{"service", "device", "frame", "scene", "camera", "view_space"}, .hooks = &.{"render_prepare", "render_queue"}, .set_log = @ptrCast(&@import("log").Destination("ke_render_cluster").setLogCallback) }),
+};
+
+/// The library's parts.
+export fn ke_render_cluster_parts(out_count: ?*usize) callconv(.c) ?*const abi_part.c.ke_part {
+    if (out_count) |n| n.* = parts.len;
+    return &parts[0];
+}
+
 const testing = std.testing;
 const zsub = @import("zsub");
 
@@ -619,4 +630,12 @@ test "a cluster pass missing its camera is refused as an invalid argument" {
 
 test "creating and destroying cluster passes leaves no block allocated" {
     try heap.expectNoLeaks();
+}
+
+test "the library's parts name render_cluster and their slots" {
+    var count: usize = 0;
+    const all = ke_render_cluster_parts(&count).?;
+    try std.testing.expectEqual(@as(usize, 1), count);
+    try std.testing.expectEqualStrings("render_cluster", std.mem.span(@as([*]const abi_part.c.ke_part, @ptrCast(all))[0].name.?));
+    try std.testing.expectEqual(@as(usize, 8), @as([*]const abi_part.c.ke_part, @ptrCast(all))[0].slot_count);
 }

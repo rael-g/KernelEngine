@@ -5,11 +5,11 @@ pub fn build(b: *std.Build) void {
     _ = ke_build.plugin(b, .{
         .name = "ke_render_service",
         .root = "src/render_service.zig",
-        .abi = &.{ "abi_resource_cache", "abi_render_contract", "abi_render_handles", "abi_mesh", "abi_math", "abi_render_gpu", "abi_asset_resolver", "abi_ecs", "abi_io", "abi_render", "abi_render_service_factory", "abi_resource_cache_default_factory", "abi_result", "abi_settings" },
+        .abi = &.{ "abi_part", "abi_resource_cache", "abi_render_contract", "abi_render_handles", "abi_mesh", "abi_math", "abi_render_gpu", "abi_asset_resolver", "abi_ecs", "abi_io", "abi_render", "abi_render_service_factory", "abi_resource_cache_default_factory", "abi_result", "abi_settings" },
         .common = &.{"heap"},
         .translations = &.{.{ .name = "c", .header = "src/c.h" }},
         .third_party = thirdParty,
-        .packages = &.{ .{ .name = "settings_schema", .dependency = "ke_settings_schema", .module = "settings_schema" }, .{ .name = "zsub", .dependency = "zsub", .module = "zsub" } },
+        .packages = &.{ .{ .name = "part", .dependency = "ke_part", .module = "part" }, .{ .name = "settings_schema", .dependency = "ke_settings_schema", .module = "settings_schema" }, .{ .name = "zsub", .dependency = "zsub", .module = "zsub" } },
         .tests = "Run the render service unit tests",
     });
 }

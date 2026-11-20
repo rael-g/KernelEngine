@@ -18,6 +18,7 @@ pub fn build(b: *std.Build) void {
     const headers = b.addWriteFiles().add("layout.h",
         \\#include <kernel_engine/render/skybox/render_skybox_log.h>
         \\#include <kernel_engine/render/skybox/skybox_create.h>
+        \\#include <kernel_engine/render/skybox/render_skybox_parts.h>
     );
     const translated = b.addTranslateC(.{ .root_source_file = headers, .target = target, .optimize = optimize });
     translated.addIncludePath(b.path("../../../../c/completion"));

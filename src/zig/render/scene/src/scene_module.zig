@@ -14,6 +14,7 @@ pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @imp
 
 pub const abi_ecs = @import("abi_ecs");
 const abi_part = @import("abi_part");
+const part = @import("part");
 const abi_render = @import("abi_render");
 const abi_render_scene_factory = @import("abi_render_scene_factory");
 const abi_render_ui_factory = @import("abi_render_ui_factory");
@@ -261,6 +262,18 @@ export fn ke_render_label_resolve_create(
     return R.ok;
 }
 
+pub const parts = [_]abi_part.c.ke_part{
+    part.of(ke_render_scene_resolve_create, .{ .name = "render_scene_resolve", .slots = &.{"main", "render", "extraction", "service", "resolver"}, .optional = &.{"resolver"}, .set_log = @ptrCast(&@import("log").Destination("ke_render_scene").setLogCallback) }),
+    part.of(ke_render_scene_resolve_systems_create, .{ .name = "render_scene_resolve_systems", .slots = &.{"scene"}, .hooks = &.{"update", "post_update"}, .set_log = @ptrCast(&@import("log").Destination("ke_render_scene").setLogCallback) }),
+    part.of(ke_render_label_resolve_create, .{ .name = "render_label_resolve", .slots = &.{"service", "scene", "ui", "resolver"}, .hooks = &.{"update"}, .optional = &.{"resolver"}, .set_log = @ptrCast(&@import("log").Destination("ke_render_scene").setLogCallback) }),
+};
+
+/// The library's parts.
+export fn ke_render_scene_parts(out_count: ?*usize) callconv(.c) ?*const abi_part.c.ke_part {
+    if (out_count) |n| n.* = parts.len;
+    return &parts[0];
+}
+
 const testing = std.testing;
 const zsub = @import("zsub");
 
@@ -390,4 +403,16 @@ test "a label resolve missing its ui is refused as an invalid argument" {
 
 test "creating and destroying the scene resolve and the label resolve leaves no block allocated" {
     try heap.expectNoLeaks();
+}
+
+test "the library's parts name render_scene_resolve, render_scene_resolve_systems, render_label_resolve and their slots" {
+    var count: usize = 0;
+    const all = ke_render_scene_parts(&count).?;
+    try std.testing.expectEqual(@as(usize, 3), count);
+    try std.testing.expectEqualStrings("render_scene_resolve", std.mem.span(@as([*]const abi_part.c.ke_part, @ptrCast(all))[0].name.?));
+    try std.testing.expectEqual(@as(usize, 5), @as([*]const abi_part.c.ke_part, @ptrCast(all))[0].slot_count);
+    try std.testing.expectEqualStrings("render_scene_resolve_systems", std.mem.span(@as([*]const abi_part.c.ke_part, @ptrCast(all))[1].name.?));
+    try std.testing.expectEqual(@as(usize, 3), @as([*]const abi_part.c.ke_part, @ptrCast(all))[1].slot_count);
+    try std.testing.expectEqualStrings("render_label_resolve", std.mem.span(@as([*]const abi_part.c.ke_part, @ptrCast(all))[2].name.?));
+    try std.testing.expectEqual(@as(usize, 5), @as([*]const abi_part.c.ke_part, @ptrCast(all))[2].slot_count);
 }
