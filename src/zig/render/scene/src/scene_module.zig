@@ -13,8 +13,9 @@ const log = std.log.scoped(.render_scene);
 pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @import("log").Destination("ke_render_scene").logFn };
 
 pub const abi_ecs = @import("abi_ecs");
+const abi_part = @import("abi_part");
+const part = @import("part");
 const abi_render = @import("abi_render");
-const abi_render_context = @import("abi_render_context");
 const abi_render_scene_factory = @import("abi_render_scene_factory");
 const abi_render_ui_factory = @import("abi_render_ui_factory");
 const abi_render_ui = @import("abi_render_ui");
@@ -22,7 +23,7 @@ const abi_result = @import("abi_result");
 const abi_settings = @import("abi_settings");
 const settings_schema = @import("settings_schema");
 const abi_schedule = @import("abi_schedule");
-const abi_module = @import("abi_module");
+const hooked_systems = @import("hooked_systems");
 const abi_extraction = @import("abi_extraction");
 const abi_spatial = @import("abi_spatial");
 const R = @import("result").Result(.{});
@@ -34,16 +35,13 @@ const heap = @import("heap");
 const gpa = heap.gpa;
 
 /// The state of one scene resolve. The factory allocates it and `destroyScene` frees it. The
-/// schedule receives the core and `sprite` as the contexts of the two systems of `module`, and
-/// their queries point into it, so it is not moved after creation. `destroyScene` detaches the
-/// module before it frees the resolve.
+/// schedule receives the core and `sprite` as the contexts of its two systems, and their queries
+/// point into it, so it is not moved after creation. `destroyScene` unregisters the systems before
+/// it frees the resolve.
 const SceneResolve = struct {
     api: abi_render.c.ke_render_scene_resolve,
-    module: abi_module.c.ke_module,
     core: *abi_render.c.ke_render_service,
-    schedule: ?*abi_schedule.c.ke_schedule = null,
-    systems: [2]abi_schedule.c.ke_schedule_system_id = .{ 0, 0 },
-    sets: [2]abi_schedule.c.ke_schedule_set_id = .{ 0, 0 },
+    systems: hooked_systems.Systems(2) = .{},
     ids: abi_render.c.ke_render_scene_component_ids,
     render_ids: abi_render.c.ke_render_scene_component_ids,
     sprite: sprite_resolve.State,
@@ -54,10 +52,6 @@ const SceneResolve = struct {
 };
 
 fn sceneOf(self: ?*abi_render.c.ke_render_scene_resolve) ?*SceneResolve {
-    return @ptrCast(@alignCast((self orelse return null).handle));
-}
-
-fn sceneOfModule(self: ?*abi_module.c.ke_module) ?*SceneResolve {
     return @ptrCast(@alignCast((self orelse return null).handle));
 }
 
@@ -75,36 +69,28 @@ fn renderComponentIds(self: ?*abi_render.c.ke_render_scene_resolve) callconv(.c)
 /// ignored.
 fn destroyScene(self: ?*abi_render.c.ke_render_scene_resolve) callconv(.c) void {
     const st = sceneOf(self) orelse return;
-    detachScene(&st.module);
+    st.systems.unregister();
     gpa.destroy(st);
 }
 
-/// Registers the component type with the ecs under its name, its size and its field table, and
-/// returns the id the ecs gives it.
-fn registerComponent(e: *abi_ecs.c.ke_ecs, name: [*c]const u8, comptime T: type, comptime table: anytype) R.Error!abi_asset_resolver.c.ke_component_id {
-    const fields = @typeInfo(@TypeOf(table.*)).array;
+/// Registers a component of the contract by its description and returns the id the ecs gives it.
+fn registerComponent(e: *abi_ecs.c.ke_ecs, desc: *const abi_ecs.c.ke_component_desc) R.Error!abi_asset_resolver.c.ke_component_id {
     var cid: abi_asset_resolver.c.ke_component_id = abi_ecs.c.KE_COMPONENT_INVALID;
-    try R.check(e.component_register.?(e, &abi_ecs.c.ke_component_desc{ .name = name, .size = @sizeOf(T), .alignment = @alignOf(T), .fields = table, .field_count = @intCast(fields.len) }, &cid));
-    return cid;
-}
-
-fn registerBare(e: *abi_ecs.c.ke_ecs, name: [*c]const u8, comptime T: type) R.Error!abi_asset_resolver.c.ke_component_id {
-    var cid: abi_asset_resolver.c.ke_component_id = abi_ecs.c.KE_COMPONENT_INVALID;
-    try R.check(e.component_register.?(e, &abi_ecs.c.ke_component_desc{ .name = name, .size = @sizeOf(T), .alignment = @alignOf(T), .fields = null, .field_count = 0 }, &cid));
+    try R.check(e.component_register.?(e, desc, &cid));
     return cid;
 }
 
 fn registerIds(e: *abi_ecs.c.ke_ecs, ids: *abi_render.c.ke_render_scene_component_ids) R.Error!void {
-    ids.mesh = try registerComponent(e, abi_render_contract.c.KE_COMPONENT_NAME_MESH, abi_render_components.c.ke_mesh_component, &abi_render_contract.c.ke_mesh_component_fields);
-    ids.world_transform = try registerBare(e, abi_spatial_contract.c.KE_COMPONENT_NAME_WORLD_TRANSFORM, abi_spatial.c.ke_world_transform_component);
-    ids.camera = try registerComponent(e, abi_render_contract.c.KE_COMPONENT_NAME_CAMERA, abi_render_components.c.ke_camera_component, &abi_render_contract.c.ke_camera_component_fields);
-    ids.directional_light = try registerComponent(e, abi_render_contract.c.KE_COMPONENT_NAME_DIRECTIONAL_LIGHT, abi_render_components.c.ke_directional_light_component, &abi_render_contract.c.ke_directional_light_component_fields);
-    ids.point_light = try registerComponent(e, abi_render_contract.c.KE_COMPONENT_NAME_POINT_LIGHT, abi_render_components.c.ke_point_light_component, &abi_render_contract.c.ke_point_light_component_fields);
-    ids.spot_light = try registerComponent(e, abi_render_contract.c.KE_COMPONENT_NAME_SPOT_LIGHT, abi_render_components.c.ke_spot_light_component, &abi_render_contract.c.ke_spot_light_component_fields);
-    ids.ambient_light = try registerComponent(e, abi_render_contract.c.KE_COMPONENT_NAME_AMBIENT_LIGHT, abi_render_components.c.ke_ambient_light_component, &abi_render_contract.c.ke_ambient_light_component_fields);
-    ids.skybox = try registerBare(e, abi_render_contract.c.KE_COMPONENT_NAME_SKYBOX, abi_render_components.c.ke_skybox_component);
-    ids.sprite2d = try registerComponent(e, abi_render_contract.c.KE_COMPONENT_NAME_SPRITE2D, abi_render_components.c.ke_sprite2d_component, &abi_render_contract.c.ke_sprite2d_component_fields);
-    ids.label = try registerComponent(e, abi_ui_components.c.KE_COMPONENT_NAME_LABEL, abi_ui_components.c.ke_label_component, &abi_render_contract.c.ke_label_component_fields);
+    ids.mesh = try registerComponent(e, &abi_render_contract.c.ke_mesh_component_desc);
+    ids.world_transform = try registerComponent(e, &abi_spatial_contract.c.ke_world_transform_component_desc);
+    ids.camera = try registerComponent(e, &abi_render_contract.c.ke_camera_component_desc);
+    ids.directional_light = try registerComponent(e, &abi_render_contract.c.ke_directional_light_component_desc);
+    ids.point_light = try registerComponent(e, &abi_render_contract.c.ke_point_light_component_desc);
+    ids.spot_light = try registerComponent(e, &abi_render_contract.c.ke_spot_light_component_desc);
+    ids.ambient_light = try registerComponent(e, &abi_render_contract.c.ke_ambient_light_component_desc);
+    ids.skybox = try registerComponent(e, &abi_render_contract.c.ke_skybox_component_desc);
+    ids.sprite2d = try registerComponent(e, &abi_render_contract.c.ke_sprite2d_component_desc);
+    ids.label = try registerComponent(e, &abi_render_contract.c.ke_label_component_desc);
 }
 
 /// The components every pair of the render world carries when its entity has them, and those whose
@@ -141,7 +127,6 @@ export fn ke_render_scene_resolve_create(main_in: ?*abi_ecs.c.ke_ecs, render_in:
 fn registerScene(st: *SceneResolve, resolver: ?*abi_asset_resolver.c.ke_asset_resolver, main: *abi_ecs.c.ke_ecs, render: *abi_ecs.c.ke_ecs, extraction: *abi_extraction.c.ke_extraction, core: *abi_render.c.ke_render_service) R.Error!void {
     st.* = .{
         .api = .{ .handle = st, .component_ids = componentIds, .render_component_ids = renderComponentIds },
-        .module = .{ .handle = st, .attach = attachScene, .detach = detachScene },
         .core = core,
         .ids = undefined,
         .render_ids = undefined,
@@ -163,118 +148,58 @@ fn registerScene(st: *SceneResolve, resolver: ?*abi_asset_resolver.c.ke_asset_re
     st.mesh_queries = .{.{ .terms = st.mesh_terms[0..].ptr, .term_count = 1 }};
 }
 
-/// Slot `attach` of the scene's module: "render.sprite2d.resolve" in the update set and
-/// "render.mesh.resolve" in the post-update set, so the mesh a sprite was given is resolved in the
-/// same tick; the first is removed when the second is refused.
-fn attachScene(self: ?*abi_module.c.ke_module, targets_in: ?*const abi_module.c.ke_module_targets) callconv(.c) abi_result.c.ke_result {
-    const st = sceneOfModule(self) orelse return R.code(error.InvalidArgument);
-    const targets = targets_in orelse return R.code(error.InvalidArgument);
-    if (st.schedule != null) return R.code(error.NotSupported);
-    const schedule: *abi_schedule.c.ke_schedule = @ptrCast(targets.update orelse return R.code(error.InvalidArgument));
-    st.sets = .{ targets.update_set, targets.post_update_set };
-    const sprite: abi_schedule.c.ke_schedule_system_desc = .{
-        .name = "render.sprite2d.resolve",
-        .user_data = &st.sprite,
-        .execute = sprite_resolve.system,
-        .queries = &st.sprite_queries,
-        .query_count = st.sprite_queries.len,
-        .sets = st.sets[0..].ptr,
-        .set_count = 1,
-    };
-    const registered = schedule.register_system.?(schedule, &sprite, &st.systems[0]);
-    if (registered != R.ok) return registered;
-    const mesh: abi_schedule.c.ke_schedule_system_desc = .{
-        .name = "render.mesh.resolve",
-        .user_data = st.core,
-        .execute = mesh_resolve.system,
-        .queries = &st.mesh_queries,
-        .query_count = st.mesh_queries.len,
-        .sets = st.sets[1..].ptr,
-        .set_count = 1,
-    };
-    const meshed = schedule.register_system.?(schedule, &mesh, &st.systems[1]);
-    if (meshed != R.ok) {
-        _ = schedule.unregister_system.?(schedule, st.systems[0]);
-        return meshed;
-    }
-    st.schedule = schedule;
-    return R.ok;
+/// The `destroy` of the owner `ke_render_scene_resolve_systems_create` hands out: unregisters both systems; the
+/// resolve stays.
+fn destroySceneSystems(ref: ?*anyopaque) callconv(.c) void {
+    const st: *SceneResolve = @ptrCast(@alignCast(ref orelse return));
+    st.systems.unregister();
 }
 
-/// Slot `detach` of the scene's module.
-fn detachScene(self: ?*abi_module.c.ke_module) callconv(.c) void {
-    const st = sceneOfModule(self) orelse return;
-    const schedule = st.schedule orelse return;
-    for (st.systems) |id| _ = schedule.unregister_system.?(schedule, id);
-    st.schedule = null;
-}
-
-fn destroySceneModule(self: ?*abi_module.c.ke_module) callconv(.c) void {
-    detachScene(self);
-}
-
-/// The factory declared in scene_resolve_systems_create.h: the module is a view of the resolve,
-/// destroyed with it or on its own.
-export fn ke_render_scene_resolve_systems_create(scene: ?*abi_render.c.ke_render_scene_resolve, out_module: ?*abi_module.c.ke_module_handle) callconv(.c) abi_result.c.ke_result {
-    const out = out_module orelse return R.code(error.InvalidArgument);
-    out.* = std.mem.zeroes(abi_module.c.ke_module_handle);
+/// The factory declared in scene_resolve_systems_create.h: registers "render.sprite2d.resolve" in the update hook
+/// and "render.mesh.resolve" in the post-update hook, so the mesh a sprite was given is resolved in the same tick;
+/// the first is removed when the second is refused. A resolve whose systems are registered refuses another
+/// registration as not supported.
+export fn ke_render_scene_resolve_systems_create(
+    scene: ?*abi_render.c.ke_render_scene_resolve,
+    update: ?*abi_schedule.c.ke_schedule,
+    update_set: abi_schedule.c.ke_schedule_set_id,
+    post_update: ?*abi_schedule.c.ke_schedule,
+    post_update_set: abi_schedule.c.ke_schedule_set_id,
+    out_systems: ?*abi_part.c.ke_owner,
+) callconv(.c) abi_result.c.ke_result {
+    const out = out_systems orelse return R.code(error.InvalidArgument);
+    out.* = .{ .ref = null, .destroy = null };
     const st = sceneOf(scene) orelse return R.code(error.InvalidArgument);
-    out.* = .{ .ref = &st.module, .destroy = destroySceneModule };
+    if (st.systems.schedules[0] != null) return R.code(error.NotSupported);
+    const registered = st.systems.register(.{
+        .{ .name = "render.sprite2d.resolve", .execute = sprite_resolve.system, .user = &st.sprite, .hook = 0, .queries = &st.sprite_queries },
+        .{ .name = "render.mesh.resolve", .execute = mesh_resolve.system, .user = st.core, .hook = 1, .queries = &st.mesh_queries },
+    }, &.{ .{ .schedule = update, .set = update_set }, .{ .schedule = post_update, .set = post_update_set } });
+    if (registered != R.ok) return registered;
+    out.* = .{ .ref = st, .destroy = destroySceneSystems };
     return R.ok;
 }
 
-/// The state of one label resolve, which is its own module. The factory allocates it and
-/// `destroyLabel` frees it. The schedule receives `state` as the context of the system, and its
-/// query points into it, so it is not moved after creation. `destroyLabel` detaches it first.
+/// The state of one label resolve. The factory allocates it and `destroyLabel` frees it. The schedule receives
+/// `state` as the context of the system, and its query points into it, so it is not moved after creation.
 const LabelResolve = struct {
-    module: abi_module.c.ke_module,
     state: label_resolve.State,
-    schedule: ?*abi_schedule.c.ke_schedule = null,
+    schedule: *abi_schedule.c.ke_schedule,
     system: abi_schedule.c.ke_schedule_system_id = 0,
-    set: [1]abi_schedule.c.ke_schedule_set_id = .{0},
+    set: [1]abi_schedule.c.ke_schedule_set_id,
     terms: [1]abi_ecs.c.ke_ecs_query_term,
     queries: [1]abi_ecs.c.ke_ecs_query_desc,
 };
 
-fn labelOf(self: ?*abi_module.c.ke_module) ?*LabelResolve {
-    return @ptrCast(@alignCast((self orelse return null).handle));
+/// The `destroy` of the owner `ke_render_label_resolve_create` hands out: unregisters the system and frees the
+/// resolve; a null argument is ignored.
+fn destroyLabel(ref: ?*anyopaque) callconv(.c) void {
+    const st: *LabelResolve = @ptrCast(@alignCast(ref orelse return));
+    _ = st.schedule.unregister_system.?(st.schedule, st.system);
+    freeLabel(st);
 }
 
-/// Slot `attach` of the label resolve: "render.label.resolve" in the update set.
-fn attachLabel(self: ?*abi_module.c.ke_module, targets_in: ?*const abi_module.c.ke_module_targets) callconv(.c) abi_result.c.ke_result {
-    const st = labelOf(self) orelse return R.code(error.InvalidArgument);
-    const targets = targets_in orelse return R.code(error.InvalidArgument);
-    if (st.schedule != null) return R.code(error.NotSupported);
-    const schedule: *abi_schedule.c.ke_schedule = @ptrCast(targets.update orelse return R.code(error.InvalidArgument));
-    st.set = .{targets.update_set};
-    const label: abi_schedule.c.ke_schedule_system_desc = .{
-        .name = "render.label.resolve",
-        .user_data = &st.state,
-        .execute = label_resolve.system,
-        .queries = &st.queries,
-        .query_count = st.queries.len,
-        .sets = &st.set,
-        .set_count = 1,
-    };
-    const registered = schedule.register_system.?(schedule, &label, &st.system);
-    if (registered != R.ok) return registered;
-    st.schedule = schedule;
-    return R.ok;
-}
-
-/// Slot `detach` of the label resolve.
-fn detachLabel(self: ?*abi_module.c.ke_module) callconv(.c) void {
-    const st = labelOf(self) orelse return;
-    const schedule = st.schedule orelse return;
-    _ = schedule.unregister_system.?(schedule, st.system);
-    st.schedule = null;
-}
-
-/// The `destroy` slot of the handle `ke_render_label_resolve_create` returns; a null argument is
-/// ignored.
-fn destroyLabel(self: ?*abi_module.c.ke_module) callconv(.c) void {
-    const st = labelOf(self) orelse return;
-    detachLabel(self);
+fn freeLabel(st: *LabelResolve) void {
     if (st.state.default_font) |d| gpa.free(d);
     gpa.destroy(st);
 }
@@ -285,22 +210,32 @@ const LabelSettings = struct {
     default_font: [:0]const u8 = "",
 };
 
-/// The factory declared in label_resolve_create.h. A missing context, scene, service, ui or
-/// settings, or a setting the schema refuses, fails as an invalid argument and a failed allocation
-/// as out of memory.
-export fn ke_render_label_resolve_create(context_in: ?*const abi_render_context.c.ke_render_context, ui_in: ?*abi_render_ui.c.ke_render_ui, resolver: ?*abi_asset_resolver.c.ke_asset_resolver, settings: ?*abi_settings.c.ke_settings, out_module: ?*abi_module.c.ke_module_handle) callconv(.c) abi_result.c.ke_result {
-    const out = out_module orelse return R.code(error.InvalidArgument);
-    out.* = std.mem.zeroes(abi_module.c.ke_module_handle);
-    const p = context_in orelse return R.code(error.InvalidArgument);
-    const core = p.service orelse return R.code(error.InvalidArgument);
+/// The factory declared in label_resolve_create.h. A missing service, scene, ui, update schedule or settings,
+/// or a setting the schema refuses, fails as an invalid argument, a failed allocation as out of memory, and a
+/// refused system with the schedule's code.
+export fn ke_render_label_resolve_create(
+    service_in: ?*abi_render.c.ke_render_service,
+    scene_in: ?*abi_render.c.ke_render_scene_resolve,
+    ui_in: ?*abi_render_ui.c.ke_render_ui,
+    resolver: ?*abi_asset_resolver.c.ke_asset_resolver,
+    update_in: ?*abi_schedule.c.ke_schedule,
+    update_set: abi_schedule.c.ke_schedule_set_id,
+    settings: ?*abi_settings.c.ke_settings,
+    out_resolve: ?*abi_part.c.ke_owner,
+) callconv(.c) abi_result.c.ke_result {
+    const out = out_resolve orelse return R.code(error.InvalidArgument);
+    out.* = .{ .ref = null, .destroy = null };
+    const core = service_in orelse return R.code(error.InvalidArgument);
+    const scene = scene_in orelse return R.code(error.InvalidArgument);
     const ui = ui_in orelse return R.code(error.InvalidArgument);
-    const scene = p.scene orelse return R.code(error.InvalidArgument);
+    const update = update_in orelse return R.code(error.InvalidArgument);
     const values = settings_schema.read(LabelSettings, settings orelse return R.code(error.InvalidArgument)) catch |err| return R.code(err);
 
     const st = gpa.create(LabelResolve) catch |err| return R.code(err);
     st.* = .{
-        .module = .{ .handle = st, .attach = attachLabel, .detach = detachLabel },
         .state = .{ .core = core, .ui = ui, .resolver = resolver },
+        .schedule = update,
+        .set = .{update_set},
         .terms = .{.{ .component = scene.component_ids.?(scene).?.*.label, .access = abi_ecs.c.KE_ECS_ACCESS_WRITE }},
         .queries = undefined,
     };
@@ -309,8 +244,34 @@ export fn ke_render_label_resolve_create(context_in: ?*const abi_render_context.
         gpa.destroy(st);
         return R.code(err);
     };
-    out.* = .{ .ref = &st.module, .destroy = destroyLabel };
+    const label: abi_schedule.c.ke_schedule_system_desc = .{
+        .name = "render.label.resolve",
+        .user_data = &st.state,
+        .execute = label_resolve.system,
+        .queries = &st.queries,
+        .query_count = st.queries.len,
+        .sets = &st.set,
+        .set_count = 1,
+    };
+    const registered = update.register_system.?(update, &label, &st.system);
+    if (registered != R.ok) {
+        freeLabel(st);
+        return registered;
+    }
+    out.* = .{ .ref = st, .destroy = destroyLabel };
     return R.ok;
+}
+
+pub const parts = [_]abi_part.c.ke_part{
+    part.of(ke_render_scene_resolve_create, .{ .name = "render_scene_resolve", .slots = &.{"main", "render", "extraction", "service", "resolver"}, .optional = &.{"resolver"}, .set_log = @ptrCast(&@import("log").Destination("ke_render_scene").setLogCallback) }),
+    part.of(ke_render_scene_resolve_systems_create, .{ .name = "render_scene_resolve_systems", .slots = &.{"scene"}, .hooks = &.{"update", "post_update"}, .set_log = @ptrCast(&@import("log").Destination("ke_render_scene").setLogCallback) }),
+    part.of(ke_render_label_resolve_create, .{ .name = "render_label_resolve", .slots = &.{"service", "scene", "ui", "resolver"}, .hooks = &.{"update"}, .optional = &.{"resolver"}, .set_log = @ptrCast(&@import("log").Destination("ke_render_scene").setLogCallback) }),
+};
+
+/// The library's parts.
+export fn ke_render_scene_parts(out_count: ?*usize) callconv(.c) ?*const abi_part.c.ke_part {
+    if (out_count) |n| n.* = parts.len;
+    return &parts[0];
 }
 
 const testing = std.testing;
@@ -356,10 +317,8 @@ const Rig = struct {
         return h;
     }
 
-    fn targets(self: *Rig) abi_module.c.ke_module_targets {
-        var t = std.mem.zeroes(abi_module.c.ke_module_targets);
-        t.update = @ptrCast(self.schedule.api());
-        return t;
+    fn systems(self: *Rig, h: abi_render.c.ke_render_scene_resolve_handle, out: *abi_part.c.ke_owner) abi_result.c.ke_result {
+        return ke_render_scene_resolve_systems_create(h.ref, self.schedule.api(), 4, self.schedule.api(), 5, out);
     }
 };
 
@@ -384,32 +343,29 @@ test "the scene resolve registers every component in both worlds, copies each in
     }
 }
 
-test "the scene's module registers both resolve systems in the update schedule and detaching removes them" {
+test "the scene's systems join the update and post-update hooks and leave with their owner" {
     var rig: Rig = undefined;
     try rig.init();
     defer rig.deinit();
     const h = rig.scene();
     defer h.destroy.?(h.ref);
-    var m: abi_module.c.ke_module_handle = undefined;
-    try R.check(ke_render_scene_resolve_systems_create(h.ref, &m));
-    const t = rig.targets();
-    try R.check(m.ref.?.attach.?(m.ref, &t));
+    var m: abi_part.c.ke_owner = undefined;
+    try R.check(rig.systems(h, &m));
     try rig.schedule.received(.register_system).times(2);
     m.destroy.?(m.ref);
     try rig.schedule.received(.unregister_system).sameAs(rig.schedule.received(.register_system));
 }
 
-test "a scene module whose mesh system the schedule refuses removes its sprite system and fails" {
+test "scene systems whose mesh system the schedule refuses remove the sprite system and fail" {
     var rig: Rig = undefined;
     try rig.init();
     defer rig.deinit();
     _ = rig.schedule.when(.register_system).returnsSeq(&.{ abi_result.c.KE_OK, abi_result.c.KE_RESULT_OUT_OF_MEMORY });
     const h = rig.scene();
     defer h.destroy.?(h.ref);
-    var m: abi_module.c.ke_module_handle = undefined;
-    try R.check(ke_render_scene_resolve_systems_create(h.ref, &m));
-    const t = rig.targets();
-    try testing.expect(m.ref.?.attach.?(m.ref, &t) != R.ok);
+    var m: abi_part.c.ke_owner = undefined;
+    try testing.expect(rig.systems(h, &m) != R.ok);
+    try testing.expect(m.ref == null);
     try rig.schedule.received(.unregister_system).times(1);
 }
 
@@ -424,16 +380,13 @@ test "a scene resolve missing its extraction is refused as an invalid argument" 
 
 var default_font = settings_schema.Fixed.init(&.{.{ .key = "default_font", .value = .{ .string = "res://default.ttf" } }});
 
-test "the label resolve attaches its system to the update set, and detaching removes it" {
+test "the label resolve registers its system in its update hook, and destroying it unregisters it" {
     var rig: Rig = undefined;
     try rig.init();
     defer rig.deinit();
     var ui = std.mem.zeroes(abi_render_ui.c.ke_render_ui);
-    const p = std.mem.zeroInit(abi_render_context.c.ke_render_context, .{ .service = rig.core.api(), .scene = &test_scene });
-    var m: abi_module.c.ke_module_handle = undefined;
-    try R.check(ke_render_label_resolve_create(&p, &ui, null, &default_font.api, &m));
-    const t = rig.targets();
-    try R.check(m.ref.?.attach.?(m.ref, &t));
+    var m: abi_part.c.ke_owner = undefined;
+    try R.check(ke_render_label_resolve_create(rig.core.api(), &test_scene, &ui, null, rig.schedule.api(), 4, &default_font.api, &m));
     try rig.schedule.received(.register_system).times(1);
     m.destroy.?(m.ref);
     try rig.schedule.received(.unregister_system).times(1);
@@ -443,12 +396,23 @@ test "a label resolve missing its ui is refused as an invalid argument" {
     var rig: Rig = undefined;
     try rig.init();
     defer rig.deinit();
-    const p = std.mem.zeroInit(abi_render_context.c.ke_render_context, .{ .service = rig.core.api(), .scene = &test_scene });
-    var m: abi_module.c.ke_module_handle = undefined;
-    try testing.expectError(error.InvalidArgument, R.check(ke_render_label_resolve_create(&p, null, null, &default_font.api, &m)));
+    var m: abi_part.c.ke_owner = undefined;
+    try testing.expectError(error.InvalidArgument, R.check(ke_render_label_resolve_create(rig.core.api(), &test_scene, null, null, rig.schedule.api(), 4, &default_font.api, &m)));
     try testing.expect(m.ref == null);
 }
 
 test "creating and destroying the scene resolve and the label resolve leaves no block allocated" {
     try heap.expectNoLeaks();
+}
+
+test "the library's parts name render_scene_resolve, render_scene_resolve_systems, render_label_resolve and their slots" {
+    var count: usize = 0;
+    const all = ke_render_scene_parts(&count).?;
+    try std.testing.expectEqual(@as(usize, 3), count);
+    try std.testing.expectEqualStrings("render_scene_resolve", std.mem.span(@as([*]const abi_part.c.ke_part, @ptrCast(all))[0].name.?));
+    try std.testing.expectEqual(@as(usize, 5), @as([*]const abi_part.c.ke_part, @ptrCast(all))[0].slot_count);
+    try std.testing.expectEqualStrings("render_scene_resolve_systems", std.mem.span(@as([*]const abi_part.c.ke_part, @ptrCast(all))[1].name.?));
+    try std.testing.expectEqual(@as(usize, 3), @as([*]const abi_part.c.ke_part, @ptrCast(all))[1].slot_count);
+    try std.testing.expectEqualStrings("render_label_resolve", std.mem.span(@as([*]const abi_part.c.ke_part, @ptrCast(all))[2].name.?));
+    try std.testing.expectEqual(@as(usize, 5), @as([*]const abi_part.c.ke_part, @ptrCast(all))[2].slot_count);
 }

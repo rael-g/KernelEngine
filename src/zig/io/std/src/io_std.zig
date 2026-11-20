@@ -12,6 +12,8 @@ const abi_completion = @import("abi_completion");
 const abi_file_system = @import("abi_file_system");
 const abi_io = @import("abi_io");
 const abi_io_std_factory = @import("abi_io_std_factory");
+const abi_part = @import("abi_part");
+const part = @import("part");
 const abi_result = @import("abi_result");
 const abi_settings = @import("abi_settings");
 const heap = @import("heap");
@@ -421,6 +423,16 @@ fn create(file_system_in: ?*abi_file_system.c.ke_file_system, settings: ?*abi_se
     return .{ .ref = &s.api, .destroy = destroy };
 }
 
+pub const parts = [_]abi_part.c.ke_part{
+    part.of(ke_io_std_create, .{ .name = "io_std", .slots = &.{"file_system"}, .set_log = @ptrCast(&@import("log").Destination("ke_io_std").setLogCallback) }),
+};
+
+/// The library's parts.
+export fn ke_io_std_parts(out_count: ?*usize) callconv(.c) ?*const abi_part.c.ke_part {
+    if (out_count) |n| n.* = parts.len;
+    return &parts[0];
+}
+
 const testing = std.testing;
 const zsub = @import("zsub");
 
@@ -649,6 +661,15 @@ test "creating without a file system or settings, or with no thread, is refused 
     try testing.expectError(error.InvalidArgument, R.check(ke_io_std_create(fs.api(), null, &h)));
     try testing.expectError(error.InvalidArgument, R.check(ke_io_std_create(fs.api(), &no_thread.api, &h)));
     try testing.expectError(error.InvalidArgument, R.check(ke_io_std_create(fs.api(), &none.api, null)));
+}
+
+test "the library's part is io_std, built from its factory" {
+    var count: usize = 0;
+    const p = ke_io_std_parts(&count).?;
+    try std.testing.expectEqual(@as(usize, 1), count);
+    try std.testing.expectEqualStrings("io_std", std.mem.span(p.name.?));
+    try std.testing.expectEqual(@as(usize, 1), p.provides_count);
+    try std.testing.expectEqual(@as(usize, 1), p.slot_count);
 }
 
 test "reading, waiting, freeing and destroying leaves no block allocated" {

@@ -2,6 +2,7 @@
 
 const abi_io = @import("io");
 const abi_logger = @import("logger");
+const abi_part = @import("part");
 const abi_result = @import("result");
 const abi_text = @import("text");
 
@@ -24,4 +25,10 @@ pub fn fontLoaderStbCreate(io: ?*abi_io.c.ke_io) Error!abi_text.c.ke_font_loader
 /// back to stderr, where they go until this is called. Called once, before the library logs.
 pub fn textStbTruetypeSetLogCallback(callback: c.ke_log_callback, ctx: ?*anyopaque) void {
     return c.ke_text_stb_truetype_set_log_callback(callback, ctx);
+}
+
+/// Gives the parts ke_text_stb_truetype contains: `font_loader_stb`, providing ke_font_loader,
+/// with the slot `io`.
+pub fn textStbTruetypeParts(out_count: ?*usize) ?*const abi_part.c.ke_part {
+    return c.ke_text_stb_truetype_parts(out_count);
 }

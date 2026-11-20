@@ -3,6 +3,8 @@
 //! executes and frees them when the next frame begins, records the passes in order into one encoder and submits it.
 
 const std = @import("std");
+const abi_part = @import("abi_part");
+const part = @import("part");
 
 pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @import("log").Destination("ke_render_graph_simple").logFn };
 
@@ -761,6 +763,24 @@ export fn ke_render_graph_simple_create(device_in: ?*gpu.ke_gpu_device, out_grap
     return R.ok;
 }
 
+pub const parts = [_]abi_part.c.ke_part{
+    part.of(ke_render_graph_simple_create, .{ .name = "render_graph_simple", .slots = &.{"device"}, .set_log = @ptrCast(&@import("log").Destination("ke_render_graph_simple").setLogCallback) }),
+};
+
+/// The library's parts.
+export fn ke_render_graph_simple_parts(out_count: ?*usize) callconv(.c) ?*const abi_part.c.ke_part {
+    if (out_count) |n| n.* = parts.len;
+    return &parts[0];
+}
+
 test {
     _ = @import("render_graph_simple_test.zig");
+}
+
+test "the library's parts name render_graph_simple and their slots" {
+    var count: usize = 0;
+    const all = ke_render_graph_simple_parts(&count).?;
+    try std.testing.expectEqual(@as(usize, 1), count);
+    try std.testing.expectEqualStrings("render_graph_simple", std.mem.span(@as([*]const abi_part.c.ke_part, @ptrCast(all))[0].name.?));
+    try std.testing.expectEqual(@as(usize, 1), @as([*]const abi_part.c.ke_part, @ptrCast(all))[0].slot_count);
 }

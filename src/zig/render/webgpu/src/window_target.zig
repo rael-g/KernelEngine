@@ -268,12 +268,12 @@ const TargetSettings = struct {
     present_mode: enum { fifo, mailbox, immediate } = .fifo,
 };
 
-export fn ke_gpu_render_target_webgpu_window_create(
-    device: [*c]abi_render_gpu.c.ke_gpu_device,
+pub export fn ke_gpu_render_target_webgpu_window_create(
+    device_in: ?*abi_render_gpu.c.ke_gpu_device,
     window: ?*abi_window.c.ke_window,
     settings: ?*abi_settings.c.ke_settings,
     out_target: ?*abi_render_gpu.c.ke_gpu_render_target_handle,
-) abi_result.c.ke_result {
+) callconv(.c) abi_result.c.ke_result {
     const out = out_target orelse return R.code(error.InvalidArgument);
     out.* = .{ .ref = null, .destroy = null };
     const read = settings_schema.read(TargetSettings, settings orelse return fail(error.InvalidArgument, "window target: no settings")) catch |err| return R.code(err);
@@ -282,7 +282,8 @@ export fn ke_gpu_render_target_webgpu_window_create(
         .mailbox => abi_render_gpu.c.KE_GPU_PRESENT_MODE_MAILBOX,
         .immediate => abi_render_gpu.c.KE_GPU_PRESENT_MODE_IMMEDIATE,
     }) };
-    if (device == null or device.*.get_default_queue != dev_impl.getDefaultQueue) {
+    const device = device_in orelse return fail(error.InvalidArgument, "window target: the device was not created by ke_gpu_device_webgpu_create");
+    if (device.get_default_queue != dev_impl.getDefaultQueue) {
         return fail(error.InvalidArgument, "window target: the device was not created by ke_gpu_device_webgpu_create");
     }
     const win = window orelse {

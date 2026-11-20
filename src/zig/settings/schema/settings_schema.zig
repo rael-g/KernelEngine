@@ -18,7 +18,9 @@ const c = abi_settings.c;
 /// enum, a `[:0]const u8`, an array of bool, integer or float, each element under `name.<index>`, or
 /// an optional of one of those, null while its key is absent;
 /// `T.ranges`, when declared, gives `.{ min, max }` per numeric field, for every element of an array.
-/// A string field borrows the settings' string, valid while the settings live.
+/// A child the settings hold is refused unless `T.children`, when declared, names it; the part reads
+/// the children it names itself. A string field borrows the settings' string, valid while the
+/// settings live.
 pub fn read(comptime T: type, settings: *c.ke_settings) R.Error!T {
     var out: T = .{};
     inline for (@typeInfo(T).@"struct".fields) |field| {
@@ -139,6 +141,16 @@ fn refuseUnknown(comptime T: type, settings: *c.ke_settings) R.Error!void {
     };
     var check: Check = .{};
     try R.check(settings.for_each_key.?(settings, Check.each, &check));
+    const ChildCheck = struct {
+        fn each(name_c: ?[*:0]const u8, ctx: ?*anyopaque) callconv(.c) void {
+            const self: *Check = @ptrCast(@alignCast(ctx));
+            const name = std.mem.span(name_c.?);
+            if (@hasDecl(T, "children")) inline for (T.children) |declared| if (std.mem.eql(u8, name, declared)) return;
+            log.warn("setting {s}: no such setting", .{name});
+            self.unknown = true;
+        }
+    };
+    try R.check(settings.for_each_child.?(settings, ChildCheck.each, &check));
     if (check.unknown) return error.InvalidArgument;
 }
 
@@ -147,14 +159,41 @@ pub const Value = union(enum) { boolean: bool, int: i64, double: f64, string: [:
 /// One key of a `Fixed` and its value.
 pub const Pair = struct { key: [:0]const u8, value: Value };
 
-/// A `ke_settings` over a list of pairs the caller keeps alive, for settings made in code and for
-/// tests; `api` is what a factory receives, and an integer is read as a number as well.
+/// One child of a `Fixed`, under its name.
+pub const Child = struct { name: [:0]const u8, settings: *Fixed };
+
+/// A `ke_settings` over a list of pairs and of children the caller keeps alive, for settings made in
+/// code and for tests; `api` is what a factory receives, and an integer is read as a number as well.
+/// A child it does not hold is `empty`.
 pub const Fixed = struct {
     api: c.ke_settings,
     pairs: []const Pair,
+    children: []const Child = &.{},
 
     pub fn init(pairs: []const Pair) Fixed {
-        return .{ .api = .{ .handle = null, .get_bool = getBool, .get_int = getInt, .get_double = getDouble, .get_string = getString, .for_each_key = forEachKey }, .pairs = pairs };
+        return tree(pairs, &.{});
+    }
+
+    pub fn tree(pairs: []const Pair, children: []const Child) Fixed {
+        return .{ .api = .{ .handle = null, .get_bool = getBool, .get_int = getInt, .get_double = getDouble, .get_string = getString, .for_each_key = forEachKey, .child = child, .for_each_child = forEachChild }, .pairs = pairs, .children = children };
+    }
+
+    var empty: Fixed = init(&.{});
+
+    fn child(self: ?*c.ke_settings, name: ?[*:0]const u8, out: ?*?*c.ke_settings) callconv(.c) abi_result.c.ke_result {
+        const f: *Fixed = @fieldParentPtr("api", self.?);
+        for (f.children) |ch| if (std.mem.eql(u8, ch.name, std.mem.span(name.?))) {
+            out.?.* = &ch.settings.api;
+            return R.ok;
+        };
+        out.?.* = &empty.api;
+        return R.ok;
+    }
+
+    fn forEachChild(self: ?*c.ke_settings, each: c.ke_settings_key_func, ctx: ?*anyopaque) callconv(.c) abi_result.c.ke_result {
+        const f: *Fixed = @fieldParentPtr("api", self.?);
+        for (f.children) |ch| each.?(ch.name.ptr, ctx);
+        return R.ok;
     }
 
     fn lookup(self: ?*c.ke_settings, key: ?[*:0]const u8) ?Value {
@@ -259,4 +298,20 @@ test "a value of the wrong type, outside its range, naming no enum value, or und
         var s = Fixed.init(pairs);
         try testing.expectError(error.InvalidArgument, read(Example, &s.api));
     }
+}
+
+test "a child the type does not declare is refused, and one it declares is left to the part" {
+    var inner = Fixed.init(&.{.{ .key = "frame", .value = .{ .int = 1 } }});
+    var s = Fixed.tree(&.{}, &.{.{ .name = "script", .settings = &inner }});
+    try testing.expectError(error.InvalidArgument, read(Example, &s.api));
+    const Scripted = struct {
+        frames: u32 = 1,
+        pub const children = .{"script"};
+    };
+    _ = try read(Scripted, &s.api);
+    var got: ?*c.ke_settings = null;
+    try R.check(s.api.child.?(&s.api, "script", &got));
+    var frame: i64 = 0;
+    try R.check(got.?.get_int.?(got.?, "frame", &frame));
+    try testing.expectEqual(@as(i64, 1), frame);
 }

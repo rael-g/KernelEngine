@@ -2,6 +2,7 @@
 
 const abi_input = @import("input");
 const abi_logger = @import("logger");
+const abi_part = @import("part");
 const abi_result = @import("result");
 const abi_settings = @import("settings");
 const abi_window = @import("window");
@@ -24,3 +25,7 @@ pub extern fn ke_window_glfw_create(input: ?*abi_input.c.ke_input, settings: ?*a
 /// Sends every line ke_window_glfw logs to callback, with ctx; a NULL callback sends them back
 /// to stderr, where they go until this is called. Called once, before the library logs.
 pub extern fn ke_window_glfw_set_log_callback(callback: ke_log_callback, ctx: ?*anyopaque) void;
+
+/// Gives the parts ke_window_glfw contains: `window_glfw`, providing ke_window, with the slot
+/// `input`, `input` optional.
+pub extern fn ke_window_glfw_parts(out_count: ?*usize) ?*const abi_part.c.ke_part;

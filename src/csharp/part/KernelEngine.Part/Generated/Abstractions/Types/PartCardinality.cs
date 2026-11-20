@@ -1,7 +1,5 @@
 using System.Numerics;
 
-using global::KernelEngine.Ecs;
-
 namespace KernelEngine.Part;
 
 public enum PartCardinality : uint

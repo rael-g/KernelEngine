@@ -2,18 +2,10 @@
 
 const std = @import("std");
 const abi_completion = @import("completion");
-const abi_ecs = @import("ecs");
 const abi_logger = @import("logger");
 const abi_result = @import("result");
-const abi_schedule = @import("schedule");
 const abi_settings = @import("settings");
 
-pub const ke_component_id = u32;
-pub const ke_entity = u64;
-pub const ke_query_id = u64;
-pub const ke_removal_tracker = u64;
-pub const ke_schedule_set_id = u32;
-pub const ke_schedule_system_id = u64;
 
 /// How many instances a slot takes.
 pub const ke_part_cardinality = c_uint;
@@ -31,20 +23,6 @@ pub const KE_PART_CARDINALITY_MANY: ke_part_cardinality = 3;
 /// thread logged.
 pub const ke_log_callback = ?*const fn (?*anyopaque, abi_logger.c.ke_log_level, ?[*:0]const u8, ?[*:0]const u8) callconv(.c) void;
 
-/// A structural operation applied when the queue holding it is drained. `user` points at the
-/// copy of the payload passed to defer; `ecs` is the live world. A failure is returned, and the
-/// queue stops there: the operations recorded after it are dropped.
-pub const ke_defer_fn = ?*const fn (?*abi_ecs.c.ke_ecs, ?*anyopaque) callconv(.c) abi_result.c.ke_result;
-
-/// One call of a system body, once per run of the schedule, or once per slice when the system is
-/// per_entity. A failure is carried to the caller of run, which fails with it; the rest of the
-/// wave still runs, and no later wave starts.
-pub const ke_schedule_execute_fn = ?*const fn (?*abi_schedule.c.ke_schedule_ctx, ?*anyopaque, f32) callconv(.c) abi_result.c.ke_result;
-
-/// Whether a system runs in this run of its schedule; asked once per run, before the first wave,
-/// on the thread that called run. A failure fails the run before any wave starts.
-pub const ke_schedule_condition_fn = ?*const fn (?*anyopaque, ?*bool) callconv(.c) abi_result.c.ke_result;
-
 /// Receives one key the settings hold.
 pub const ke_settings_key_func = ?*const fn (?[*:0]const u8, ?*anyopaque) callconv(.c) void;
 
@@ -58,66 +36,42 @@ pub const ke_part_slot = extern struct {
     cardinality: ke_part_cardinality = std.mem.zeroes(ke_part_cardinality),
 };
 
-/// A place in the frame where a part runs work: a set of a schedule the composition names.
-pub const ke_part_hook = extern struct {
-    /// Unique among the part's hooks.
-    name: ?[*:0]const u8 = std.mem.zeroes(?[*:0]const u8),
-    /// The set the hook joins when the composition names only the schedule.
-    default_set: ?[*:0]const u8 = std.mem.zeroes(?[*:0]const u8),
-};
-
-/// A set a part introduces in the schedule one of its hooks is bound to.
-pub const ke_part_set = extern struct {
-    /// The set's name in that schedule.
-    name: ?[*:0]const u8 = std.mem.zeroes(?[*:0]const u8),
-    /// The hook whose schedule the set is introduced in.
-    hook: ?[*:0]const u8 = std.mem.zeroes(?[*:0]const u8),
-    /// A set of that schedule this one runs after; NULL for none.
-    after: ?[*:0]const u8 = std.mem.zeroes(?[*:0]const u8),
-};
-
 /// The instances bound to one slot. Two of them the composition ordered come in that order; any
 /// others in no guaranteed order.
 pub const ke_part_bound = extern struct {
     /// Each the instance of the slot's contract; NULL when count is zero.
     instances: ?*const ?*anyopaque = std.mem.zeroes(?*const ?*anyopaque),
+    /// The position of each of instances among every instance bound to any slot of the part, counted
+    /// from zero: two the composition ordered, within a slot or across slots, have positions in that
+    /// order. NULL when count is zero.
+    positions: ?*const usize = std.mem.zeroes(?*const usize),
     count: usize = std.mem.zeroes(usize),
 };
 
-/// Where one hook was bound.
-pub const ke_part_hooked = extern struct {
-    /// Outlives the instance.
-    schedule: ?*abi_schedule.c.ke_schedule = std.mem.zeroes(?*abi_schedule.c.ke_schedule),
-    set: ke_schedule_set_id = std.mem.zeroes(ke_schedule_set_id),
-};
-
-/// An instance a part created: the instance of its contract, or a handle of its own when it
-/// provides none. destroy is the part's own function taking that ref, never an implementation's
-/// destroy of another type.
-pub const ke_part_instance = extern struct {
+/// What has no contract of its own to be released through: an instance a part created, or the
+/// systems a module registered. destroy takes ref.
+pub const ke_owner = extern struct {
     ref: ?*anyopaque = std.mem.zeroes(?*anyopaque),
     destroy: ?*const fn (?*anyopaque) callconv(.c) void = null,
 };
 
-/// The description of an implementation: what it provides, what it needs and where it runs, and
-/// how it is created from that. A part states facts about its implementation, never a choice of
-/// the host.
+/// The description of an implementation: what it provides and what it needs, and how it is
+/// created from that. A part states facts about its implementation, never a choice of the host.
 pub const ke_part = extern struct {
     /// The implementation's name, unique among the parts given to one assembly.
     name: ?[*:0]const u8 = std.mem.zeroes(?[*:0]const u8),
-    /// The contract the instance provides; NULL when it provides none, as a module.
-    provides: ?[*:0]const u8 = std.mem.zeroes(?[*:0]const u8),
+    /// provides_count contracts the instance provides, each named by the C type of its vtable; none
+    /// for one that provides nothing, as a module.
+    provides: ?*const ?[*:0]const u8 = std.mem.zeroes(?*const ?[*:0]const u8),
+    provides_count: usize = std.mem.zeroes(usize),
     /// slot_count slots, in the order create receives them.
     slots: ?*const ke_part_slot = std.mem.zeroes(?*const ke_part_slot),
     slot_count: usize = std.mem.zeroes(usize),
-    /// hook_count hooks, in the order create receives them.
-    hooks: ?*const ke_part_hook = std.mem.zeroes(?*const ke_part_hook),
-    hook_count: usize = std.mem.zeroes(usize),
-    /// set_count sets the part introduces.
-    sets: ?*const ke_part_set = std.mem.zeroes(?*const ke_part_set),
-    set_count: usize = std.mem.zeroes(usize),
     /// Creates an instance.
-    create: ?*const fn (?*const ke_part, ?*const ke_part_bound, ?*const ke_part_hooked, ?*abi_settings.c.ke_settings, ?*ke_part_instance) callconv(.c) abi_result.c.ke_result = null,
+    create: ?*const fn (?*const ke_part, ?*const ke_part_bound, ?*abi_settings.c.ke_settings, ?*ke_owner) callconv(.c) abi_result.c.ke_result = null,
+    /// Gives the instance of the contract at index of provides; NULL for a part that provides one
+    /// contract, whose instance is the owner's ref.
+    provided: ?*const fn (?*anyopaque, usize) callconv(.c) ?*anyopaque = null,
     /// Gives the completion an instance finishes becoming usable with; NULL for an implementation
     /// that is usable once created.
     ready: ?*const fn (?*anyopaque, ?*?*abi_completion.c.ke_completion) callconv(.c) abi_result.c.ke_result = null,

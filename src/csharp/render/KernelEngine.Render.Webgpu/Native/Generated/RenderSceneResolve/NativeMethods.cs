@@ -6,9 +6,10 @@ using global::KernelEngine.Ecs;
 using KernelEngine.Asset.Native;
 using KernelEngine.Ecs.Native;
 using KernelEngine.Extraction.Native;
-using KernelEngine.Module.Native;
+using KernelEngine.Part.Native;
 using KernelEngine.Render.Native;
 using KernelEngine.Result.Native;
+using KernelEngine.Schedule.Native;
 
 namespace KernelEngine.Render.Webgpu.Native;
 
@@ -20,5 +21,5 @@ public static unsafe partial class NativeMethods
 
     [DllImport("ke_render_scene", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_render_scene_resolve_systems_create", ExactSpelling = true)]
     [return: NativeTypeName("ke_result")]
-    public static extern KernelEngine.Result.Native.Result render_scene_resolve_systems_create([NativeTypeName("ke_render_scene_resolve *")] KernelEngine.Render.Native.ke_render_scene_resolve* scene, [NativeTypeName("ke_module_handle *")] KernelEngine.Module.Native.ke_module_handle* out_module);
+    public static extern KernelEngine.Result.Native.Result render_scene_resolve_systems_create([NativeTypeName("ke_render_scene_resolve *")] KernelEngine.Render.Native.ke_render_scene_resolve* scene, [NativeTypeName("ke_schedule *")] KernelEngine.Schedule.Native.ke_schedule* update, [NativeTypeName("ke_schedule_set_id")] uint update_set, [NativeTypeName("ke_schedule *")] KernelEngine.Schedule.Native.ke_schedule* post_update, [NativeTypeName("ke_schedule_set_id")] uint post_update_set, [NativeTypeName("ke_owner *")] KernelEngine.Part.Native.ke_owner* out_systems);
 }

@@ -13,6 +13,7 @@ const abi_scheduler = @import("abi_scheduler");
 const heap = @import("heap");
 
 const abi_settings = @import("abi_settings");
+const abi_part = @import("abi_part");
 const settings_schema = @import("settings_schema");
 const R = @import("result").Result(.{});
 const log = std.log.scoped(.scheduler);
@@ -232,6 +233,120 @@ export fn ke_scheduler_create(job_system: ?*abi_job.c.ke_job_system, async_syste
     s.api.handle = s;
     out.* = .{ .ref = &s.api, .destroy = &destroy };
     return R.ok;
+}
+
+const P = abi_part.c;
+
+const contract_list = [_]?[*:0]const u8{"ke_scheduler"};
+
+const scheduler_slots = [_]P.ke_part_slot{
+    .{ .name = "job", .contract = "ke_job_system", .cardinality = P.KE_PART_CARDINALITY_ONE },
+    .{ .name = "async", .contract = "ke_async", .cardinality = P.KE_PART_CARDINALITY_ONE },
+};
+
+const layout_slots = [_]P.ke_part_slot{
+    .{ .name = "scheduler", .contract = "ke_scheduler", .cardinality = P.KE_PART_CARDINALITY_ONE },
+    .{ .name = "startup", .contract = "ke_scheduler_executable", .cardinality = P.KE_PART_CARDINALITY_MANY },
+    .{ .name = "every_tick", .contract = "ke_scheduler_executable", .cardinality = P.KE_PART_CARDINALITY_MANY },
+    .{ .name = "fixed", .contract = "ke_scheduler_executable", .cardinality = P.KE_PART_CARDINALITY_MANY },
+    .{ .name = "shutdown", .contract = "ke_scheduler_executable", .cardinality = P.KE_PART_CARDINALITY_MANY },
+};
+
+const cadence_of_slot = [_]c.ke_scheduler_cadence{
+    c.KE_SCHEDULER_CADENCE_STARTUP,
+    c.KE_SCHEDULER_CADENCE_EVERY_TICK,
+    c.KE_SCHEDULER_CADENCE_FIXED,
+    c.KE_SCHEDULER_CADENCE_SHUTDOWN,
+};
+
+fn first(b: P.ke_part_bound) ?*anyopaque {
+    return if (b.count > 0) @as([*]const ?*anyopaque, @ptrCast(b.instances))[0] else null;
+}
+
+fn destroyPart(ref: ?*anyopaque) callconv(.c) void {
+    destroy(@ptrCast(@alignCast(ref)));
+}
+
+/// Slot `create` of the scheduler's part: the scheduler over the job and async systems bound to it.
+fn createScheduler(self: ?*const P.ke_part, bound_in: ?*const P.ke_part_bound, settings: ?*abi_settings.c.ke_settings, out_instance: ?*P.ke_owner) callconv(.c) abi_result.c.ke_result {
+    const out = out_instance orelse return R.code(error.InvalidArgument);
+    out.* = .{};
+    if (self == null) return R.code(error.InvalidArgument);
+    const bound: [*]const P.ke_part_bound = @ptrCast(bound_in orelse return R.code(error.InvalidArgument));
+    var handle: c.ke_scheduler_handle = .{};
+    const made = ke_scheduler_create(@ptrCast(@alignCast(first(bound[0]))), @ptrCast(@alignCast(first(bound[1]))), settings, &handle);
+    if (made != R.ok) return made;
+    out.* = .{ .ref = handle.ref, .destroy = &destroyPart };
+    return R.ok;
+}
+
+/// One executable of a cadence slot, with where the composition placed it among all of them.
+const Placed = struct { position: usize, cadence: c.ke_scheduler_cadence, executable: *const c.ke_scheduler_executable };
+
+/// The `destroy` of the layout's owner: runs the scheduler's shutdown executables while they still exist; the
+/// scheduler's own destroy then runs nothing more.
+fn shutdownLayout(ref: ?*anyopaque) callconv(.c) void {
+    const sched: *c.ke_scheduler = @ptrCast(@alignCast(ref orelse return));
+    const ended = shutdown(sched);
+    if (ended != R.ok) log.warn("the scheduler's shutdown failed with result code {d}", .{ended});
+}
+
+/// Slot `create` of the layout's part: adds every executable of the cadence slots to the scheduler bound to it, in
+/// the order of their positions, each with its slot's cadence, the one order a tick runs them in.
+fn createLayout(self: ?*const P.ke_part, bound_in: ?*const P.ke_part_bound, settings: ?*abi_settings.c.ke_settings, out_instance: ?*P.ke_owner) callconv(.c) abi_result.c.ke_result {
+    _ = settings;
+    const out = out_instance orelse return R.code(error.InvalidArgument);
+    out.* = .{};
+    if (self == null) return R.code(error.InvalidArgument);
+    const bound: [*]const P.ke_part_bound = @ptrCast(bound_in orelse return R.code(error.InvalidArgument));
+    const sched: *c.ke_scheduler = @ptrCast(@alignCast(first(bound[0]) orelse return R.code(error.InvalidArgument)));
+    var placed: std.ArrayList(Placed) = .empty;
+    defer placed.deinit(gpa);
+    for (cadence_of_slot, 1..) |cadence, k| {
+        const b = bound[k];
+        if (b.count == 0) continue;
+        const instances = @as([*]const ?*anyopaque, @ptrCast(b.instances))[0..b.count];
+        const positions = @as([*]const usize, @ptrCast(b.positions))[0..b.count];
+        for (instances, positions) |instance, position| {
+            placed.append(gpa, .{ .position = position, .cadence = cadence, .executable = @ptrCast(@alignCast(instance orelse return R.code(error.InvalidArgument))) }) catch |err| return R.code(err);
+        }
+    }
+    std.sort.insertion(Placed, placed.items, {}, struct {
+        fn lessThan(_: void, x: Placed, y: Placed) bool {
+            return x.position < y.position;
+        }
+    }.lessThan);
+    for (placed.items) |p| {
+        const added = add(sched, p.executable.run, p.executable.user, p.cadence);
+        if (added != R.ok) return added;
+    }
+    out.* = .{ .ref = sched, .destroy = &shutdownLayout };
+    return R.ok;
+}
+
+const parts = [_]P.ke_part{
+    .{
+        .name = "scheduler",
+        .provides = &contract_list[0],
+        .provides_count = contract_list.len,
+        .slots = &scheduler_slots[0],
+        .slot_count = scheduler_slots.len,
+        .create = &createScheduler,
+        .set_log = @ptrCast(&@import("log").Destination("ke_scheduler").setLogCallback),
+    },
+    .{
+        .name = "scheduler_layout",
+        .slots = &layout_slots[0],
+        .slot_count = layout_slots.len,
+        .create = &createLayout,
+        .set_log = @ptrCast(&@import("log").Destination("ke_scheduler").setLogCallback),
+    },
+};
+
+/// The library's parts.
+export fn ke_scheduler_parts(out_count: ?*usize) callconv(.c) ?*const P.ke_part {
+    if (out_count) |n| n.* = parts.len;
+    return &parts[0];
 }
 
 const testing = std.testing;
@@ -475,6 +590,91 @@ test "a slot given no scheduler refuses" {
     try testing.expectEqual(R.code(error.InvalidArgument), tick(null, 0));
     try testing.expectEqual(R.code(error.InvalidArgument), shutdown(null));
     try testing.expect(!exitRequested(null));
+}
+
+const Executable = struct {
+    log: *Log,
+    letter: u8,
+    done: abi_completion.c.ke_completion = .{ .poll = &executablePoll, .wait = &executableWait, .release = &doneRelease },
+    as_added: c.ke_scheduler_executable = undefined,
+
+    fn bind(e: *Executable) *c.ke_scheduler_executable {
+        e.as_added = .{ .run = &Executable.run, .user = e };
+        return &e.as_added;
+    }
+
+    fn run(user: ?*anyopaque, dt: f32, out: ?*?*abi_completion.c.ke_completion) callconv(.c) abi_result.c.ke_result {
+        const e: *Executable = @ptrCast(@alignCast(user.?));
+        e.log.letters[e.log.count] = e.letter;
+        e.log.dts[e.log.count] = dt;
+        e.log.count += 1;
+        out.?.* = &e.done;
+        return R.ok;
+    }
+};
+
+fn executablePoll(_: ?*abi_completion.c.ke_completion, out: ?*abi_result.c.ke_result) callconv(.c) bool {
+    if (out) |o| o.* = R.ok;
+    return true;
+}
+
+fn executableWait(_: ?*abi_completion.c.ke_completion) callconv(.c) abi_result.c.ke_result {
+    return R.ok;
+}
+
+test "the layout's part adds every executable of its cadence slots in the order of their positions, and its owner shuts the scheduler down" {
+    var jobs: zsub.For(abi_job.c.ke_job_system) = undefined;
+    try jobs.init();
+    defer jobs.deinit();
+    var asyncs: zsub.For(abi_async.c.ke_async) = undefined;
+    try asyncs.init();
+    defer asyncs.deinit();
+    var log_of: Log = .{};
+    var start = Executable{ .log = &log_of, .letter = 's' };
+    var pre = Executable{ .log = &log_of, .letter = 'p' };
+    var step = Executable{ .log = &log_of, .letter = 'f' };
+    var update = Executable{ .log = &log_of, .letter = 'u' };
+    var end = Executable{ .log = &log_of, .letter = 'e' };
+    const job = [_]?*anyopaque{jobs.api()};
+    const async_one = [_]?*anyopaque{asyncs.api()};
+    const only = [_]usize{0};
+    const made_bound = [_]P.ke_part_bound{
+        .{ .instances = @ptrCast(&job), .positions = &only[0], .count = 1 },
+        .{ .instances = @ptrCast(&async_one), .positions = &only[0], .count = 1 },
+    };
+    var count: usize = 0;
+    const all: [*]const P.ke_part = @ptrCast(ke_scheduler_parts(&count).?);
+    try testing.expectEqual(@as(usize, 2), count);
+    try testing.expectEqual(@as(usize, 2), all[0].slot_count);
+    try testing.expectEqual(@as(usize, 5), all[1].slot_count);
+    var made: P.ke_owner = undefined;
+    try R.check(all[0].create.?(&all[0], &made_bound[0], &test_settings.api, &made));
+    const sched: *c.ke_scheduler = @ptrCast(@alignCast(made.ref.?));
+    const scheduler_one = [_]?*anyopaque{sched};
+    const startups = [_]?*anyopaque{start.bind()};
+    const ticks = [_]?*anyopaque{ pre.bind(), update.bind() };
+    const fixeds = [_]?*anyopaque{step.bind()};
+    const shutdowns = [_]?*anyopaque{end.bind()};
+    const start_at = [_]usize{0};
+    const ticks_at = [_]usize{ 1, 3 };
+    const fixed_at = [_]usize{2};
+    const end_at = [_]usize{4};
+    const layout_bound = [_]P.ke_part_bound{
+        .{ .instances = @ptrCast(&scheduler_one), .positions = &only[0], .count = 1 },
+        .{ .instances = @ptrCast(&startups), .positions = &start_at[0], .count = 1 },
+        .{ .instances = @ptrCast(&ticks), .positions = &ticks_at[0], .count = 2 },
+        .{ .instances = @ptrCast(&fixeds), .positions = &fixed_at[0], .count = 1 },
+        .{ .instances = @ptrCast(&shutdowns), .positions = &end_at[0], .count = 1 },
+    };
+    var layout: P.ke_owner = undefined;
+    try R.check(all[1].create.?(&all[1], &layout_bound[0], null, &layout));
+    try R.check(sched.tick.?(sched, 0.25));
+    try testing.expect(sched.completed_since.?(sched, &update, 1));
+    try testing.expect(!sched.completed_since.?(sched, &update, sched.sequence.?(sched) + 1));
+    layout.destroy.?(layout.ref);
+    try testing.expectEqualStrings("spfue", log_of.text());
+    made.destroy.?(made.ref);
+    try testing.expectEqualStrings("spfue", log_of.text());
 }
 
 test "nothing the scheduler allocated is left behind" {

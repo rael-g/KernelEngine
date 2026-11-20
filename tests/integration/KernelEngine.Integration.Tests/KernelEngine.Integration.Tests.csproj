@@ -6,6 +6,7 @@
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <ItemGroup>
@@ -25,7 +26,7 @@
     <ProjectReference Include="..\..\..\src\csharp\asset\KernelEngine.Asset.Assimp\KernelEngine.Asset.Assimp.csproj" />
     <ProjectReference Include="..\..\..\src\csharp\job\KernelEngine.Job.Enki\KernelEngine.Job.Enki.csproj" />
     <ProjectReference Include="..\..\..\src\csharp\async\KernelEngine.Async.Enki\KernelEngine.Async.Enki.csproj" />
-    <ProjectReference Include="..\..\..\src\csharp\sdk\KernelEngine.Sdk\KernelEngine.Sdk.csproj" />
+    <ProjectReference Include="..\..\..\src\csharp\sdk\KernelEngine.Sdk.Defaults\KernelEngine.Sdk.Defaults.csproj" />
     <ProjectReference Include="..\..\..\src\csharp\file_system\KernelEngine.FileSystem.Std\KernelEngine.FileSystem.Std.csproj" />
     <ProjectReference Include="..\..\..\src\csharp\io\KernelEngine.Io.Std\KernelEngine.Io.Std.csproj" />
     <ProjectReference Include="..\..\..\src\csharp\ecs\KernelEngine.Ecs.Flecs\KernelEngine.Ecs.Flecs.csproj" />

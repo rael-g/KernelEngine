@@ -3,6 +3,7 @@
 const abi_file_system = @import("file_system");
 const abi_io = @import("io");
 const abi_logger = @import("logger");
+const abi_part = @import("part");
 const abi_result = @import("result");
 const abi_settings = @import("settings");
 
@@ -20,6 +21,10 @@ pub const ke_log_callback = ?*const fn (?*anyopaque, abi_logger.c.ke_log_level, 
 /// Creates a ke_io with no thread of its own: each request runs on the calling thread, through
 /// file_system, before the call that submits it returns, so its completion has already finished.
 pub extern fn ke_io_inline_create(file_system: ?*abi_file_system.c.ke_file_system, settings: ?*abi_settings.c.ke_settings, out_io: ?*abi_io.c.ke_io_handle) abi_result.c.ke_result;
+
+/// Gives the parts ke_io_inline contains: `io_inline`, providing ke_io, with the slot
+/// `file_system`.
+pub extern fn ke_io_inline_parts(out_count: ?*usize) ?*const abi_part.c.ke_part;
 
 /// Sends every line ke_io_inline logs to callback, with ctx; a NULL callback sends them back to
 /// stderr, where they go until this is called. Called once, before the library logs.

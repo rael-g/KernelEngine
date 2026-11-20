@@ -2,6 +2,7 @@
 #include <kernel_engine/render/frame/frame_create.h>
 #include <kernel_engine/render/frame/frame_systems_create.h>
 #include <kernel_engine/render/frame/render_frame_log.h>
+#include <kernel_engine/render/frame/render_frame_parts.h>
 const unsigned long long layout_values[] = {
     0,
 };

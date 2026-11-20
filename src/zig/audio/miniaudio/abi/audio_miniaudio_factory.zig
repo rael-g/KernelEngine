@@ -3,6 +3,7 @@
 const abi_audio = @import("audio");
 const abi_io = @import("io");
 const abi_logger = @import("logger");
+const abi_part = @import("part");
 const abi_result = @import("result");
 
 /// The ABI as the headers declare it.
@@ -24,4 +25,10 @@ pub fn audioMiniaudioCreate(io: ?*abi_io.c.ke_io) Error!abi_audio.c.ke_audio_han
     var written: abi_audio.c.ke_audio_handle = undefined;
     try checkResult(c.ke_audio_miniaudio_create(io, &written));
     return written;
+}
+
+/// Gives the parts ke_audio_miniaudio contains: `audio_miniaudio`, providing ke_audio, with the
+/// slot `io`.
+pub fn audioMiniaudioParts(out_count: ?*usize) ?*const abi_part.c.ke_part {
+    return c.ke_audio_miniaudio_parts(out_count);
 }

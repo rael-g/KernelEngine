@@ -1,0 +1,23 @@
+.{
+    .name = .ke_runner_window,
+    .version = "0.1.0",
+    .fingerprint = 0x33f04c9cda7239e7,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .abi_part = .{ .path = "../../abi/part" },
+        .abi_result = .{ .path = "../../abi/result" },
+        .abi_runner = .{ .path = "../../abi/runner" },
+        .abi_scheduler = .{ .path = "../../abi/scheduler" },
+        .abi_window = .{ .path = "../../abi/window" },
+        .ke_common = .{ .path = "../../common" },
+        .ke_build = .{ .path = "../../build" },
+        .ke_logger = .{ .path = "../../logger" },
+        .ke_part = .{ .path = "../../part" },
+        .ke_result = .{ .path = "../../result" },
+        .zsub = .{
+            .url = "https://github.com/rael-g/zsub/archive/10fee26318ed2ef628f6fada5f3c39f4572381ba.tar.gz",
+            .hash = "zsub-0.0.0-c8a1QlLVAABkTAwiY20uW_c1jJDIb3Ke92-LuXFWiXmU",
+        },
+    },
+    .paths = .{"."},
+}

@@ -8,6 +8,8 @@ pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @imp
 
 pub const _DllMainCRTStartup = @import("dll_entry")._DllMainCRTStartup;
 
+const abi_part = @import("abi_part");
+const part = @import("part");
 const abi_completion = @import("abi_completion");
 const abi_file_system = @import("abi_file_system");
 const abi_io = @import("abi_io");
@@ -330,6 +332,16 @@ export fn ke_io_inline_create(file_system: ?*abi_file_system.c.ke_file_system, s
     return R.ok;
 }
 
+pub const parts = [_]abi_part.c.ke_part{
+    part.of(ke_io_inline_create, .{ .name = "io_inline", .slots = &.{"file_system"}, .set_log = @ptrCast(&@import("log").Destination("ke_io_inline").setLogCallback) }),
+};
+
+/// The library's parts.
+export fn ke_io_inline_parts(out_count: ?*usize) callconv(.c) ?*const abi_part.c.ke_part {
+    if (out_count) |n| n.* = parts.len;
+    return &parts[0];
+}
+
 fn create(file_system_in: ?*abi_file_system.c.ke_file_system, settings: ?*abi_settings.c.ke_settings) R.Error!abi_io.c.ke_io_handle {
     const file_system = file_system_in orelse return error.InvalidArgument;
     _ = try settings_schema.read(Settings, settings orelse return error.InvalidArgument);
@@ -516,6 +528,15 @@ test "creating without a file system or settings, or with any setting, is refuse
     try testing.expectError(error.InvalidArgument, R.check(ke_io_inline_create(fs.api(), null, &h)));
     try testing.expectError(error.InvalidArgument, R.check(ke_io_inline_create(fs.api(), &some.api, &h)));
     try testing.expectError(error.InvalidArgument, R.check(ke_io_inline_create(fs.api(), &none.api, null)));
+}
+
+test "the library's part is io_inline, built from its factory" {
+    var count: usize = 0;
+    const p = ke_io_inline_parts(&count).?;
+    try std.testing.expectEqual(@as(usize, 1), count);
+    try std.testing.expectEqualStrings("io_inline", std.mem.span(p.name.?));
+    try std.testing.expectEqual(@as(usize, 1), p.provides_count);
+    try std.testing.expectEqual(@as(usize, 1), p.slot_count);
 }
 
 test "reading, waiting, freeing and destroying leaves no block allocated" {

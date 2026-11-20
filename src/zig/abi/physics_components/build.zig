@@ -5,6 +5,8 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     const abi = b.addModule("abi", .{ .root_source_file = b.path("physics_components.zig") });
+    abi.addImport("ecs", b.dependency("abi_ecs", .{}).module("abi"));
+    abi.addImport("ecs_variant", b.dependency("abi_ecs_variant", .{}).module("abi"));
     abi.addImport("math", b.dependency("abi_math", .{}).module("abi"));
     abi.addImport("physics", b.dependency("abi_physics", .{}).module("abi"));
     abi.addImport("result", b.dependency("abi_result", .{}).module("abi"));
@@ -12,8 +14,10 @@ pub fn build(b: *std.Build) void {
 
     const headers = b.addWriteFiles().add("layout.h",
         \\#include <kernel_engine/physics/components.h>
+        \\#include <kernel_engine/physics/component_fields.h>
     );
     const translated = b.addTranslateC(.{ .root_source_file = headers, .target = target, .optimize = optimize });
+    translated.addIncludePath(b.path("../../../c/ecs"));
     translated.addIncludePath(b.path("../../../c/math"));
     translated.addIncludePath(b.path("../../../c/physics"));
     translated.addIncludePath(b.path("../../common/include"));
@@ -30,6 +34,7 @@ pub fn build(b: *std.Build) void {
         },
     }) });
     tests.root_module.addCSourceFile(.{ .file = b.path("layout_values.c") });
+    tests.root_module.addIncludePath(b.path("../../../c/ecs"));
     tests.root_module.addIncludePath(b.path("../../../c/math"));
     tests.root_module.addIncludePath(b.path("../../../c/physics"));
     tests.root_module.addIncludePath(b.path("../../common/include"));

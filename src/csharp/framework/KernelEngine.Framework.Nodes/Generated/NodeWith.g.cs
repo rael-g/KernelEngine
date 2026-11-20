@@ -5,17 +5,21 @@
 
 using System;
 
+using KernelEngine.Ecs;
+using KernelEngine.Ecs.Native;
+using KernelEngine.Framework.Nodes.Native;
+
 namespace KernelEngine.Framework.Nodes;
 
 /// <summary>A component every node of a type carries beside its fields, and how it is born.</summary>
 public partial struct NodeWith
 {
-    /// <summary>The registered component's name.</summary>
-    public string? Name;
+    /// <summary>How the component is registered: its name, size, alignment and field table.</summary>
+    public ComponentDesc Component;
     /// <summary>The bytes each node starts with; none starts it zeroed.</summary>
     public ReadOnlyMemory<byte> Initial;
 
     /// <summary>The entry whose initial is the bytes of <paramref name="initial"/>.</summary>
-    public static NodeWith Of<T>(string? name, T initial) where T : unmanaged =>
-        new() { Name = name, Initial = System.Runtime.InteropServices.MemoryMarshal.AsBytes(new[] { initial }.AsSpan()).ToArray() };
+    public static NodeWith Of<T>(ComponentDesc component, T initial) where T : unmanaged =>
+        new() { Component = component, Initial = System.Runtime.InteropServices.MemoryMarshal.AsBytes(new[] { initial }.AsSpan()).ToArray() };
 }

@@ -4,6 +4,7 @@
     .fingerprint = 0xebbc11606b299d4f,
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
+        .abi_part = .{ .path = "../abi/part" },
         .abi_settings = .{ .path = "../abi/settings" },
         .ke_settings_schema = .{ .path = "../settings/schema" },
         .abi_async = .{ .path = "../abi/async" },

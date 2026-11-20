@@ -52,8 +52,8 @@ public interface IExtraction : IDisposable
     /// <summary>Extracts, on the calling thread, with neither world touched by anything else: destroys the render world's frame_local entities, pairs the newly synced entities and drops the pairs of the others, then runs the copies, the interpolations at alpha and the custom extractions.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
     void Extract(float alpha);
-    /// <summary>One run of the render stage, with the ABI of a scheduler's executable whose user is the extraction: extracts at the scheduler's fixed alpha, then starts a run of the render schedule.</summary>
-    /// <returns>Receives the render schedule's run.</returns>
+    /// <summary>One extraction, with the ABI of a scheduler's executable whose user is the extraction: extracts at the scheduler's fixed alpha. What runs over the render world is added to the scheduler after it.</summary>
+    /// <returns>Receives a completion already finished with KE_OK, which the caller releases.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
     nint Run(float dt);
 }

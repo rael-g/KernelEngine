@@ -1,6 +1,6 @@
 //! The `ke_extraction` contract over two `ke_ecs` worlds, on the calling thread: pairs the synced entities of
 //! the main world with entities of the render world, copies and blends the registered components into them,
-//! and runs the render schedule as the render stage.
+//! extracting as an executable of the scheduler.
 
 const std = @import("std");
 
@@ -10,10 +10,11 @@ const abi_completion = @import("abi_completion");
 const abi_ecs = @import("abi_ecs");
 const abi_ecs_variant = @import("abi_ecs_variant");
 const abi_extraction = @import("abi_extraction");
-const abi_module = @import("abi_module");
 const abi_result = @import("abi_result");
 const abi_schedule = @import("abi_schedule");
 const abi_scheduler = @import("abi_scheduler");
+const abi_part = @import("abi_part");
+const part = @import("part");
 const heap = @import("heap");
 
 const R = @import("result").Result(.{});
@@ -52,15 +53,15 @@ const Custom = struct { extract: x.ke_extraction_custom_fn, user: ?*anyopaque };
 
 /// The state behind the handle, whose `api.handle` points back at it. `to_render` and `to_main` are the pairs
 /// both ways; `synced`, `interpolated` and `teleported` are the tags of the main world and `frame_local` that of
-/// the render world, each read through a query of its one tag. `history` is the schedule the history module
-/// attached to, null while it is detached.
+/// the render world, each read through a query of its one tag. `history` is the schedule of the history
+/// module's hook while the module lives, null otherwise.
 const State = struct {
     api: x.ke_extraction,
-    module: abi_module.c.ke_module = undefined,
+    executable: abi_scheduler.c.ke_scheduler_executable = .{ .run = &runAsExecutable },
     main: *Ecs,
     render: *Ecs,
     scheduler: *abi_scheduler.c.ke_scheduler,
-    render_schedule: *abi_schedule.c.ke_schedule,
+    done: abi_completion.c.ke_completion = .{ .poll = &donePoll, .wait = &doneWait, .release = &doneRelease },
     synced: Cid = 0,
     interpolated: Cid = 0,
     teleported: Cid = 0,
@@ -349,15 +350,27 @@ fn extract(self: ?*x.ke_extraction, alpha: f32) callconv(.c) Result {
     return R.ok;
 }
 
-/// Slot `run`: the render stage.
-fn run(self: ?*x.ke_extraction, dt: f32, out_completion: ?*?*abi_completion.c.ke_completion) callconv(.c) Result {
+/// Slot `run`: extracts at the scheduler's fixed alpha and hands over the state's one completion, finished.
+fn run(self: ?*x.ke_extraction, _: f32, out_completion: ?*?*abi_completion.c.ke_completion) callconv(.c) Result {
     const out = out_completion orelse return R.code(error.InvalidArgument);
     out.* = null;
     const s = stateOf(self) orelse return R.code(error.InvalidArgument);
     const extracted = extract(&s.api, s.scheduler.fixed_alpha.?(s.scheduler));
     if (extracted != R.ok) return extracted;
-    return s.render_schedule.run.?(s.render_schedule, dt, out);
+    out.* = &s.done;
+    return R.ok;
 }
+
+fn donePoll(_: ?*abi_completion.c.ke_completion, out_result: ?*Result) callconv(.c) bool {
+    if (out_result) |r| r.* = R.ok;
+    return true;
+}
+
+fn doneWait(_: ?*abi_completion.c.ke_completion) callconv(.c) Result {
+    return R.ok;
+}
+
+fn doneRelease(_: ?*abi_completion.c.ke_completion) callconv(.c) void {}
 
 /// The history system of one interpolation: copies each entity's current value into its previous one.
 fn historySystem(ctx: ?*abi_schedule.c.ke_schedule_ctx, user: ?*anyopaque, _: f32) callconv(.c) Result {
@@ -397,42 +410,38 @@ fn detachHistory(s: *State) void {
     s.history = null;
 }
 
-/// Slot `attach` of the history module: one system per interpolation in the fixed schedule's
-/// fixed_pre_update set; a failure leaves none registered.
-fn historyAttach(self: ?*abi_module.c.ke_module, targets_in: ?*const abi_module.c.ke_module_targets) callconv(.c) Result {
-    const s: *State = @ptrCast(@alignCast((self orelse return R.code(error.InvalidArgument)).handle));
-    const targets = targets_in orelse return R.code(error.InvalidArgument);
-    if (s.history != null) return R.code(error.NotSupported);
-    s.history = @ptrCast(targets.fixed orelse return R.code(error.InvalidArgument));
-    s.history_set = .{targets.fixed_pre_update_set};
-    for (s.interps.items) |i| registerHistory(s, i) catch |err| {
-        detachHistory(s);
-        log.warn("attaching the extraction history failed: {t}", .{err});
-        return R.code(err);
-    };
-    return R.ok;
+/// The history module owner's `destroy`: unregisters its systems; the state stays with the extraction.
+fn historyDestroy(ref: ?*anyopaque) callconv(.c) void {
+    detachHistory(@ptrCast(@alignCast(ref orelse return)));
 }
 
-/// Slot `detach` of the history module.
-fn historyDetach(self: ?*abi_module.c.ke_module) callconv(.c) void {
-    detachHistory(@ptrCast(@alignCast((self orelse return).handle)));
-}
-
-/// The history module handle's `destroy`: detaches; the state stays with the extraction.
-fn historyDestroy(self: ?*abi_module.c.ke_module) callconv(.c) void {
-    historyDetach(self);
-}
-
-export fn ke_extraction_history_create(extraction: ?*x.ke_extraction, out_module: ?*abi_module.c.ke_module_handle) callconv(.c) Result {
+/// Factory of the history module: one system per interpolation, registered before or after, in
+/// `fixed_pre_update_set` of `fixed_pre_update`; a failure leaves none registered. A second module over
+/// the same extraction while the first lives is not supported.
+export fn ke_extraction_history_create(
+    extraction: ?*x.ke_extraction,
+    fixed_pre_update: ?*abi_schedule.c.ke_schedule,
+    fixed_pre_update_set: abi_schedule.c.ke_schedule_set_id,
+    out_module: ?*abi_part.c.ke_owner,
+) callconv(.c) Result {
     const out = out_module orelse return R.code(error.InvalidArgument);
-    out.* = std.mem.zeroes(abi_module.c.ke_module_handle);
+    out.* = std.mem.zeroes(abi_part.c.ke_owner);
     const given = extraction orelse return R.code(error.InvalidArgument);
+    const schedule = fixed_pre_update orelse return R.code(error.InvalidArgument);
     if (given.extract != &extract) {
         log.warn("extraction history: the extraction was not created by this library", .{});
         return R.code(error.InvalidArgument);
     }
     const s = stateOf(given) orelse return R.code(error.InvalidArgument);
-    out.* = .{ .ref = &s.module, .destroy = historyDestroy };
+    if (s.history != null) return R.code(error.NotSupported);
+    s.history = schedule;
+    s.history_set = .{fixed_pre_update_set};
+    for (s.interps.items) |i| registerHistory(s, i) catch |err| {
+        detachHistory(s);
+        log.warn("creating the extraction history failed: {t}", .{err});
+        return R.code(err);
+    };
+    out.* = .{ .ref = s, .destroy = historyDestroy };
     return R.ok;
 }
 
@@ -463,7 +472,6 @@ export fn ke_extraction_create(
     main_in: ?*Ecs,
     render_in: ?*Ecs,
     scheduler_in: ?*abi_scheduler.c.ke_scheduler,
-    render_schedule_in: ?*abi_schedule.c.ke_schedule,
     out_extraction: ?*x.ke_extraction_handle,
 ) callconv(.c) Result {
     const out = out_extraction orelse return R.code(error.InvalidArgument);
@@ -472,7 +480,6 @@ export fn ke_extraction_create(
         main_in orelse return R.code(error.InvalidArgument),
         render_in orelse return R.code(error.InvalidArgument),
         scheduler_in orelse return R.code(error.InvalidArgument),
-        render_schedule_in orelse return R.code(error.InvalidArgument),
     ) catch |err| {
         log.warn("creating the extraction failed: {t}", .{err});
         return R.code(err);
@@ -480,7 +487,7 @@ export fn ke_extraction_create(
     return R.ok;
 }
 
-fn create(main: *Ecs, render: *Ecs, scheduler: *abi_scheduler.c.ke_scheduler, render_schedule: *abi_schedule.c.ke_schedule) R.Error!x.ke_extraction_handle {
+fn create(main: *Ecs, render: *Ecs, scheduler: *abi_scheduler.c.ke_scheduler) R.Error!x.ke_extraction_handle {
     const s = gpa.create(State) catch return error.OutOfMemory;
     errdefer gpa.destroy(s);
     s.* = .{
@@ -497,10 +504,9 @@ fn create(main: *Ecs, render: *Ecs, scheduler: *abi_scheduler.c.ke_scheduler, re
         .main = main,
         .render = render,
         .scheduler = scheduler,
-        .render_schedule = render_schedule,
     };
     s.api.handle = s;
-    s.module = .{ .handle = s, .attach = historyAttach, .detach = historyDetach };
+    s.executable.user = &s.api;
     s.synced = try tag(main, x.KE_COMPONENT_NAME_RENDER_SYNCED);
     s.interpolated = try tag(main, x.KE_COMPONENT_NAME_INTERPOLATED);
     s.teleported = try tag(main, x.KE_COMPONENT_NAME_TELEPORTED);
@@ -511,6 +517,28 @@ fn create(main: *Ecs, render: *Ecs, scheduler: *abi_scheduler.c.ke_scheduler, re
     s.frame_local_query = try tagQuery(render, s.frame_local);
     try R.check(main.removal_track.?(main, s.synced, &s.tracker));
     return .{ .ref = &s.api, .destroy = destroy };
+}
+
+/// The extraction as a scheduler runs it: `user` is the extraction itself, the name completed_since knows it by.
+fn runAsExecutable(user: ?*anyopaque, dt: f32, out_completion: ?*?*abi_completion.c.ke_completion) callconv(.c) Result {
+    return run(@ptrCast(@alignCast(user orelse return R.code(error.InvalidArgument))), dt, out_completion);
+}
+
+/// The vtable of each contract the extraction's part provides: the extraction, then the executable.
+fn provided(instance: ?*anyopaque, index: usize) callconv(.c) ?*anyopaque {
+    const s = stateOf(@ptrCast(@alignCast(instance))) orelse return null;
+    return if (index == 0) &s.api else &s.executable;
+}
+
+pub const parts = [_]abi_part.c.ke_part{
+    part.of(ke_extraction_create, .{ .name = "extraction", .slots = &.{ "main", "render", "scheduler" }, .also = &.{"ke_scheduler_executable"}, .provided = provided, .set_log = @ptrCast(&@import("log").Destination("ke_extraction_default").setLogCallback) }),
+    part.of(ke_extraction_history_create, .{ .name = "extraction_history", .slots = &.{"extraction"}, .hooks = &.{"fixed_pre_update"}, .set_log = @ptrCast(&@import("log").Destination("ke_extraction_default").setLogCallback) }),
+};
+
+/// The library's parts.
+export fn ke_extraction_default_parts(out_count: ?*usize) callconv(.c) ?*const abi_part.c.ke_part {
+    if (out_count) |n| n.* = parts.len;
+    return &parts[0];
 }
 
 test {

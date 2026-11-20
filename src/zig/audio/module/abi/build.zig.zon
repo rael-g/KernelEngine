@@ -7,7 +7,7 @@
         .abi_audio = .{ .path = "../../../abi/audio" },
         .abi_ecs = .{ .path = "../../../abi/ecs" },
         .abi_logger = .{ .path = "../../../abi/logger" },
-        .abi_module = .{ .path = "../../../abi/module" },
+        .abi_part = .{ .path = "../../../abi/part" },
         .abi_result = .{ .path = "../../../abi/result" },
         .abi_schedule = .{ .path = "../../../abi/schedule" },
     },

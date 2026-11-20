@@ -1,0 +1,16 @@
+.{
+    .name = .abi_runner_window_factory,
+    .version = "0.1.0",
+    .fingerprint = 0x30a2a0d087fb6364,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .abi_completion = .{ .path = "../../../abi/completion" },
+        .abi_logger = .{ .path = "../../../abi/logger" },
+        .abi_part = .{ .path = "../../../abi/part" },
+        .abi_result = .{ .path = "../../../abi/result" },
+        .abi_runner = .{ .path = "../../../abi/runner" },
+        .abi_scheduler = .{ .path = "../../../abi/scheduler" },
+        .abi_window = .{ .path = "../../../abi/window" },
+    },
+    .paths = .{"."},
+}

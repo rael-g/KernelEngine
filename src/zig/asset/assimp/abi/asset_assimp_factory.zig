@@ -3,6 +3,7 @@
 const abi_asset_loader = @import("asset_loader");
 const abi_io = @import("io");
 const abi_logger = @import("logger");
+const abi_part = @import("part");
 const abi_result = @import("result");
 
 /// The ABI as the headers declare it.
@@ -24,4 +25,10 @@ pub fn assetLoaderAssimpCreate(io: ?*abi_io.c.ke_io) Error!abi_asset_loader.c.ke
     var written: abi_asset_loader.c.ke_asset_loader_handle = undefined;
     try checkResult(c.ke_asset_loader_assimp_create(io, &written));
     return written;
+}
+
+/// Gives the parts ke_asset_assimp contains: `asset_loader_assimp`, providing ke_asset_loader,
+/// with the slot `io`.
+pub fn assetAssimpParts(out_count: ?*usize) ?*const abi_part.c.ke_part {
+    return c.ke_asset_assimp_parts(out_count);
 }

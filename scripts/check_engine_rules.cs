@@ -53,6 +53,17 @@ var factoryHeaders = plugins
     .ToDictionary(s => s.Key, s => declared.Matches(Regex.Replace(string.Join('\n', s.Value), @"/\*.*?\*/", "", RegexOptions.Singleline))
         .Select(m => m.Groups[1].Value).ToList());
 var declaredNames = factoryHeaders.Values.SelectMany(v => v).ToHashSet(StringComparer.Ordinal);
+var prototype = new Regex(@"KE_\w*API\s+ke_result\s+(\w+_create)\s*\(([^)]*)\)", RegexOptions.Singleline);
+var assemblyMadeOf = new HashSet<string>(StringComparer.Ordinal) { "ke_assembly_handle", "ke_configuration_handle", "ke_configuration_source_handle", "ke_composition_source_handle" };
+var partShaped = plugins
+    .Where(s => s.Key.EndsWith(".h", StringComparison.Ordinal) && s.Key.Contains("/include/", StringComparison.Ordinal))
+    .SelectMany(s => prototype.Matches(Regex.Replace(string.Join('\n', s.Value), @"/\*.*?\*/", "", RegexOptions.Singleline))
+        .Select(m => (Plugin: s.Key[..s.Key.IndexOf("/include/", StringComparison.Ordinal)], Factory: m.Groups[1].Value,
+            Parameters: m.Groups[2].Value.Split(',').Select(p => Regex.Replace(p.Trim(), @"\s+", " ")).ToList())))
+    .Where(f => f.Parameters.Count > 0
+        && !assemblyMadeOf.Contains(f.Parameters[^1].Split(' ')[0])
+        && f.Parameters.SkipLast(1).All(p => Regex.IsMatch(p, @"^(const )?ke_\w+ ?\*") || p.StartsWith("ke_schedule_set_id ", StringComparison.Ordinal)))
+    .ToList();
 
 var rules = new List<Rule>
 {
@@ -112,6 +123,10 @@ var rules = new List<Rule>
             .SelectMany(s => s.Value.Select((l, i) => (s.Key, Line: i + 1, Match: exportFn.Match(l))))
             .Where(x => x.Match.Success && !declaredNames.Contains(x.Match.Groups[1].Value))
             .Select(x => $"{x.Key}:{x.Line}: {x.Match.Groups[1].Value}")),
+    new("a plugin whose factory takes only dependencies, hooks and settings exports its parts", 0,
+        partShaped.Where(f => !declaredNames.Any(n => n.EndsWith("_parts", StringComparison.Ordinal)
+                && factoryHeaders.Any(h => h.Key.StartsWith(f.Plugin + "/include/", StringComparison.Ordinal) && h.Value.Contains(n))))
+            .Select(f => $"{f.Plugin}: {f.Factory} has no part")),
     new("a factory header declares one function", 0,
         factoryHeaders.Where(h => h.Value.Count > 1).SelectMany(h => h.Value.Skip(1).Select(n => $"{h.Key}: {n}"))),
     new("a contract declares no defaults", 0,

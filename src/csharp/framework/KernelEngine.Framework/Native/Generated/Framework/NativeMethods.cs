@@ -6,12 +6,13 @@ using global::KernelEngine.Input;
 using global::KernelEngine.Logger;
 
 using KernelEngine.Asset.Native;
-using KernelEngine.Configuration.Native;
 using KernelEngine.Ecs.Native;
 using KernelEngine.Input.Native;
 using KernelEngine.Io.Native;
-using KernelEngine.Module.Native;
+using KernelEngine.Part.Native;
 using KernelEngine.Result.Native;
+using KernelEngine.Schedule.Native;
+using KernelEngine.Settings.Native;
 using KernelEngine.Text.Native;
 
 namespace KernelEngine.Framework.Native;
@@ -24,15 +25,15 @@ public static unsafe partial class NativeMethods
 
     [DllImport("ke_framework", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_input_actions_create", ExactSpelling = true)]
     [return: NativeTypeName("ke_result")]
-    public static extern KernelEngine.Result.Native.Result input_actions_create([NativeTypeName("ke_configuration *")] KernelEngine.Configuration.Native.ke_configuration* configuration, [NativeTypeName("const char *")] sbyte* section, ke_input_actions_handle* out_actions);
+    public static extern KernelEngine.Result.Native.Result input_actions_create([NativeTypeName("ke_settings *")] KernelEngine.Settings.Native.ke_settings* settings, ke_input_actions_handle* out_actions);
 
     [DllImport("ke_framework", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_input_actions_evaluation_create", ExactSpelling = true)]
     [return: NativeTypeName("ke_result")]
-    public static extern KernelEngine.Result.Native.Result input_actions_evaluation_create(ke_input_actions* actions, [NativeTypeName("ke_input *")] KernelEngine.Input.Native.ke_input* input, [NativeTypeName("ke_module_handle *")] KernelEngine.Module.Native.ke_module_handle* out_module);
+    public static extern KernelEngine.Result.Native.Result input_actions_evaluation_create(ke_input_actions* actions, [NativeTypeName("ke_input *")] KernelEngine.Input.Native.ke_input* input, [NativeTypeName("ke_schedule *")] KernelEngine.Schedule.Native.ke_schedule* pre_update, [NativeTypeName("ke_schedule_set_id")] uint pre_update_set, [NativeTypeName("ke_owner *")] KernelEngine.Part.Native.ke_owner* out_module);
 
     [DllImport("ke_framework", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_scene_hierarchy_create", ExactSpelling = true)]
     [return: NativeTypeName("ke_result")]
-    public static extern KernelEngine.Result.Native.Result scene_hierarchy_create([NativeTypeName("ke_ecs *")] KernelEngine.Ecs.Native.ke_ecs* ecs, [NativeTypeName("ke_module_handle *")] KernelEngine.Module.Native.ke_module_handle* out_module);
+    public static extern KernelEngine.Result.Native.Result scene_hierarchy_create([NativeTypeName("ke_ecs *")] KernelEngine.Ecs.Native.ke_ecs* ecs, [NativeTypeName("ke_schedule *")] KernelEngine.Schedule.Native.ke_schedule* post_update, [NativeTypeName("ke_schedule_set_id")] uint post_update_set, [NativeTypeName("ke_owner *")] KernelEngine.Part.Native.ke_owner* out_module);
 
     [DllImport("ke_framework", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_asset_resolver_create", ExactSpelling = true)]
     [return: NativeTypeName("ke_result")]
@@ -40,4 +41,8 @@ public static unsafe partial class NativeMethods
 
     [DllImport("ke_framework", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_framework_set_log_callback", ExactSpelling = true)]
     public static extern void framework_set_log_callback([NativeTypeName("ke_log_callback")] delegate* unmanaged[Cdecl]<void*, global::KernelEngine.Logger.LogLevel, sbyte*, sbyte*, void> callback, void* ctx);
+
+    [DllImport("ke_framework", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_framework_parts", ExactSpelling = true)]
+    [return: NativeTypeName("const ke_part *")]
+    public static extern KernelEngine.Part.Native.ke_part* framework_parts([NativeTypeName("size_t *")] nuint* out_count);
 }

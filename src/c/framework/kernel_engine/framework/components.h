@@ -3,6 +3,8 @@
 
 #include <kernel_engine/ecs/ecs.h>
 
+#include <stdalign.h>
+
 #ifdef __cplusplus
 extern "C"
 {
@@ -24,6 +26,11 @@ extern "C"
 
 #define KE_COMPONENT_NAME_HIERARCHY "hierarchy"
 #define KE_COMPONENT_NAME_NAME      "name"
+
+/// How `ke_hierarchy_component` is registered: its name, size, alignment, and no field table.
+static const ke_component_desc ke_hierarchy_component_desc = { KE_COMPONENT_NAME_HIERARCHY, sizeof(ke_hierarchy_component), alignof(ke_hierarchy_component), NULL, 0 };
+/// How `ke_name_component` is registered: its name, size, alignment, and no field table.
+static const ke_component_desc ke_name_component_desc = { KE_COMPONENT_NAME_NAME, sizeof(ke_name_component), alignof(ke_name_component), NULL, 0 };
 
 #ifdef __cplusplus
 }

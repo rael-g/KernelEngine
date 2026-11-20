@@ -75,9 +75,16 @@ every surface a struct of function pointers obtained from a factory. Each domain
 so a consumer sees only the domains it asks for; there is no umbrella header.
 
 **Plugins.** `src/zig/` holds implementations and no contract. A plugin is a shared library exporting one
-create function per factory header (`<plugin>/include/kernel_engine/<domain>/...`) and one log-callback
-setter; everything else is a vtable that factory returns. It logs with `std.log`, the host sets where each
-library's log goes, and the host injects every dependency. Contract types reach a plugin through the ABI
+create function per factory header (`<plugin>/include/kernel_engine/<domain>/...`), one log-callback
+setter, and its parts (`<library>_parts`, a `ke_part` per factory whose arguments are only dependencies,
+hooks and settings, made with the `part` package); everything else is a vtable that factory returns. It logs
+with `std.log`, the host sets where each library's log goes, and the host injects every dependency.
+
+**Assembly.** A host adds the parts of the libraries it links to a `ke_assembly` (`src/c/assembly/`) and
+writes a composition over them: which instances exist, with which section of the project file, bound to
+which. A composition is code first and a file on top (`ke_composition_source`, `src/sdk/*.composition`);
+resolving it reports every mistake at once, and the instances are made in dependency order and destroyed in
+reverse. Contract types reach a plugin through the ABI
 packages kabic generates (`src/zig/abi/<domain>/`).
 
 **Bindings.** One `Native/` directory per managed project, configured from the `bindings` array of
@@ -87,8 +94,10 @@ whether the concept belongs in kabic's core, and only a concept that is neither 
 
 **Managed.** Each factory is a class wrapping its vtable. Game code starts from `KernelEngine.Sdk` and
 `KernelEngine.Sdk.Defaults` (`src/csharp/sdk/`); a complete game is
-[`examples/csharp/games/pong/`](examples/csharp/games/pong/Program.cs). No service locator: a container in
-the host is composition, and each plugin still receives its dependencies through its factory.
+[`examples/csharp/games/pong/`](examples/csharp/games/pong/Program.cs); its C twin is
+[`examples/c/pong/`](examples/c/pong/main.c). No service locator: the assembly composes the engine, the C#
+container only holds the `KernelEngineHost` and services over the instances it made, and each plugin still
+receives its dependencies through its factory.
 
 **Dependencies** enter through vcpkg, NuGet or `build.zig.zon`; then a pinned fetch step in the root
 `build.zig`; then, for a pure-C library nothing carries, a vendored copy in `<plugin>/third_party/<lib>/`

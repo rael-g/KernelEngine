@@ -7,6 +7,7 @@
         .abi_async = .{ .path = "../../../abi/async" },
         .abi_completion = .{ .path = "../../../abi/completion" },
         .abi_logger = .{ .path = "../../../abi/logger" },
+        .abi_part = .{ .path = "../../../abi/part" },
         .abi_render_gpu = .{ .path = "../../../abi/render_gpu" },
         .abi_result = .{ .path = "../../../abi/result" },
         .abi_settings = .{ .path = "../../../abi/settings" },

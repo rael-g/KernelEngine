@@ -2,6 +2,7 @@
 
 const abi_job = @import("job");
 const abi_logger = @import("logger");
+const abi_part = @import("part");
 const abi_physics = @import("physics");
 const abi_result = @import("result");
 const abi_settings = @import("settings");
@@ -31,3 +32,7 @@ pub extern fn ke_physics_2d_box2d_create(job_system: ?*abi_job.c.ke_job_system, 
 /// Sends every line ke_physics_2d_box2d logs to callback, with ctx; a NULL callback sends them
 /// back to stderr, where they go until this is called. Called once, before the library logs.
 pub extern fn ke_physics_2d_box2d_set_log_callback(callback: ke_log_callback, ctx: ?*anyopaque) void;
+
+/// Gives the parts ke_physics_2d_box2d contains: `physics_2d_box2d`, providing ke_physics_2d,
+/// with the slot `job_system`.
+pub extern fn ke_physics_2d_box2d_parts(out_count: ?*usize) ?*const abi_part.c.ke_part;

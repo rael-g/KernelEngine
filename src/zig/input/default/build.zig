@@ -5,7 +5,8 @@ pub fn build(b: *std.Build) void {
     _ = ke_build.plugin(b, .{
         .name = "ke_input_default",
         .root = "src/input_default.zig",
-        .abi = &.{ "abi_input", "abi_result" },
+        .abi = &.{ "abi_part", "abi_input", "abi_result" },
+        .packages = &.{.{ .name = "part", .dependency = "ke_part", .module = "part" }},
         .common = &.{"heap"},
         .tests = "Run the default input unit tests",
     });

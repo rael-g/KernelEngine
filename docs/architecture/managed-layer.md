@@ -11,8 +11,8 @@ is in abi.md. How a wrapper works inside is on the generated page of its file.
 | generated wrapper | one class per vtable, under `Generated/` | the owner struct a factory returned, or a borrowed pointer | managed methods over the vtable slots |
 | native interface | one per domain, such as `INativeEcs`, `INativeIo` | nothing | the wrapper's pointer, as `Native` |
 | result translation | the private `NativeResult` of each generated class | a `ke_result`, or a managed exception | the exception the manifest names for the code, or the code it stands for |
-| SDK | `Engine`, `AddKernelEngine` | the parts registered under their contracts in the host's container | the standard schedules, the modules attached to them, the loop |
-| defaults | `DefaultCore.AddDefaultCore`, `DefaultEngine` | a project directory | the common implementation of every part the host did not register |
+| SDK | `KernelEngineHost`, `AddKernelEngine` | how to open an assembly, and what to write into it | every instance made when it starts, keyed services over them, the runner on the calling thread |
+| defaults | `DefaultProject`, `AddDefaultKernelEngine` | a project directory and a composition file | the parts of every default library and the composition the file holds |
 
 ## What ties the parts together
 
@@ -36,11 +36,12 @@ written to the result code, queued on the wrapper, or held for the call that ret
 managed code. The call that observes the failure throws `InvalidOperationException` carrying
 what was queued, or the exception the manifest names for the code.
 
-**A game is composed in the host's container.** Each part is registered under its contract with
-the constructor the projection generates; `AddDefaultCore` adds the common implementation of every
-part not registered yet. The container makes each part from the parts it takes and releases them in
-the reverse order; `Engine.Dispose` first detaches the modules and releases the schedules it made.
-Only the host and the SDK use the container; no engine part asks it for a dependency.
+**A game is composed by the assembly, not by the container.** The container holds the host and the
+services over it: `AddKernelEngine` registers nothing native, only factories that ask the started host for
+an instance by name, so asking before it started fails. Starting the host resolves the composition and creates
+every instance; stopping it destroys them in the reverse order. A game registers its node types between
+`Start` and `Run`, before the first tick opens the first scene. No engine part asks the container for a
+dependency.
 
 ## What the parts agree on without a contract
 

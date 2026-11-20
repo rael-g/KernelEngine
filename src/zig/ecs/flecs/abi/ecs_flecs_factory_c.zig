@@ -2,6 +2,7 @@
 
 const abi_ecs = @import("ecs");
 const abi_logger = @import("logger");
+const abi_part = @import("part");
 const abi_result = @import("result");
 const abi_settings = @import("settings");
 
@@ -29,3 +30,6 @@ pub extern fn ke_ecs_flecs_set_log_callback(callback: ke_log_callback, ctx: ?*an
 /// KE_RESULT_INVALID_ARGUMENT, and an internal failure of flecs logs flecs's message and the
 /// stack before flecs ends the process.
 pub extern fn ke_ecs_flecs_create(settings: ?*abi_settings.c.ke_settings, out_ecs: ?*abi_ecs.c.ke_ecs_handle) abi_result.c.ke_result;
+
+/// Gives the parts ke_ecs_flecs contains: `ecs_flecs`, providing ke_ecs.
+pub extern fn ke_ecs_flecs_parts(out_count: ?*usize) ?*const abi_part.c.ke_part;

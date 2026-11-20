@@ -2,7 +2,7 @@
 #define KERNEL_ENGINE_FRAMEWORK_INPUT_ACTIONS_CREATE_H_
 
 #include <kernel_engine/framework/input_actions.h>
-#include <kernel_engine/configuration/configuration.h>
+#include <kernel_engine/settings/settings.h>
 
 #ifdef __cplusplus
 extern "C"
@@ -25,23 +25,20 @@ extern "C"
 #endif
 #endif
 
-    /// Creates the action maps, adding through the map's own slots every map the configuration
-    /// describes under the section: `<section>.map.<Map>` holds `priority` (default 0) and
-    /// `enabled` (default true); `<section>.map.<Map>.action.<Action>` holds `type` (Button,
-    /// Axis1D, Axis2D or Axis3D, default Button); `<section>.map.<Map>.action.<Action>.bindings.<n>`
-    /// holds `kind` and its keys: `key` for key, `button` (Left, Right, Middle) for mouse,
-    /// `negative` and `positive` for key_pair, `up`, `down`, `left` and `right` for key_quad, each
-    /// a key name such as "Space" or "W".
+    /// Creates the action maps, adding through the map's own slots every map @p settings describe:
+    /// the child `map.<Map>` holds `priority` (default 0) and `enabled` (default true);
+    /// `map.<Map>.action.<Action>` holds `type` (Button, Axis1D, Axis2D or Axis3D, default Button);
+    /// `map.<Map>.action.<Action>.bindings.<n>` holds `kind` and its keys: `key` for key, `button`
+    /// (Left, Right, Middle) for mouse, `negative` and `positive` for key_pair, `up`, `down`, `left`
+    /// and `right` for key_quad, each a key name such as "Space" or "W".
     /// The input actions module evaluates the maps each tick.
-    /// @param configuration [borrowed,optional] Read during the call only; NULL creates no map.
-    /// @param section [borrowed,utf8] The configuration section the maps are read from.
+    /// @param settings [borrowed] Read once; holds no key and no child but `map`.
     /// @param out_actions [out] Receives the maps; left zeroed on failure.
-    /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null @p section or @p out_actions, and for an
-    ///         unknown action type, binding kind, key or button name, or a binding missing a key,
-    ///         logging where; KE_RESULT_OUT_OF_MEMORY.
+    /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null argument, a key or a child the settings
+    ///         do not hold, an unknown action type, binding kind, key or button name, or a binding
+    ///         missing a key, logging where; KE_RESULT_OUT_OF_MEMORY.
     KE_FRAMEWORK_API ke_result ke_input_actions_create(
-        ke_configuration              *configuration,
-        const char                    *section,
+        ke_settings                   *settings,
         ke_input_actions_handle       *out_actions);
 
 #ifdef __cplusplus

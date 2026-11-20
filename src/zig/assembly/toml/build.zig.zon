@@ -1,0 +1,21 @@
+.{
+    .name = .ke_assembly_toml,
+    .version = "0.1.0",
+    .fingerprint = 0x89a3a28d6ee5cd51,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .abi_assembly = .{ .path = "../../abi/assembly" },
+        .abi_assembly_toml_factory = .{ .path = "abi" },
+        .abi_file_system = .{ .path = "../../abi/file_system" },
+        .abi_result = .{ .path = "../../abi/result" },
+        .ke_common = .{ .path = "../../common" },
+        .ke_build = .{ .path = "../../build" },
+        .ke_logger = .{ .path = "../../logger" },
+        .ke_result = .{ .path = "../../result" },
+        .zsub = .{
+            .url = "https://github.com/rael-g/zsub/archive/10fee26318ed2ef628f6fada5f3c39f4572381ba.tar.gz",
+            .hash = "zsub-0.0.0-c8a1QlLVAABkTAwiY20uW_c1jJDIb3Ke92-LuXFWiXmU",
+        },
+    },
+    .paths = .{"."},
+}

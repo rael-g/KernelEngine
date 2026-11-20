@@ -2,6 +2,7 @@
 
 const abi_input = @import("input");
 const abi_logger = @import("logger");
+const abi_part = @import("part");
 const abi_result = @import("result");
 
 
@@ -12,9 +13,15 @@ const abi_result = @import("result");
 /// thread logged.
 pub const ke_log_callback = ?*const fn (?*anyopaque, abi_logger.c.ke_log_level, ?[*:0]const u8, ?[*:0]const u8) callconv(.c) void;
 
+/// Receives one key the settings hold.
+pub const ke_settings_key_func = ?*const fn (?[*:0]const u8, ?*anyopaque) callconv(.c) void;
+
 /// Creates an input system.
 pub extern fn ke_input_create(out_input: ?*abi_input.c.ke_input_handle) abi_result.c.ke_result;
 
 /// Sends every line ke_input_default logs to callback, with ctx; a NULL callback sends them back
 /// to stderr, where they go until this is called. Called once, before the library logs.
 pub extern fn ke_input_default_set_log_callback(callback: ke_log_callback, ctx: ?*anyopaque) void;
+
+/// Gives the parts ke_input_default contains: `input_default`, providing ke_input.
+pub extern fn ke_input_default_parts(out_count: ?*usize) ?*const abi_part.c.ke_part;

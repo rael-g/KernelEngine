@@ -2,6 +2,8 @@
 //! a window from a GLFW device and starts it.
 
 const std = @import("std");
+const abi_part = @import("abi_part");
+const part = @import("part");
 
 /// Turns off the signal stack that the standard library would allocate for this library.
 pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @import("log").Destination("ke_window_glfw").logFn };
@@ -21,6 +23,22 @@ const glfw = @import("glfw_device.zig");
 const heap = @import("heap");
 const R = @import("result").Result(.{});
 const log = std.log.scoped(.window_glfw);
+
+/// Slot `pump` of the window's part: handles the window's events.
+fn pumpWindow(instance: ?*anyopaque) callconv(.c) void {
+    const window: *abi_window.c.ke_window = @ptrCast(@alignCast(instance orelse return));
+    window.poll_events.?(window);
+}
+
+pub const parts = [_]abi_part.c.ke_part{
+    part.of(ke_window_glfw_create, .{ .name = "window_glfw", .slots = &.{"input"}, .optional = &.{"input"}, .pump = &pumpWindow, .set_log = @ptrCast(&@import("log").Destination("ke_window_glfw").setLogCallback) }),
+};
+
+/// The library's parts.
+export fn ke_window_glfw_parts(out_count: ?*usize) callconv(.c) ?*const abi_part.c.ke_part {
+    if (out_count) |n| n.* = parts.len;
+    return &parts[0];
+}
 
 test {
     _ = @import("device.zig");
@@ -104,4 +122,12 @@ test "creating with a zero width fails with invalid argument and leaves the hand
     var window: abi_window.c.ke_window_handle = undefined;
     try std.testing.expectEqual(R.code(error.InvalidArgument), ke_window_glfw_create(null, &zero.api, &window));
     try std.testing.expectEqual(@as(?*anyopaque, null), @as(?*anyopaque, @ptrCast(window.ref)));
+}
+
+test "the library's parts name window_glfw and their slots" {
+    var count: usize = 0;
+    const all = ke_window_glfw_parts(&count).?;
+    try std.testing.expectEqual(@as(usize, 1), count);
+    try std.testing.expectEqualStrings("window_glfw", std.mem.span(@as([*]const abi_part.c.ke_part, @ptrCast(all))[0].name.?));
+    try std.testing.expectEqual(@as(usize, 1), @as([*]const abi_part.c.ke_part, @ptrCast(all))[0].slot_count);
 }

@@ -5,6 +5,8 @@
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
         .abi_audio = .{ .path = "../audio" },
+        .abi_ecs = .{ .path = "../ecs" },
+        .abi_ecs_variant = .{ .path = "../ecs_variant" },
         .abi_result = .{ .path = "../result" },
         .abi_spatial = .{ .path = "../spatial" },
     },

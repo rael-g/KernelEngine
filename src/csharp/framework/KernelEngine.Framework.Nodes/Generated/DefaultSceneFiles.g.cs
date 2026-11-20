@@ -5,7 +5,7 @@
 
 namespace KernelEngine.Framework.Nodes;
 
-/// <summary>Creates scene files that spawn through `node_types`, look components up and write their fields through `ecs`, resolve a `res://` path through `assets` and read every file through `io`; each must outlive the scene files. It registers through `node_types` the node type `scene_slot`, carrying a ke_scene_slot_component, whose update replaces a slot's children when its path changes; the scene files must outlive every tick that runs it.</summary>
+/// <summary>Creates scene files that spawn through `node_types`, look components up and write their fields through `ecs`, resolve a `res://` path through `assets` and read every file through `io`; each must outlive the scene files. It registers through `node_types` the node type `scene_slot`, carrying a ke_scene_slot_component, whose update replaces a slot's children when its path changes; the scene files must outlive every tick that runs it. With the setting `first_scene`, a `res://` path, it also registers in first_scene_set of first_scene an exclusive system that, on its first run, does what `open` does with that path, and nothing on any later run; without it, no system. Destroying the scene files unregisters that system.</summary>
 public sealed unsafe partial class DefaultSceneFiles : KernelEngine.Framework.Nodes.SceneFiles
 {
 
@@ -50,27 +50,32 @@ public sealed unsafe partial class DefaultSceneFiles : KernelEngine.Framework.No
         }
     }
 
-    /// <summary>Creates scene files that spawn through `node_types`, look components up and write their fields through `ecs`, resolve a `res://` path through `assets` and read every file through `io`; each must outlive the scene files. It registers through `node_types` the node type `scene_slot`, carrying a ke_scene_slot_component, whose update replaces a slot's children when its path changes; the scene files must outlive every tick that runs it.</summary>
+    /// <summary>Creates scene files that spawn through `node_types`, look components up and write their fields through `ecs`, resolve a `res://` path through `assets` and read every file through `io`; each must outlive the scene files. It registers through `node_types` the node type `scene_slot`, carrying a ke_scene_slot_component, whose update replaces a slot's children when its path changes; the scene files must outlive every tick that runs it. With the setting `first_scene`, a `res://` path, it also registers in first_scene_set of first_scene an exclusive system that, on its first run, does what `open` does with that path, and nothing on any later run; without it, no system. Destroying the scene files unregisters that system.</summary>
     /// <param name="ecs"></param>
     /// <param name="nodeTypes"></param>
     /// <param name="assets"></param>
     /// <param name="io"></param>
-    public DefaultSceneFiles(KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Framework.Nodes.INativeNodeTypes nodeTypes, KernelEngine.Framework.INativeAssetResolver assets, KernelEngine.Io.INativeIo io) : base(Create(ecs, nodeTypes, assets, io))
+    /// <param name="firstScene">Must outlive the scene files.</param>
+    /// <param name="firstSceneSet">The set of first_scene the system joins.</param>
+    /// <param name="settings">Read during the call: `first_scene`, none by default.</param>
+    public DefaultSceneFiles(KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Framework.Nodes.INativeNodeTypes nodeTypes, KernelEngine.Framework.INativeAssetResolver assets, KernelEngine.Io.INativeIo io, KernelEngine.Schedule.INativeSchedule firstScene, uint firstSceneSet, KernelEngine.Settings.IPartSettings settings) : base(Create(ecs, nodeTypes, assets, io, firstScene, firstSceneSet, settings))
     {
         Hold(ecs.Owner);
         Hold(nodeTypes.Owner);
         Hold(assets.Owner);
         Hold(io.Owner);
+        Hold(firstScene.Owner);
     }
 
-    private static KernelEngine.Framework.Nodes.Native.ke_scene_files_handle Create(KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Framework.Nodes.INativeNodeTypes nodeTypes, KernelEngine.Framework.INativeAssetResolver assets, KernelEngine.Io.INativeIo io)
+    private static KernelEngine.Framework.Nodes.Native.ke_scene_files_handle Create(KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Framework.Nodes.INativeNodeTypes nodeTypes, KernelEngine.Framework.INativeAssetResolver assets, KernelEngine.Io.INativeIo io, KernelEngine.Schedule.INativeSchedule firstScene, uint firstSceneSet, KernelEngine.Settings.IPartSettings settings)
     {
         ArgumentNullException.ThrowIfNull(ecs);
         ArgumentNullException.ThrowIfNull(nodeTypes);
         ArgumentNullException.ThrowIfNull(assets);
         ArgumentNullException.ThrowIfNull(io);
+        ArgumentNullException.ThrowIfNull(firstScene);
         KernelEngine.Framework.Nodes.Native.ke_scene_files_handle handle;
-        NativeResult.ThrowIfFailed(KernelEngine.Framework.Nodes.Native.NativeMethods.scene_files_create(ecs.Native, nodeTypes.Native, assets.Native, io.Native, &handle), "ke_scene_files_create");
+        NativeResult.ThrowIfFailed(KernelEngine.Framework.Nodes.Native.NativeMethods.scene_files_create(ecs.Native, nodeTypes.Native, assets.Native, io.Native, firstScene.Native, firstSceneSet, ((KernelEngine.Settings.INativeSettings)settings).Native, &handle), "ke_scene_files_create");
         return handle;
     }
 }

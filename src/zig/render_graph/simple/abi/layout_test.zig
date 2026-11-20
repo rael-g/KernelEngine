@@ -45,6 +45,7 @@ test "every record is laid out as the header lays it out" {
     if (@hasDecl(c, "ke_render_graph_readback_fn")) try expectSameLayout(abi.c.ke_render_graph_readback_fn, c.ke_render_graph_readback_fn);
     if (@hasDecl(c, "ke_render_graph_record_fn")) try expectSameLayout(abi.c.ke_render_graph_record_fn, c.ke_render_graph_record_fn);
     if (@hasDecl(c, "ke_render_graph_resource")) try expectSameLayout(abi.c.ke_render_graph_resource, c.ke_render_graph_resource);
+    if (@hasDecl(c, "ke_settings_key_func")) try expectSameLayout(abi.c.ke_settings_key_func, c.ke_settings_key_func);
 }
 
 extern const layout_values: [1]c_ulonglong;

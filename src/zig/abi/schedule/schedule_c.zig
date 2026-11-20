@@ -74,6 +74,14 @@ pub const ke_schedule_system_desc = extern struct {
     exclusive: bool = std.mem.zeroes(bool),
 };
 
+/// One set of a schedule, as a module joins its systems to it: the schedule and the set's id
+/// there.
+pub const ke_schedule_set = extern struct {
+    /// The schedule the set is registered in.
+    schedule: ?*ke_schedule = std.mem.zeroes(?*ke_schedule),
+    id: ke_schedule_set_id = std.mem.zeroes(ke_schedule_set_id),
+};
+
 /// Orders the systems of one world by what they touch and the sets they join, and runs them on
 /// the job system. The systems of a set run after those of the sets it follows, and a writer of
 /// a component before its readers. Two systems conflict when they touch the same component, at
@@ -123,5 +131,7 @@ pub const ke_schedule_ctx = extern struct {
     slice: ?*const fn (?*ke_schedule_ctx, ?*u32, ?*u32) callconv(.c) void = null,
 };
 
-/// Creates a schedule over ecs whose runs go to job_system, both borrowed for its lifetime.
+/// Creates a schedule over ecs whose runs go to job_system, both borrowed for its lifetime. It
+/// starts with one set, `schedule`, which its part provides as the ke_schedule_set a module
+/// joins.
 pub extern fn ke_schedule_create(ecs: ?*abi_ecs.c.ke_ecs, job_system: ?*abi_job.c.ke_job_system, settings: ?*abi_settings.c.ke_settings, out_schedule: ?*ke_schedule_handle) abi_result.c.ke_result;

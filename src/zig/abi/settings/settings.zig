@@ -55,6 +55,21 @@ pub const Settings = struct {
                     return abi_result.c.KE_OK;
                 }
             }.call,
+            .child = &struct {
+                fn call(self: ?*c.ke_settings, a0: ?[*:0]const u8, a1: ?*?*c.ke_settings) callconv(.c) abi_result.c.ke_result {
+                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
+                    const value = T.child(state, std.mem.span(a0 orelse return resultOf(error.Failed))) catch |failure| return resultOf(failure);
+                    (a1 orelse return resultOf(error.Failed)).* = value.ptr;
+                    return abi_result.c.KE_OK;
+                }
+            }.call,
+            .for_each_child = &struct {
+                fn call(self: ?*c.ke_settings, a0: c.ke_settings_key_func, a1: ?*anyopaque) callconv(.c) abi_result.c.ke_result {
+                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
+                    T.forEachChild(state, a0, a1) catch |failure| return resultOf(failure);
+                    return abi_result.c.KE_OK;
+                }
+            }.call,
         };
     }
 
@@ -89,6 +104,19 @@ pub const Settings = struct {
     /// Calls each once for every key that holds a value, in no particular order.
     pub fn forEachKey(self: Settings, each: c.ke_settings_key_func, ctx: ?*anyopaque) Error!void {
         try checkResult(self.ptr.for_each_key.?(self.ptr, each, ctx));
+    }
+
+    /// Gives the settings nested under name, empty when nothing is.
+    pub fn child(self: Settings, name: [:0]const u8) Error!Settings {
+        var written: ?*c.ke_settings = undefined;
+        try checkResult(self.ptr.child.?(self.ptr, name.ptr, &written));
+        return .{ .ptr = written orelse return error.Failed };
+    }
+
+    /// Calls each once for every child that holds a key or a child of its own, in the order it was
+    /// first written.
+    pub fn forEachChild(self: Settings, each: c.ke_settings_key_func, ctx: ?*anyopaque) Error!void {
+        try checkResult(self.ptr.for_each_child.?(self.ptr, each, ctx));
     }
 
 };

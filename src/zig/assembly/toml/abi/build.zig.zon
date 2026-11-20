@@ -1,0 +1,13 @@
+.{
+    .name = .abi_assembly_toml_factory,
+    .version = "0.1.0",
+    .fingerprint = 0x034126c3b418e577,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .abi_assembly = .{ .path = "../../../abi/assembly" },
+        .abi_file_system = .{ .path = "../../../abi/file_system" },
+        .abi_logger = .{ .path = "../../../abi/logger" },
+        .abi_result = .{ .path = "../../../abi/result" },
+    },
+    .paths = .{"."},
+}

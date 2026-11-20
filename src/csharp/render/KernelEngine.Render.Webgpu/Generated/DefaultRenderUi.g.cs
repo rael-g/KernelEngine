@@ -5,7 +5,7 @@
 
 namespace KernelEngine.Render.Webgpu;
 
-/// <summary>Makes the ui pass and registers its quad and label components in the main and the render world, with a copy of each in the extraction. Its systems come from ke_render_ui_systems_create.</summary>
+/// <summary>Makes the ui pass and registers its quad and label components in main and render, with a copy of each in extraction. Its systems come from ke_render_ui_systems_create. Every argument but out_ui must outlive the pass.</summary>
 public sealed unsafe partial class DefaultRenderUi : KernelEngine.Render.Webgpu.RenderUi
 {
 
@@ -50,52 +50,33 @@ public sealed unsafe partial class DefaultRenderUi : KernelEngine.Render.Webgpu.
         }
     }
 
-    /// <summary>Makes the ui pass and registers its quad and label components in the main and the render world, with a copy of each in the extraction. Its systems come from ke_render_ui_systems_create.</summary>
-    /// <param name="ecs">The render world: holds what the passes read and own.</param>
-    /// <param name="main">The main world, whose components are extracted into ecs.</param>
-    /// <param name="extraction">Copies the main world's components into ecs.</param>
-    /// <param name="service">Holds the assets the passes draw.</param>
-    /// <param name="device">Creates the passes' GPU objects.</param>
-    /// <param name="viewSpace">Builds views and projections.</param>
-    /// <param name="camera">Answers the camera's matrices.</param>
-    /// <param name="scene">Names the components the passes read.</param>
-    /// <param name="frame">The frame the passes declare into.</param>
-    public DefaultRenderUi(KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Ecs.INativeEcs main, KernelEngine.Extraction.INativeExtraction extraction, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.Frame.INativeRenderFrame frame) : base(Create(ecs, main, extraction, service, device, viewSpace, camera, scene, frame))
+    /// <summary>Makes the ui pass and registers its quad and label components in main and render, with a copy of each in extraction. Its systems come from ke_render_ui_systems_create. Every argument but out_ui must outlive the pass.</summary>
+    /// <param name="main"></param>
+    /// <param name="render"></param>
+    /// <param name="extraction"></param>
+    /// <param name="service"></param>
+    /// <param name="device"></param>
+    /// <param name="frame"></param>
+    public DefaultRenderUi(KernelEngine.Ecs.INativeEcs main, KernelEngine.Ecs.INativeEcs render, KernelEngine.Extraction.INativeExtraction extraction, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.Render.Frame.INativeRenderFrame frame) : base(Create(main, render, extraction, service, device, frame))
     {
-        Hold(ecs.Owner);
         Hold(main.Owner);
+        Hold(render.Owner);
         Hold(extraction.Owner);
         Hold(service.Owner);
         Hold(device.Owner);
-        Hold(viewSpace.Owner);
-        Hold(camera.Owner);
-        Hold(scene.Owner);
         Hold(frame.Owner);
     }
 
-    private static KernelEngine.Render.Webgpu.Native.ke_render_ui_handle Create(KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Ecs.INativeEcs main, KernelEngine.Extraction.INativeExtraction extraction, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.Frame.INativeRenderFrame frame)
+    private static KernelEngine.Render.Webgpu.Native.ke_render_ui_handle Create(KernelEngine.Ecs.INativeEcs main, KernelEngine.Ecs.INativeEcs render, KernelEngine.Extraction.INativeExtraction extraction, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.Render.Frame.INativeRenderFrame frame)
     {
-        ArgumentNullException.ThrowIfNull(ecs);
         ArgumentNullException.ThrowIfNull(main);
+        ArgumentNullException.ThrowIfNull(render);
         ArgumentNullException.ThrowIfNull(extraction);
         ArgumentNullException.ThrowIfNull(service);
         ArgumentNullException.ThrowIfNull(device);
-        ArgumentNullException.ThrowIfNull(viewSpace);
-        ArgumentNullException.ThrowIfNull(camera);
-        ArgumentNullException.ThrowIfNull(scene);
         ArgumentNullException.ThrowIfNull(frame);
-        KernelEngine.Render.Webgpu.Native.RenderContext context = default;
-        context.Ecs = ecs.Native;
-        context.Main = main.Native;
-        context.Extraction = extraction.Native;
-        context.Service = service.Native;
-        context.Device = device.Native;
-        context.ViewSpace = viewSpace.Native;
-        context.Camera = camera.Native;
-        context.Scene = scene.Native;
-        context.Frame = frame.Native;
         KernelEngine.Render.Webgpu.Native.ke_render_ui_handle handle;
-        NativeResult.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_ui_create(&context, &handle), "ke_render_ui_create");
+        NativeResult.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_ui_create(main.Native, render.Native, extraction.Native, service.Native, device.Native, frame.Native, &handle), "ke_render_ui_create");
         return handle;
     }
 }

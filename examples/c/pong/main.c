@@ -4,48 +4,37 @@
 
 #include <stdio.h>
 
+static pong_game game;
+
+static void pong_release(void *ref)
+{
+    (void)ref;
+}
+
+static ke_result pong_create(const ke_part *self, const ke_part_bound *slots, ke_settings *settings, ke_owner *out)
+{
+    (void)self;
+    (void)settings;
+    game.types = slots[0].instances[0];
+    ke_result made = pong_register(&game);
+    if (made == KE_OK) *out = (ke_owner){ .ref = &game, .destroy = pong_release };
+    return made;
+}
+
+static const ke_part_slot pong_slots[] = { { .name = "node_types", .contract = "ke_node_types", .cardinality = KE_PART_CARDINALITY_ONE } };
+
+static const ke_part pong_part = { .name = "pong_nodes", .slots = pong_slots, .slot_count = 1, .create = pong_create };
+
 int main(void)
 {
-    const ke_sdk_engine_desc desc = {
-        .job_system = ke_sdk_job_system_enki,
-        .file_system = ke_sdk_file_system_std,
-        .io = ke_sdk_io_std,
-        .configuration = ke_sdk_configuration_toml,
-        .async = ke_sdk_async_enki,
-        .input = ke_sdk_input,
-        .window = ke_sdk_window_glfw,
-        .ecs = ke_sdk_ecs_flecs,
-        .scheduler = ke_sdk_scheduler,
-        .schedule = ke_sdk_schedule,
-        .gpu_device = ke_sdk_gpu_device_webgpu,
-        .render_target = ke_sdk_render_target_webgpu_window,
-        .fonts = ke_sdk_fonts_stb,
-        .assets = ke_sdk_assets,
-        .scene_tree = ke_sdk_scene_tree,
-        .render_service = ke_sdk_render_service,
-        .gbuffer = ke_sdk_gbuffer,
-        .deferred_lighting = ke_sdk_deferred_lighting,
-        .forward = ke_sdk_forward,
-        .tonemap = ke_sdk_tonemap,
-        .ui = ke_sdk_ui,
-        .labels = ke_sdk_labels,
-        .physics = ke_sdk_physics_box2d,
-        .audio = ke_sdk_audio_miniaudio,
-        .actions = ke_sdk_actions,
-        .node_types = ke_sdk_node_types,
-        .scene_files = ke_sdk_scene_files,
-        .extraction = ke_sdk_extraction,
-    };
-    ke_sdk_default_engine parts;
-    ke_sdk_engine *engine = &parts.engine;
-    ke_result made = ke_sdk_engine_create(&desc, "pong", engine);
-    if (made == KE_OK)
-    {
-        pong_game game = { .types = engine->node_types.ref };
-        made = pong_register(&game);
-    }
-    if (made == KE_OK) made = ke_sdk_engine_run(engine, NULL);
-    ke_sdk_engine_destroy(engine);
+    ke_sdk_host host;
+    ke_result made = ke_sdk_host_open("pong", &host);
+    ke_assembly *a = host.assembly.ref;
+    if (made == KE_OK) made = ke_sdk_defaults_compose(&host);
+    if (made == KE_OK) made = a->add_part(a, &pong_part);
+    if (made == KE_OK) made = a->add_instance(a, "pong_nodes", "pong_nodes", NULL);
+    if (made == KE_OK) made = ke_sdk_host_run(&host);
+    ke_sdk_host_close(&host);
     if (made != KE_OK)
     {
         fprintf(stderr, "pong failed with result code 0x%08x\n", (unsigned)made);

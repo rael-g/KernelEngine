@@ -1,7 +1,7 @@
 #include "pong.h"
 
 #include <kernel_engine/audio/component_fields.h>
-#include <kernel_engine/framework/engine_node_types.h>
+#include <kernel_engine/engine_nodes/engine_node_types.h>
 #include <kernel_engine/physics/component_fields.h>
 #include <kernel_engine/render/ui/component_fields.h>
 #include <kernel_engine/sdk/field.h>
@@ -79,12 +79,6 @@ typedef struct pong_serve_requested
 {
     bool requested;
 } pong_serve_requested;
-
-typedef struct pong_score_changed
-{
-    int32_t left;
-    int32_t right;
-} pong_score_changed;
 
 static const ke_component_desc pong_goal_scored_params = KE_COMPONENT_UNTABLED(pong_goal_scored, "pong.goal_scored");
 static const ke_component_desc pong_serve_requested_params = KE_COMPONENT_UNTABLED(pong_serve_requested, "pong.serve_requested");

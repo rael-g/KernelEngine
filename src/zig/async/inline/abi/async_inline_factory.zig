@@ -2,6 +2,7 @@
 
 const abi_async = @import("async");
 const abi_logger = @import("logger");
+const abi_part = @import("part");
 const abi_result = @import("result");
 const abi_settings = @import("settings");
 
@@ -18,6 +19,11 @@ pub fn asyncInlineCreate(settings: ?*abi_settings.c.ke_settings) Error!abi_async
     var written: abi_async.c.ke_async_handle = undefined;
     try checkResult(c.ke_async_inline_create(settings, &written));
     return written;
+}
+
+/// Gives the parts ke_async_inline contains: `async_inline`, providing ke_async.
+pub fn asyncInlineParts(out_count: ?*usize) ?*const abi_part.c.ke_part {
+    return c.ke_async_inline_parts(out_count);
 }
 
 /// Sends every line ke_async_inline logs to callback, with ctx; a NULL callback sends them back

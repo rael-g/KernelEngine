@@ -598,7 +598,8 @@
       "name": "ke_component_desc",
       "doc": "What a component type is registered with.",
       "tags": [
-        "bag"
+        "bag",
+        "borrowed"
       ],
       "fields": [
         {

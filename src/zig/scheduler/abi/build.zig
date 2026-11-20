@@ -9,6 +9,7 @@ pub fn build(b: *std.Build) void {
     abi.addImport("completion", b.dependency("abi_completion", .{}).module("abi"));
     abi.addImport("job", b.dependency("abi_job", .{}).module("abi"));
     abi.addImport("logger", b.dependency("abi_logger", .{}).module("abi"));
+    abi.addImport("part", b.dependency("abi_part", .{}).module("abi"));
     abi.addImport("result", b.dependency("abi_result", .{}).module("abi"));
     abi.addImport("scheduler", b.dependency("abi_scheduler", .{}).module("abi"));
     abi.addImport("settings", b.dependency("abi_settings", .{}).module("abi"));
@@ -16,12 +17,14 @@ pub fn build(b: *std.Build) void {
     const headers = b.addWriteFiles().add("layout.h",
         \\#include <kernel_engine/scheduler/scheduler_create.h>
         \\#include <kernel_engine/scheduler/scheduler_log.h>
+        \\#include <kernel_engine/scheduler/scheduler_parts.h>
     );
     const translated = b.addTranslateC(.{ .root_source_file = headers, .target = target, .optimize = optimize });
     translated.addIncludePath(b.path("../../../c/async"));
     translated.addIncludePath(b.path("../../../c/completion"));
     translated.addIncludePath(b.path("../../../c/job"));
     translated.addIncludePath(b.path("../../../c/logger"));
+    translated.addIncludePath(b.path("../../../c/part"));
     translated.addIncludePath(b.path("../../../c/result"));
     translated.addIncludePath(b.path("../../../c/scheduler"));
     translated.addIncludePath(b.path("../include"));
@@ -42,6 +45,7 @@ pub fn build(b: *std.Build) void {
     tests.root_module.addIncludePath(b.path("../../../c/completion"));
     tests.root_module.addIncludePath(b.path("../../../c/job"));
     tests.root_module.addIncludePath(b.path("../../../c/logger"));
+    tests.root_module.addIncludePath(b.path("../../../c/part"));
     tests.root_module.addIncludePath(b.path("../../../c/result"));
     tests.root_module.addIncludePath(b.path("../../../c/scheduler"));
     tests.root_module.addIncludePath(b.path("../include"));

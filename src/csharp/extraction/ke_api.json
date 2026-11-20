@@ -1636,8 +1636,8 @@
           "name": "run",
           "returns": "ke_result",
           "tags": [],
-          "doc": "One run of the render stage, with the ABI of a scheduler\u0027s executable whose user is the extraction: extracts at the scheduler\u0027s fixed alpha, then starts a run of the render schedule.",
-          "return_doc": "KE_OK, or the code of the extraction or the schedule that failed.",
+          "doc": "One extraction, with the ABI of a scheduler\u0027s executable whose user is the extraction: extracts at the scheduler\u0027s fixed alpha. What runs over the render world is added to the scheduler after it.",
+          "return_doc": "KE_OK, or the code of the extraction that failed.",
           "params": [
             {
               "name": "dt",
@@ -1651,7 +1651,7 @@
               "tags": [
                 "out"
               ],
-              "doc": "Receives the render schedule\u0027s run."
+              "doc": "Receives a completion already finished with KE_OK, which the caller releases."
             }
           ],
           "receiver": "ke_extraction *"

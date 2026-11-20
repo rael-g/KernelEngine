@@ -1,0 +1,119 @@
+[defaults]
+ke_ecs = "world"
+
+[instance.job]
+part = "job_system_enki"
+section = "job"
+
+[instance.async]
+part = "async_enki"
+section = "async"
+
+[instance.io]
+part = "io_std"
+section = "io"
+
+[instance.input]
+part = "input_default"
+
+[instance.world]
+part = "ecs_flecs"
+section = "ecs"
+
+[instance.startup]
+part = "schedule"
+section = "schedule"
+
+[instance.pre_update]
+part = "schedule"
+section = "schedule"
+
+[instance.fixed_pre_update]
+part = "schedule"
+section = "schedule"
+
+[instance.fixed_update]
+part = "schedule"
+section = "schedule"
+
+[instance.fixed_post_update]
+part = "schedule"
+section = "schedule"
+
+[instance.update]
+part = "schedule"
+section = "schedule"
+
+[instance.post_update]
+part = "schedule"
+section = "schedule"
+
+[instance.shutdown]
+part = "schedule"
+section = "schedule"
+
+[instance.scheduler]
+part = "scheduler"
+section = "scheduler"
+
+[instance.layout]
+part = "scheduler_layout"
+order = ["startup", "pre_update", "fixed_pre_update", "fixed_update", "fixed_post_update", "update", "post_update", "shutdown"]
+[instance.layout.bind]
+startup = "startup"
+every_tick = ["pre_update", "update", "post_update"]
+fixed = ["fixed_pre_update", "fixed_update", "fixed_post_update"]
+shutdown = "shutdown"
+
+[instance.scene_tree]
+part = "scene_tree"
+
+[instance.hierarchy]
+part = "scene_hierarchy"
+[instance.hierarchy.bind]
+post_update = "post_update"
+
+[instance.physics]
+part = "physics_2d_box2d"
+section = "physics"
+
+[instance.bodies]
+part = "physics_body2d"
+[instance.bodies.bind]
+fixed_post_update = "fixed_post_update"
+
+[instance.actions]
+part = "input_actions"
+section = "actions"
+
+[instance.action_evaluation]
+part = "input_actions_evaluation"
+[instance.action_evaluation.bind]
+pre_update = "pre_update"
+
+[instance.node_types]
+part = "node_types"
+
+[instance.node_systems]
+part = "node_types_systems"
+[instance.node_systems.bind]
+pre_update = "pre_update"
+fixed_update = "fixed_update"
+update = "update"
+post_update = "post_update"
+
+[instance.engine_nodes]
+part = "engine_nodes"
+
+[instance.assets]
+part = "asset_resolver"
+
+[instance.scene_files]
+part = "scene_files"
+section = "scene_files"
+[instance.scene_files.bind]
+first_scene = "startup"
+
+[instance.runner]
+part = "runner_headless"
+section = "runner"

@@ -600,7 +600,8 @@
       "name": "ke_component_desc",
       "doc": "What a component type is registered with.",
       "tags": [
-        "bag"
+        "bag",
+        "borrowed"
       ],
       "fields": [
         {
@@ -854,12 +855,12 @@
       ],
       "fields": [
         {
-          "name": "name",
-          "type": "const char *",
+          "name": "component",
+          "type": "const ke_component_desc *",
           "tags": [
-            "utf8"
+            "borrowed"
           ],
-          "doc": "The registered component\u0027s name."
+          "doc": "How the component is registered: its name, size, alignment and field table."
         },
         {
           "name": "initial",
@@ -873,7 +874,7 @@
           "name": "initial_size",
           "type": "size_t",
           "tags": [],
-          "doc": "The component\u0027s registered size, or 0 to start it zeroed."
+          "doc": "The component\u0027s size, or 0 to start it zeroed."
         }
       ]
     },
@@ -972,7 +973,7 @@
             "array_of:with_count",
             "default:empty"
           ],
-          "doc": "Registered components every node of the type carries beside its fields, each with the value it is born with."
+          "doc": "Components every node of the type carries beside its fields, each with the value it is born with; registering the type registers each."
         },
         {
           "name": "with_count",
@@ -2385,8 +2386,8 @@
           "name": "register_type",
           "returns": "ke_result",
           "tags": [],
-          "doc": "Registers a node type and the systems of its behaviours.",
-          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a null or nameless desc, a table or initial bytes without \u0060fields_size\u0060, \u0060initial\u0060 without fields, an initial whose size is not its component\u0027s, or events without \u0060on\u0060; KE_RESULT_NOT_FOUND for a \u0060with\u0060 name or an event never registered; the ecs\u0027s or the runtime\u0027s code when it refuses.",
+          "doc": "Registers a node type and the systems of its behaviours, and each component of \u0060with\u0060 as the ecs\u0027s component_register does: one already registered with the same name and layout keeps its id.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a null or nameless desc, a table or initial bytes without \u0060fields_size\u0060, \u0060initial\u0060 without fields, a \u0060with\u0060 without its component, an initial whose size is not its component\u0027s, or events without \u0060on\u0060; KE_RESULT_NOT_FOUND for an event never registered; the ecs\u0027s or the runtime\u0027s code when it refuses.",
           "params": [
             {
               "name": "desc",

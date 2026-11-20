@@ -9,14 +9,14 @@ const std = @import("std");
 pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @import("log").Destination("ke_render_tonemap").logFn };
 
 const abi_ecs = @import("abi_ecs");
-const abi_module = @import("abi_module");
+const abi_part = @import("abi_part");
+const part = @import("part");
 const abi_render = @import("abi_render");
-const abi_render_context = @import("abi_render_context");
 const abi_render_frame = @import("abi_render_frame");
 const abi_render_graph = @import("abi_render_graph");
 const abi_result = @import("abi_result");
 const abi_schedule = @import("abi_schedule");
-const pass_systems = @import("pass_systems");
+const hooked_systems = @import("hooked_systems");
 const R = @import("result").Result(.{});
 
 const heap = @import("heap");
@@ -30,11 +30,11 @@ const shader_layout = abi_render_gpu.c.ke_render_shader_layout_desc{
     .hint_count = 0,
 };
 
-/// The state of one tonemap pass. The factory allocates it and `destroyHandle` frees it, after
-/// detaching `systems`, whose system receives it as its context. `color` is the frame's colour the
+/// The state of one tonemap pass. The factory allocates it and `destroyOwner` frees it, after
+/// unregistering `systems`, whose system receives it as its context. `color` is the frame's colour the
 /// pass declared this frame, read by `record`.
 const TonemapModule = struct {
-    systems: pass_systems.Systems(1) = undefined,
+    systems: hooked_systems.Systems(1) = .{},
     core: *abi_render.c.ke_render_service = undefined,
     device: *abi_render_gpu.c.ke_gpu_device = undefined,
     frame: *abi_render_frame.c.ke_render_frame = undefined,
@@ -112,11 +112,10 @@ fn queueSystem(_: ?*abi_schedule.c.ke_schedule_ctx, user: ?*anyopaque, _: f32) c
 /// it, a failed pipeline request fails with the layout left for the caller's release. The caller
 /// releases the module after any failure. A successful call has asked the service for the pipeline
 /// once, so a failure surfaces at creation.
-fn setup(tm: *TonemapModule, p: *const abi_render_context.c.ke_render_context) R.Error!void {
-    const core: *abi_render.c.ke_render_service = p.service.?;
+fn setup(tm: *TonemapModule, core: *abi_render.c.ke_render_service, device: *abi_render_gpu.c.ke_gpu_device, frame: *abi_render_frame.c.ke_render_frame) R.Error!void {
     tm.core = core;
-    tm.device = p.device.?;
-    tm.frame = p.frame.?;
+    tm.device = device;
+    tm.frame = frame;
     const format = tm.frame.output_format.?(tm.frame);
 
     var vs: abi_asset_resolver.c.ke_gpu_shader_module = undefined;
@@ -146,42 +145,66 @@ fn setup(tm: *TonemapModule, p: *const abi_render_context.c.ke_render_context) R
 }
 
 /// Releases the set of the last frame and the layout, each only when it is valid. Runs from
-/// `destroyHandle` and from the failure paths of `ke_render_tonemap_create`.
+/// `destroyOwner` and from the failure paths of `ke_render_tonemap_create`.
 fn destroyModule(tm: *const TonemapModule) void {
     if (tm.layout == abi_render_gpu.c.KE_RENDER_BINDING_INVALID) return;
     tm.binder.destroy_set.?(tm.binder, tm.set);
     tm.binder.destroy_shader_layout.?(tm.binder, tm.layout);
 }
 
-/// The `destroy` slot of the handle `ke_render_tonemap_create` returns. It detaches the module,
-/// releases the GPU objects and frees the pass; a null argument is ignored.
-fn destroyHandle(self: ?*abi_module.c.ke_module) callconv(.c) void {
-    const systems: *pass_systems.Systems(1) = @ptrCast(@alignCast((self orelse return).handle));
-    const tm: *TonemapModule = @fieldParentPtr("systems", systems);
-    pass_systems.Systems(1).detach(self);
+/// The `destroy` of the owner `ke_render_tonemap_create` hands out: unregisters the system, releases the GPU
+/// objects and frees the pass; a null argument is ignored.
+fn destroyOwner(ref: ?*anyopaque) callconv(.c) void {
+    const tm: *TonemapModule = @ptrCast(@alignCast(ref orelse return));
+    tm.systems.unregister();
     destroyModule(tm);
     gpa.destroy(tm);
 }
 
-/// The factory declared in tonemap_create.h. A missing service, device or frame fails as an invalid
-/// argument and a failed allocation as out of memory. A failure in `setup` fails with its code and
-/// leaves the handle zeroed. On success the handle owns the pass.
-export fn ke_render_tonemap_create(context_in: ?*const abi_render_context.c.ke_render_context, out_module: ?*abi_module.c.ke_module_handle) callconv(.c) abi_result.c.ke_result {
-    const out = out_module orelse return R.code(error.InvalidArgument);
-    out.* = std.mem.zeroes(abi_module.c.ke_module_handle);
-    const p = context_in orelse return R.code(error.InvalidArgument);
-    if (p.service == null or p.device == null or p.frame == null) return R.code(error.InvalidArgument);
+/// The factory declared in tonemap_create.h. A missing service, device, frame or render queue fails as an
+/// invalid argument and a failed allocation as out of memory. A failure in `setup` or in registering the
+/// system fails with its code and leaves the owner zeroed. On success the owner owns the pass.
+export fn ke_render_tonemap_create(
+    service_in: ?*abi_render.c.ke_render_service,
+    device_in: ?*abi_render_gpu.c.ke_gpu_device,
+    frame_in: ?*abi_render_frame.c.ke_render_frame,
+    render_queue: ?*abi_schedule.c.ke_schedule,
+    render_queue_set: abi_schedule.c.ke_schedule_set_id,
+    out_pass: ?*abi_part.c.ke_owner,
+) callconv(.c) abi_result.c.ke_result {
+    const out = out_pass orelse return R.code(error.InvalidArgument);
+    out.* = .{ .ref = null, .destroy = null };
+    const service = service_in orelse return R.code(error.InvalidArgument);
+    const device = device_in orelse return R.code(error.InvalidArgument);
+    const frame = frame_in orelse return R.code(error.InvalidArgument);
+    if (render_queue == null) return R.code(error.InvalidArgument);
 
     const tm = gpa.create(TonemapModule) catch |err| return R.code(err);
     tm.* = .{};
-    setup(tm, p) catch |err| {
+    setup(tm, service, device, frame) catch |err| {
+        log.warn("creating the tonemap pass failed: {t}", .{err});
         destroyModule(tm);
         gpa.destroy(tm);
         return R.code(err);
     };
-    tm.systems.init(.{.{ .name = "render.tonemap", .execute = queueSystem, .user = tm, .set = .queue, .access = &tm.access }});
-    out.* = .{ .ref = &tm.systems.module, .destroy = destroyHandle };
+    const registered = tm.systems.register(.{.{ .name = "render.tonemap", .execute = queueSystem, .user = tm, .hook = 0, .access = &tm.access }}, &.{.{ .schedule = render_queue, .set = render_queue_set }});
+    if (registered != R.ok) {
+        destroyModule(tm);
+        gpa.destroy(tm);
+        return registered;
+    }
+    out.* = .{ .ref = tm, .destroy = destroyOwner };
     return R.ok;
+}
+
+pub const parts = [_]abi_part.c.ke_part{
+    part.of(ke_render_tonemap_create, .{ .name = "render_tonemap", .slots = &.{"service", "device", "frame"}, .hooks = &.{"render_queue"}, .set_log = @ptrCast(&@import("log").Destination("ke_render_tonemap").setLogCallback) }),
+};
+
+/// The library's parts.
+export fn ke_render_tonemap_parts(out_count: ?*usize) callconv(.c) ?*const abi_part.c.ke_part {
+    if (out_count) |n| n.* = parts.len;
+    return &parts[0];
 }
 
 const testing = std.testing;
@@ -229,14 +252,8 @@ const Rig = struct {
         self.dev.deinit();
     }
 
-    fn context(self: *Rig) abi_render_context.c.ke_render_context {
-        return std.mem.zeroInit(abi_render_context.c.ke_render_context, .{ .service = self.core.api(), .device = self.dev.api(), .frame = self.frame.api() });
-    }
-
-    fn targets(self: *Rig) abi_module.c.ke_module_targets {
-        var t = std.mem.zeroes(abi_module.c.ke_module_targets);
-        t.render = @ptrCast(self.schedule.api());
-        return t;
+    fn create(self: *Rig, out: *abi_part.c.ke_owner) abi_result.c.ke_result {
+        return ke_render_tonemap_create(self.core.api(), self.dev.api(), self.frame.api(), self.schedule.api(), 4, out);
     }
 
     fn expectReleased(self: *Rig) !void {
@@ -245,20 +262,16 @@ const Rig = struct {
     }
 };
 
-fn passOf(h: abi_module.c.ke_module_handle) *TonemapModule {
-    const systems: *pass_systems.Systems(1) = @ptrCast(@alignCast(h.ref.?.handle));
-    return @fieldParentPtr("systems", systems);
+fn passOf(h: abi_part.c.ke_owner) *TonemapModule {
+    return @ptrCast(@alignCast(h.ref.?));
 }
 
-test "the tonemap module attaches its system to the render schedule, and destroying it detaches it and releases the GPU objects" {
+test "the tonemap pass registers its system in the render queue, and destroying it unregisters it and releases the GPU objects" {
     var rig: Rig = undefined;
     try rig.init();
     defer rig.deinit();
-    const p = rig.context();
-    var h: abi_module.c.ke_module_handle = undefined;
-    try R.check(ke_render_tonemap_create(&p, &h));
-    const t = rig.targets();
-    try R.check(h.ref.?.attach.?(h.ref, &t));
+    var h: abi_part.c.ke_owner = undefined;
+    try R.check(rig.create(&h));
     try rig.schedule.received(.register_system).times(1);
     h.destroy.?(h.ref);
     try rig.schedule.received(.unregister_system).times(1);
@@ -269,9 +282,8 @@ test "the tonemap pass writes the frame's output from its colour at the tonemap 
     var rig: Rig = undefined;
     try rig.init();
     defer rig.deinit();
-    const p = rig.context();
-    var h: abi_module.c.ke_module_handle = undefined;
-    try R.check(ke_render_tonemap_create(&p, &h));
+    var h: abi_part.c.ke_owner = undefined;
+    try R.check(rig.create(&h));
     defer h.destroy.?(h.ref);
     try testing.expectEqual(R.ok, queueSystem(&empty_ctx, passOf(h), 0));
     try rig.graph.received(.add_pass).times(1);
@@ -283,27 +295,24 @@ test "a frame not being declared gets no tonemap pass" {
     try rig.init();
     defer rig.deinit();
     _ = rig.frame.when(.live).returns(false);
-    const p = rig.context();
-    var h: abi_module.c.ke_module_handle = undefined;
-    try R.check(ke_render_tonemap_create(&p, &h));
+    var h: abi_part.c.ke_owner = undefined;
+    try R.check(rig.create(&h));
     defer h.destroy.?(h.ref);
     try testing.expectEqual(R.ok, queueSystem(&empty_ctx, passOf(h), 0));
     try rig.graph.received(.add_pass).never();
     try rig.frame.received(.claim_output).never();
 }
 
-test "a tonemap module the schedule refuses fails to attach" {
+test "a tonemap pass the schedule refuses fails to be made and releases what it had created" {
     var rig: Rig = undefined;
     try rig.init();
     defer rig.deinit();
     _ = rig.schedule.when(.register_system).returns(abi_result.c.KE_RESULT_OUT_OF_MEMORY);
-    const p = rig.context();
-    var h: abi_module.c.ke_module_handle = undefined;
-    try R.check(ke_render_tonemap_create(&p, &h));
-    defer h.destroy.?(h.ref);
-    const t = rig.targets();
-    try testing.expect(h.ref.?.attach.?(h.ref, &t) != R.ok);
+    var h: abi_part.c.ke_owner = undefined;
+    try testing.expect(rig.create(&h) != R.ok);
+    try testing.expect(h.ref == null);
     try rig.schedule.received(.unregister_system).never();
+    try rig.expectReleased();
 }
 
 test "a tonemap pass whose shader fails to load releases what it had created" {
@@ -311,9 +320,8 @@ test "a tonemap pass whose shader fails to load releases what it had created" {
     try rig.init();
     defer rig.deinit();
     _ = rig.core.when(.load_shader).returns(abi_result.c.KE_RESULT_GENERAL);
-    const p = rig.context();
-    var h: abi_module.c.ke_module_handle = undefined;
-    try testing.expect(ke_render_tonemap_create(&p, &h) != R.ok);
+    var h: abi_part.c.ke_owner = undefined;
+    try testing.expect(rig.create(&h) != R.ok);
     try testing.expect(h.ref == null);
     try rig.expectReleased();
 }
@@ -322,13 +330,19 @@ test "a tonemap pass missing its device is refused as an invalid argument" {
     var rig: Rig = undefined;
     try rig.init();
     defer rig.deinit();
-    var p = rig.context();
-    p.device = null;
-    var h: abi_module.c.ke_module_handle = undefined;
-    try testing.expectError(error.InvalidArgument, R.check(ke_render_tonemap_create(&p, &h)));
+    var h: abi_part.c.ke_owner = undefined;
+    try testing.expectError(error.InvalidArgument, R.check(ke_render_tonemap_create(rig.core.api(), null, rig.frame.api(), rig.schedule.api(), 4, &h)));
     try testing.expect(h.ref == null);
 }
 
 test "creating and destroying tonemap passes leaves no block allocated" {
     try heap.expectNoLeaks();
+}
+
+test "the library's parts name render_tonemap and their slots" {
+    var count: usize = 0;
+    const all = ke_render_tonemap_parts(&count).?;
+    try std.testing.expectEqual(@as(usize, 1), count);
+    try std.testing.expectEqualStrings("render_tonemap", std.mem.span(@as([*]const abi_part.c.ke_part, @ptrCast(all))[0].name.?));
+    try std.testing.expectEqual(@as(usize, 4), @as([*]const abi_part.c.ke_part, @ptrCast(all))[0].slot_count);
 }

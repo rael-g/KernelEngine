@@ -2,7 +2,7 @@
 
 const abi_ecs = @import("ecs");
 const abi_logger = @import("logger");
-const abi_module = @import("module");
+const abi_part = @import("part");
 const abi_render = @import("render");
 const abi_render_frame = @import("render_frame");
 const abi_render_graph = @import("render_graph");
@@ -25,15 +25,15 @@ pub fn renderFrameCreate(ecs: ?*abi_ecs.c.ke_ecs, graph: ?*abi_render_graph.c.ke
     return written;
 }
 
-/// Creates the module of frame: attaching it registers, in the render schedule,
-/// "render.begin_frame" in the render begin set, which begins the frame, publishes the frame
-/// globals and the scene's light and declares the clear of the frame's colour and depth, and
-/// "render.end_frame" in the render submit set, which copies the colour into the output when no
-/// pass claimed it, submits the uploads, executes the graph and presents. A frame the render
-/// target has nothing to draw into is neither declared nor executed.
-pub fn renderFrameSystemsCreate(frame: ?*abi_render_frame.c.ke_render_frame) Error!abi_module.c.ke_module_handle {
-    var written: abi_module.c.ke_module_handle = undefined;
-    try checkResult(c.ke_render_frame_systems_create(frame, &written));
+/// Registers the systems of frame: "render.begin_frame" in render_begin_set of render_begin,
+/// which begins the frame, publishes the frame globals and the scene's light and declares the
+/// clear of the frame's colour and depth, and "render.end_frame" in render_submit_set of
+/// render_submit, which copies the colour into the output when no pass claimed it, submits the
+/// uploads, executes the graph and presents. A frame the render target has nothing to draw into
+/// is neither declared nor executed. Every argument but out_systems must outlive the systems.
+pub fn renderFrameSystemsCreate(frame: ?*abi_render_frame.c.ke_render_frame, render_begin: ?*abi_schedule.c.ke_schedule, render_begin_set: c.ke_schedule_set_id, render_submit: ?*abi_schedule.c.ke_schedule, render_submit_set: c.ke_schedule_set_id) Error!abi_part.c.ke_owner {
+    var written: abi_part.c.ke_owner = undefined;
+    try checkResult(c.ke_render_frame_systems_create(frame, render_begin, render_begin_set, render_submit, render_submit_set, &written));
     return written;
 }
 
@@ -41,4 +41,12 @@ pub fn renderFrameSystemsCreate(frame: ?*abi_render_frame.c.ke_render_frame) Err
 /// to stderr, where they go until this is called. Called once, before the library logs.
 pub fn renderFrameSetLogCallback(callback: c.ke_log_callback, ctx: ?*anyopaque) void {
     return c.ke_render_frame_set_log_callback(callback, ctx);
+}
+
+/// Gives the parts ke_render_frame contains, each named after its factory and with its slots
+/// named after the factory's parameters: `render_frame` (ke_render_frame; `ecs`, `graph`,
+/// `service`, `camera` and `scene`); `render_frame_systems` (nothing; `frame`, `render_begin`
+/// and `render_submit`).
+pub fn renderFrameParts(out_count: ?*usize) ?*const abi_part.c.ke_part {
+    return c.ke_render_frame_parts(out_count);
 }

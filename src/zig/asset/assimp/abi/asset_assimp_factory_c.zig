@@ -3,6 +3,7 @@
 const abi_asset_loader = @import("asset_loader");
 const abi_io = @import("io");
 const abi_logger = @import("logger");
+const abi_part = @import("part");
 const abi_result = @import("result");
 
 
@@ -13,6 +14,9 @@ const abi_result = @import("result");
 /// thread logged.
 pub const ke_log_callback = ?*const fn (?*anyopaque, abi_logger.c.ke_log_level, ?[*:0]const u8, ?[*:0]const u8) callconv(.c) void;
 
+/// Receives one key the settings hold.
+pub const ke_settings_key_func = ?*const fn (?[*:0]const u8, ?*anyopaque) callconv(.c) void;
+
 /// Sends every line ke_asset_assimp logs to callback, with ctx; a NULL callback sends them back
 /// to stderr, where they go until this is called. Called once, before the library logs.
 pub extern fn ke_asset_assimp_set_log_callback(callback: ke_log_callback, ctx: ?*anyopaque) void;
@@ -20,3 +24,7 @@ pub extern fn ke_asset_assimp_set_log_callback(callback: ke_log_callback, ctx: ?
 /// Creates a ke_asset_loader that imports models with Assimp, reading the model and every file
 /// it names through io.
 pub extern fn ke_asset_loader_assimp_create(io: ?*abi_io.c.ke_io, out_loader: ?*abi_asset_loader.c.ke_asset_loader_handle) abi_result.c.ke_result;
+
+/// Gives the parts ke_asset_assimp contains: `asset_loader_assimp`, providing ke_asset_loader,
+/// with the slot `io`.
+pub extern fn ke_asset_assimp_parts(out_count: ?*usize) ?*const abi_part.c.ke_part;

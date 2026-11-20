@@ -5,6 +5,7 @@ using global::KernelEngine.Logger;
 
 using KernelEngine.Async.Native;
 using KernelEngine.Completion.Native;
+using KernelEngine.Part.Native;
 using KernelEngine.Render.Native;
 using KernelEngine.Result.Native;
 using KernelEngine.Settings.Native;
@@ -19,4 +20,8 @@ public static unsafe partial class NativeMethods
 
     [DllImport("ke_gpu_device_webgpu", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_gpu_device_webgpu_set_log_callback", ExactSpelling = true)]
     public static extern void gpu_device_webgpu_set_log_callback([NativeTypeName("ke_log_callback")] delegate* unmanaged[Cdecl]<void*, global::KernelEngine.Logger.LogLevel, sbyte*, sbyte*, void> callback, void* ctx);
+
+    [DllImport("ke_gpu_device_webgpu", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_gpu_device_webgpu_parts", ExactSpelling = true)]
+    [return: NativeTypeName("const ke_part *")]
+    public static extern KernelEngine.Part.Native.ke_part* gpu_device_webgpu_parts([NativeTypeName("size_t *")] nuint* out_count);
 }

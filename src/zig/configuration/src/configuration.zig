@@ -293,6 +293,25 @@ fn settingsForEachKey(self: ?*abi_settings.c.ke_settings, each: abi_settings.c.k
     return R.ok;
 }
 
+/// Slot `child` of a section's settings: the view of the section named by the view's name, a dot
+/// and `name`, or `name` alone under the root view.
+fn settingsChild(self: ?*abi_settings.c.ke_settings, name_c: ?[*:0]const u8, out_settings: ?*?*abi_settings.c.ke_settings) callconv(.c) abi_result.c.ke_result {
+    const out = out_settings orelse return R.code(error.InvalidArgument);
+    out.* = null;
+    const v = viewOf(self) orelse return R.code(error.InvalidArgument);
+    const name = std.mem.span(name_c orelse return R.code(error.InvalidArgument));
+    const full = (if (v.name.len == 0) gpa.dupeZ(u8, name) else std.fmt.allocPrintSentinel(gpa, "{s}.{s}", .{ v.name, name }, 0)) catch return R.code(error.OutOfMemory);
+    defer gpa.free(full);
+    return sectionView(&v.store.api, full.ptr, out_settings);
+}
+
+/// Slot `for_each_child` of a section's settings: the configuration's children of the view's section.
+fn settingsForEachChild(self: ?*abi_settings.c.ke_settings, each: abi_settings.c.ke_settings_key_func, ctx: ?*anyopaque) callconv(.c) abi_result.c.ke_result {
+    const v = viewOf(self) orelse return R.code(error.InvalidArgument);
+    if (each == null) return R.code(error.InvalidArgument);
+    return forEachChild(&v.store.api, v.name.ptr, @ptrCast(each), ctx);
+}
+
 /// Slot `section`. The view of a section is made the first time it is asked for and handed out
 /// again afterwards.
 fn sectionView(self: ?*abi_configuration.c.ke_configuration, name_c: ?[*:0]const u8, out_settings: ?*?*abi_settings.c.ke_settings) callconv(.c) abi_result.c.ke_result {
@@ -328,6 +347,8 @@ fn makeView(st: *State, name: []const u8) error{OutOfMemory}!*View {
             .get_double = settingsGetDouble,
             .get_string = settingsGetString,
             .for_each_key = settingsForEachKey,
+            .child = settingsChild,
+            .for_each_child = settingsForEachChild,
         },
         .store = st,
         .name = owned,
@@ -449,6 +470,44 @@ fn settingsOf(cfg: ?*abi_configuration.c.ke_configuration, name: [*:0]const u8) 
     var out: ?*abi_settings.c.ke_settings = null;
     try R.check(cfg.?.section.?(cfg, name, &out));
     return out.?;
+}
+
+test "a section read as settings gives the sections under it as its children, by name and in order" {
+    const h = try madeStore();
+    defer h.destroy.?(h.ref);
+    const cfg = h.ref;
+    try R.check(cfg.?.set_int.?(cfg, "test.script.0", "frame", 3));
+    try R.check(cfg.?.set_int.?(cfg, "test.script.1", "frame", 5));
+    try R.check(cfg.?.set_int.?(cfg, "test", "frames", 10));
+    const st = try settingsOf(cfg, "test");
+    const Names = struct {
+        seen: [4][8]u8 = undefined,
+        count: usize = 0,
+        fn add(name: ?[*:0]const u8, ctx: ?*anyopaque) callconv(.c) void {
+            const self: *@This() = @ptrCast(@alignCast(ctx));
+            const n = std.mem.span(name.?);
+            @memcpy(self.seen[self.count][0..n.len], n);
+            self.seen[self.count][n.len] = 0;
+            self.count += 1;
+        }
+    };
+    var names: Names = .{};
+    try R.check(st.for_each_child.?(st, Names.add, &names));
+    try std.testing.expectEqual(@as(usize, 1), names.count);
+    var script: ?*abi_settings.c.ke_settings = null;
+    try R.check(st.child.?(st, "script", &script));
+    names = .{};
+    try R.check(script.?.for_each_child.?(script.?, Names.add, &names));
+    try std.testing.expectEqual(@as(usize, 2), names.count);
+    try std.testing.expectEqualStrings("1", std.mem.sliceTo(&names.seen[1], 0));
+    var second: ?*abi_settings.c.ke_settings = null;
+    try R.check(script.?.child.?(script.?, "1", &second));
+    var frame: i64 = 0;
+    try R.check(second.?.get_int.?(second.?, "frame", &frame));
+    try std.testing.expectEqual(@as(i64, 5), frame);
+    var none: ?*abi_settings.c.ke_settings = null;
+    try R.check(st.child.?(st, "absent", &none));
+    try std.testing.expectError(error.NotFound, R.check(none.?.get_int.?(none.?, "frame", &frame)));
 }
 
 test "a section read as settings gives each key of it by type, and nothing of other sections" {

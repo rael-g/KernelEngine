@@ -127,6 +127,13 @@ typedef struct ke_schedule_handle {
     void (*destroy)(ke_schedule *self);
 } ke_schedule_handle;
 
+/// [bag] One set of a schedule, as a module joins its systems to it: the schedule and the set's id there.
+typedef struct ke_schedule_set {
+    /// [borrowed] The schedule the set is registered in.
+    ke_schedule *schedule;
+    ke_schedule_set_id id;
+} ke_schedule_set;
+
 /// What one call of a system body is given: the entities its queries resolved to, its share of
 /// them, and the queue it records structural changes into. It means nothing outside the call.
 struct ke_schedule_ctx {

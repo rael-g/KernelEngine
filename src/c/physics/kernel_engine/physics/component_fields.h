@@ -2,8 +2,11 @@
 #define KERNEL_ENGINE_PHYSICS_COMPONENT_FIELDS_H_
 
 #include <kernel_engine/ecs/component_field.h>
+#include <kernel_engine/ecs/ecs.h>
 #include <kernel_engine/physics/components.h>
+#include <stdalign.h>
 #include <stddef.h>
+#include <stdint.h>
 
 /// The fields of `ke_body2d_component` a scene or the game writes by name: each name, kind, place, size, default
 /// and, for an enumeration, its value names.
@@ -29,5 +32,11 @@ static const ke_component_field ke_collider2d_component_fields[] = {
     { "mask", KE_VARIANT_INT, offsetof(ke_collider2d_component, mask), sizeof(((ke_collider2d_component *)0)->mask), { KE_VARIANT_INT, { .i = 4294967295 } }, NULL, 0 },
     { "attached", KE_VARIANT_BOOL, offsetof(ke_collider2d_component, attached), sizeof(((ke_collider2d_component *)0)->attached), { KE_VARIANT_NULL, { 0 } }, NULL, 0 },
 };
+
+/// How `ke_body2d_component` is registered: its name, size, alignment and field table.
+static const ke_component_desc ke_body2d_component_desc = { KE_COMPONENT_NAME_BODY2D, sizeof(ke_body2d_component), alignof(ke_body2d_component), ke_body2d_component_fields, (uint32_t)(sizeof ke_body2d_component_fields / sizeof ke_body2d_component_fields[0]) };
+
+/// How `ke_collider2d_component` is registered: its name, size, alignment and field table.
+static const ke_component_desc ke_collider2d_component_desc = { KE_COMPONENT_NAME_COLLIDER2D, sizeof(ke_collider2d_component), alignof(ke_collider2d_component), ke_collider2d_component_fields, (uint32_t)(sizeof ke_collider2d_component_fields / sizeof ke_collider2d_component_fields[0]) };
 
 #endif

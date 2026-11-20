@@ -3,6 +3,7 @@
 const abi_image_loader = @import("image_loader");
 const abi_io = @import("io");
 const abi_logger = @import("logger");
+const abi_part = @import("part");
 const abi_result = @import("result");
 
 /// The ABI as the headers declare it.
@@ -24,4 +25,10 @@ pub fn imageLoaderStbCreate(io: ?*abi_io.c.ke_io) Error!abi_image_loader.c.ke_im
     var written: abi_image_loader.c.ke_image_loader_handle = undefined;
     try checkResult(c.ke_image_loader_stb_create(io, &written));
     return written;
+}
+
+/// Gives the parts ke_asset_stb_image contains: `image_loader_stb`, providing ke_image_loader,
+/// with the slot `io`.
+pub fn assetStbImageParts(out_count: ?*usize) ?*const abi_part.c.ke_part {
+    return c.ke_asset_stb_image_parts(out_count);
 }

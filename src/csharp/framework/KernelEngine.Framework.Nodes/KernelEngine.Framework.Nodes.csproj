@@ -9,9 +9,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\KernelEngine.Framework\KernelEngine.Framework.csproj" />
-    <ProjectReference Include="..\..\physics\KernelEngine.Physics\KernelEngine.Physics.csproj" />
-    <ProjectReference Include="..\..\audio\KernelEngine.Audio\KernelEngine.Audio.csproj" />
-    <ProjectReference Include="..\..\render\KernelEngine.Render.Native\KernelEngine.Render.Native.csproj" />
   </ItemGroup>
 
   <ItemGroup>

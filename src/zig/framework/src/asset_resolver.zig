@@ -11,6 +11,8 @@ const std = @import("std");
 const c = @import("c");
 const abi_render = @import("abi_render");
 const abi_result = @import("abi_result");
+const part = @import("part");
+const abi_part = @import("abi_part");
 const abi_text = @import("abi_text");
 const heap = @import("heap");
 
@@ -461,6 +463,10 @@ export fn ke_asset_resolver_create(
     out.* = .{ .ref = &s.api, .destroy = vtDestroy };
     return R.ok;
 }
+
+pub const parts = [_]abi_part.c.ke_part{
+    part.of(ke_asset_resolver_create, .{ .name = "asset_resolver", .slots = &.{ "image_loader", "font_loader", "io" }, .optional = &.{ "image_loader", "font_loader" } }),
+};
 
 const testing = std.testing;
 

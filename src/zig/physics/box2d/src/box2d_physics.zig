@@ -9,6 +9,8 @@ pub const _DllMainCRTStartup = @import("dll_entry")._DllMainCRTStartup;
 
 const abi_math = @import("abi_math");
 const abi_physics = @import("abi_physics");
+const abi_part = @import("abi_part");
+const part = @import("part");
 const abi_result = @import("abi_result");
 const abi_settings = @import("abi_settings");
 const settings_schema = @import("settings_schema");
@@ -393,6 +395,16 @@ fn create(jobs: *abi_job.c.ke_job_system, params: *const Config) R.Error!abi_phy
     return .{ .ref = &s.api, .destroy = destroy };
 }
 
+pub const parts = [_]abi_part.c.ke_part{
+    part.of(ke_physics_2d_box2d_create, .{ .name = "physics_2d_box2d", .slots = &.{"job_system"}, .set_log = @ptrCast(&@import("log").Destination("ke_physics_2d_box2d").setLogCallback) }),
+};
+
+/// The library's parts.
+export fn ke_physics_2d_box2d_parts(out_count: ?*usize) callconv(.c) ?*const abi_part.c.ke_part {
+    if (out_count) |n| n.* = parts.len;
+    return &parts[0];
+}
+
 const testing = std.testing;
 const zsub = @import("zsub");
 
@@ -717,6 +729,15 @@ test "a gravity that is not finite is refused and leaves the handle zeroed" {
     try testing.expect(h.ref == null);
     try testing.expectEqual(R.code(error.InvalidArgument), ke_physics_2d_box2d_create(try jobsForTests(), &inf_gravity.api, &h));
     try testing.expect(h.ref == null);
+}
+
+test "the library's part is physics_2d_box2d, built from its factory" {
+    var count: usize = 0;
+    const p = ke_physics_2d_box2d_parts(&count).?;
+    try std.testing.expectEqual(@as(usize, 1), count);
+    try std.testing.expectEqualStrings("physics_2d_box2d", std.mem.span(p.name.?));
+    try std.testing.expectEqual(@as(usize, 1), p.provides_count);
+    try std.testing.expectEqual(@as(usize, 1), p.slot_count);
 }
 
 test "creating and destroying a physics world leaves no block allocated" {

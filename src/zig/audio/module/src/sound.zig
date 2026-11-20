@@ -9,7 +9,7 @@ const abi_audio_contract = @import("abi_audio_contract");
 const abi_audio_module_factory = @import("abi_audio_module_factory");
 const abi_ecs = @import("abi_ecs");
 const abi_result = @import("abi_result");
-const abi_module = @import("abi_module");
+const abi_part = @import("abi_part");
 const abi_schedule = @import("abi_schedule");
 
 const heap = @import("heap");
@@ -28,15 +28,14 @@ const Tracked = struct {
     seen: u64,
 };
 
-/// The state behind the `ke_module` handle `ke_sound_create` returns, whose `api.handle` points
-/// back at it. The query declaration points into this struct's own term array, so its address stays
-/// fixed while the system is registered; `scheduler` is the update schedule while attached. `tracked` holds every clip the module loaded and every voice it started,
+/// The state behind the owner `ke_sound_create` hands out. The query declaration points into this struct's own
+/// term array, so its address stays fixed while the system is registered in `scheduler`. `tracked` holds every
+/// clip the module loaded and every voice it started,
 /// by entity, and `update` counts the system's runs, so a sound whose entity no longer holds it is
 /// found.
 const Module = struct {
-    api: abi_module.c.ke_module = std.mem.zeroes(abi_module.c.ke_module),
     audio: *abi_audio.c.ke_audio,
-    scheduler: ?*abi_schedule.c.ke_schedule = null,
+    scheduler: *abi_schedule.c.ke_schedule,
     system: abi_schedule.c.ke_schedule_system_id = 0,
     set: [1]abi_schedule.c.ke_schedule_set_id = .{0},
     tracked: std.AutoHashMapUnmanaged(abi_ecs.c.ke_entity, Tracked) = .empty,
@@ -154,17 +153,42 @@ fn destroyModule(m: *Module) void {
     gpa.destroy(m);
 }
 
-fn moduleOfApi(self: ?*abi_module.c.ke_module) ?*Module {
-    return @ptrCast(@alignCast((self orelse return null).handle));
+/// The owner's `destroy`: unregisters the sound system, stops every voice and releases every clip the module
+/// holds, and frees the module.
+fn destroyHandle(ref: ?*anyopaque) callconv(.c) void {
+    const m: *Module = @ptrCast(@alignCast(ref orelse return));
+    _ = m.scheduler.unregister_system.?(m.scheduler, m.system);
+    destroyModule(m);
 }
 
-/// Slot `attach`: registers the sound system in the update schedule's post_update set.
-fn attach(self: ?*abi_module.c.ke_module, targets_in: ?*const abi_module.c.ke_module_targets) callconv(.c) abi_result.c.ke_result {
-    const m = moduleOfApi(self) orelse return R.code(error.InvalidArgument);
-    const targets = targets_in orelse return R.code(error.InvalidArgument);
-    if (m.scheduler != null) return R.code(error.NotSupported);
-    const sched: *abi_schedule.c.ke_schedule = @ptrCast(targets.update orelse return R.code(error.InvalidArgument));
-    m.set = .{targets.post_update_set};
+/// Builds the module and registers its system in `post_update_set` of `post_update`. A missing ecs, audio or
+/// schedule fails as an invalid argument; the objects made so far are released on any failure.
+pub export fn ke_sound_create(
+    ecs: ?*abi_ecs.c.ke_ecs,
+    audio: ?*abi_audio.c.ke_audio,
+    post_update: ?*abi_schedule.c.ke_schedule,
+    post_update_set: abi_schedule.c.ke_schedule_set_id,
+    out_module: ?*abi_part.c.ke_owner,
+) callconv(.c) abi_result.c.ke_result {
+    const out = out_module orelse return R.code(error.InvalidArgument);
+    out.* = .{ .ref = null, .destroy = null };
+    out.* = create(ecs orelse return R.code(error.InvalidArgument), audio orelse return R.code(error.InvalidArgument), post_update orelse return R.code(error.InvalidArgument), post_update_set) catch |err| {
+        log.warn("creating the sound module failed: {t}", .{err});
+        return R.code(err);
+    };
+    return R.ok;
+}
+
+fn create(ecs: *abi_ecs.c.ke_ecs, audio: *abi_audio.c.ke_audio, sched: *abi_schedule.c.ke_schedule, set: abi_schedule.c.ke_schedule_set_id) R.Error!abi_part.c.ke_owner {
+    const m = try gpa.create(Module);
+    m.* = .{ .audio = audio, .scheduler = sched, .set = .{set} };
+    errdefer destroyModule(m);
+
+    var cid: abi_ecs.c.ke_component_id = abi_ecs.c.KE_COMPONENT_INVALID;
+    try R.check(ecs.*.component_register.?(ecs, &abi_audio_contract.c.ke_sound_component_desc, &cid));
+
+    m.terms = .{.{ .component = cid, .access = abi_ecs.c.KE_ECS_ACCESS_WRITE }};
+    m.queries = .{.{ .terms = &m.terms, .term_count = 1 }};
     const desc: abi_schedule.c.ke_schedule_system_desc = .{
         .name = "audio.sound",
         .user_data = m,
@@ -174,58 +198,8 @@ fn attach(self: ?*abi_module.c.ke_module, targets_in: ?*const abi_module.c.ke_mo
         .sets = &m.set,
         .set_count = 1,
     };
-    R.check(sched.register_system.?(sched, &desc, &m.system)) catch |err| {
-        log.warn("attaching the sound module failed: {t}", .{err});
-        return R.code(err);
-    };
-    m.scheduler = sched;
-    return R.ok;
-}
-
-/// Slot `detach`: unregisters the sound system.
-fn detach(self: ?*abi_module.c.ke_module) callconv(.c) void {
-    const m = moduleOfApi(self) orelse return;
-    const sched = m.scheduler orelse return;
-    _ = sched.unregister_system.?(sched, m.system);
-    m.scheduler = null;
-}
-
-/// The handle's `destroy`: detaches, stops every voice and releases every clip the module holds,
-/// and frees the module.
-fn destroyHandle(self: ?*abi_module.c.ke_module) callconv(.c) void {
-    const m = moduleOfApi(self) orelse return;
-    detach(self);
-    destroyModule(m);
-}
-
-/// Builds the module, its system attached later. A missing ecs or audio fails as an invalid
-/// argument; the objects made so far are released on any failure.
-export fn ke_sound_create(
-    ecs: ?*abi_ecs.c.ke_ecs,
-    audio: ?*abi_audio.c.ke_audio,
-    out_module: ?*abi_module.c.ke_module_handle,
-) callconv(.c) abi_result.c.ke_result {
-    const out = out_module orelse return R.code(error.InvalidArgument);
-    out.* = .{ .ref = null, .destroy = null };
-    out.* = create(ecs orelse return R.code(error.InvalidArgument), audio orelse return R.code(error.InvalidArgument)) catch |err| {
-        log.warn("creating the sound module failed: {t}", .{err});
-        return R.code(err);
-    };
-    return R.ok;
-}
-
-fn create(ecs: *abi_ecs.c.ke_ecs, audio: *abi_audio.c.ke_audio) R.Error!abi_module.c.ke_module_handle {
-    const m = try gpa.create(Module);
-    m.* = .{ .audio = audio };
-    m.api = .{ .handle = m, .attach = attach, .detach = detach };
-    errdefer destroyModule(m);
-
-    var cid: abi_ecs.c.ke_component_id = abi_ecs.c.KE_COMPONENT_INVALID;
-    try R.check(ecs.*.component_register.?(ecs, &abi_ecs.c.ke_component_desc{ .name = abi_audio_contract.c.KE_COMPONENT_NAME_SOUND, .size = @sizeOf(Sound), .alignment = @alignOf(Sound), .fields = &abi_audio_contract.c.ke_sound_component_fields, .field_count = abi_audio_contract.c.ke_sound_component_fields.len }, &cid));
-
-    m.terms = .{.{ .component = cid, .access = abi_ecs.c.KE_ECS_ACCESS_WRITE }};
-    m.queries = .{.{ .terms = &m.terms, .term_count = 1 }};
-    return .{ .ref = &m.api, .destroy = destroyHandle };
+    try R.check(sched.register_system.?(sched, &desc, &m.system));
+    return .{ .ref = m, .destroy = destroyHandle };
 }
 
 const testing = std.testing;
@@ -337,7 +311,7 @@ const Harness = struct {
         h.ctx.view = SoundView.view;
         h.ctx.commands = h.cmds.api();
         h.m = try gpa.create(Module);
-        h.m.* = .{ .audio = &h.audio };
+        h.m.* = .{ .audio = &h.audio, .scheduler = h.rt.api() };
     }
 
     fn tick(h: *Harness) !void {
@@ -468,7 +442,7 @@ test "a sound whose entity no longer holds it is stopped and its clip released o
     try testing.expectEqual(@as(usize, 1), FakeAudio.unloaded);
 }
 
-test "a sound module missing its ecs or audio is refused, and a whole one attached registers one system" {
+test "a sound module missing its ecs, audio or schedule is refused, and a whole one registers one system" {
     FakeAudio.reset();
     var audio = FakeAudio.api();
     var ecs: EcsSub = undefined;
@@ -480,16 +454,12 @@ test "a sound module missing its ecs or audio is refused, and a whole one attach
     defer rt.deinit();
     _ = rt.when(.register_system).writesFresh(2);
 
-    var h: abi_module.c.ke_module_handle = undefined;
-    try testing.expectError(error.InvalidArgument, R.check(ke_sound_create(null, &audio, &h)));
-    try testing.expectError(error.InvalidArgument, R.check(ke_sound_create(ecs.api(), null, &h)));
+    var h: abi_part.c.ke_owner = undefined;
+    try testing.expectError(error.InvalidArgument, R.check(ke_sound_create(null, &audio, rt.api(), 7, &h)));
+    try testing.expectError(error.InvalidArgument, R.check(ke_sound_create(ecs.api(), null, rt.api(), 7, &h)));
+    try testing.expectError(error.InvalidArgument, R.check(ke_sound_create(ecs.api(), &audio, null, 7, &h)));
     try testing.expect(h.ref == null);
-    try R.check(ke_sound_create(ecs.api(), &audio, &h));
-    var targets = std.mem.zeroes(abi_module.c.ke_module_targets);
-    try testing.expectError(error.InvalidArgument, R.check(h.ref.?.attach.?(h.ref, &targets)));
-    targets.update = @ptrCast(rt.api());
-    try R.check(h.ref.?.attach.?(h.ref, &targets));
-    try testing.expectError(error.NotSupported, R.check(h.ref.?.attach.?(h.ref, &targets)));
+    try R.check(ke_sound_create(ecs.api(), &audio, rt.api(), 7, &h));
     try rt.received(.register_system).times(1);
     h.destroy.?(h.ref);
     try rt.received(.unregister_system).sameAs(rt.received(.register_system));

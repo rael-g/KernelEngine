@@ -12,6 +12,8 @@ const abi_framework = @import("abi_framework");
 const abi_framework_factory = @import("abi_framework_factory");
 const abi_math = @import("abi_math");
 const abi_result = @import("abi_result");
+const part = @import("part");
+const abi_part = @import("abi_part");
 const abi_schedule = @import("abi_schedule");
 const abi_spatial = @import("abi_spatial");
 const heap = @import("heap");
@@ -68,12 +70,11 @@ fn getWorldTransform(s: *State, e: abi_asset_resolver.c.ke_entity) ?*abi_spatial
     return @ptrCast(@alignCast(s.ecs.component_get.?(s.ecs, e, s.world_transform_cid)));
 }
 
-/// Registers a component the tree writes with the field table its header generates, or none when
-/// no field of it is written by a scene. A component the ecs already knows keeps its id, so trees
-/// created on one ecs share their ids, and its table is checked against the one registered first.
-fn registerComponent(ecs: *abi_ecs.c.ke_ecs, name: [*c]const u8, comptime T: type, fields: []const abi_ecs.c.ke_component_field) R.Error!abi_asset_resolver.c.ke_component_id {
+/// Registers a component of the contract by its description. A component the ecs already knows keeps
+/// its id, so trees, hierarchies and node types on one ecs share their ids.
+pub fn registerComponent(ecs: *abi_ecs.c.ke_ecs, desc: *const abi_ecs.c.ke_component_desc) R.Error!abi_asset_resolver.c.ke_component_id {
     var cid: abi_asset_resolver.c.ke_component_id = 0;
-    try R.check(ecs.component_register.?(ecs, &abi_ecs.c.ke_component_desc{ .name = name, .size = @sizeOf(T), .alignment = @alignOf(T), .fields = if (fields.len > 0) fields.ptr else null, .field_count = @intCast(fields.len) }, &cid));
+    try R.check(ecs.component_register.?(ecs, desc, &cid));
     return cid;
 }
 
@@ -550,11 +551,11 @@ fn create(ecs: *abi_ecs.c.ke_ecs) R.Error!abi_scene_tree.c.ke_scene_tree_handle 
         .api = std.mem.zeroes(abi_scene_tree.c.ke_scene_tree),
         .ecs = ecs,
         .root = abi_ecs.c.KE_ENTITY_INVALID,
-        .transform_cid = try registerComponent(ecs, abi_spatial_contract.c.KE_COMPONENT_NAME_TRANSFORM, abi_spatial.c.ke_transform_component, &abi_spatial_contract.c.ke_transform_component_fields),
-        .transform2d_cid = try registerComponent(ecs, abi_spatial_contract.c.KE_COMPONENT_NAME_TRANSFORM2D, abi_spatial.c.ke_transform2d_component, &abi_spatial_contract.c.ke_transform2d_component_fields),
-        .world_transform_cid = try registerComponent(ecs, abi_spatial_contract.c.KE_COMPONENT_NAME_WORLD_TRANSFORM, abi_spatial.c.ke_world_transform_component, &.{}),
-        .hierarchy_cid = try registerComponent(ecs, abi_framework_components.c.KE_COMPONENT_NAME_HIERARCHY, abi_framework_components.c.ke_hierarchy_component, &.{}),
-        .name_cid = try registerComponent(ecs, abi_framework_components.c.KE_COMPONENT_NAME_NAME, abi_framework_components.c.ke_name_component, &.{}),
+        .transform_cid = try registerComponent(ecs, &abi_spatial_contract.c.ke_transform_component_desc),
+        .transform2d_cid = try registerComponent(ecs, &abi_spatial_contract.c.ke_transform2d_component_desc),
+        .world_transform_cid = try registerComponent(ecs, &abi_spatial_contract.c.ke_world_transform_component_desc),
+        .hierarchy_cid = try registerComponent(ecs, &abi_framework_components.c.ke_hierarchy_component_desc),
+        .name_cid = try registerComponent(ecs, &abi_framework_components.c.ke_name_component_desc),
     };
 
     try R.check(ecs.entity_create.?(ecs, &s.root));
@@ -595,6 +596,10 @@ fn create(ecs: *abi_ecs.c.ke_ecs) R.Error!abi_scene_tree.c.ke_scene_tree_handle 
 
     return .{ .ref = &s.api, .destroy = vtDestroy };
 }
+
+pub const parts = [_]abi_part.c.ke_part{
+    part.of(ke_scene_tree_create, .{ .name = "scene_tree", .slots = &.{"ecs"} }),
+};
 
 const testing = std.testing;
 

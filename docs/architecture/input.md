@@ -13,7 +13,7 @@ part works inside is on the generated page of its file. Contracts are under `src
 | managed input | `IInput` | `Input` in `KernelEngine.Input` | the native `ke_input` | live queries, and one `InputSnapshot` through `GetSnapshot` |
 | action maps | `ke_input_actions`, `InputActions` | framework | maps and actions added through its slots, from code or from the `input` section of a configuration; one snapshot per frame | polled action values |
 | node field | `ke_action_ref` | framework | an action name, written by a scene or by code | the action's value through `axis` and `pressed` of `ke_node_ctx` |
-| system | the "input.actions" system of the module `ke_input_actions_evaluation_create` returns | framework | the `ke_input_actions` and the `ke_input` it was given, then the standard schedules at attach | the actions evaluated for the tick |
+| system | the "input.actions" system of the module `ke_input_actions_evaluation_create` returns | framework | the `ke_input_actions` and the `ke_input` it was given, then the schedule and set the system joins | the actions evaluated for the tick |
 
 **The window feeds the sinks.** `ke_window_glfw_create` takes a borrowed, nullable `ke_input`.
 While the window polls, each key, button, cursor and scroll event becomes a call to `on_key`,
@@ -57,4 +57,4 @@ slots a program calls; with no configuration the maps are whatever the program a
   a code outside them is ignored. The capacity of the event queue is private to the plugin.
 - The system name "input.actions" is a literal of `src/zig/framework/src/input_actions.zig`.
 - The window is created with the settings `KE_WINDOW_SETTING_TITLE`, `KE_WINDOW_SETTING_WIDTH`,
-  `KE_WINDOW_SETTING_HEIGHT` and `KE_WINDOW_SETTING_FULLSCREEN`; the SDKs hand it the "runtime.window" section of the project file.
+  `KE_WINDOW_SETTING_HEIGHT` and `KE_WINDOW_SETTING_FULLSCREEN`; the default composition hands it the "window" section of the project file.

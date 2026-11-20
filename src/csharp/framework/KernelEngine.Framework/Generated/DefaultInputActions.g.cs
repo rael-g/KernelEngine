@@ -5,7 +5,7 @@
 
 namespace KernelEngine.Framework;
 
-/// <summary>Creates the action maps, adding through the map's own slots every map the configuration describes under the section: ` &lt;section &gt;.map. &lt;Map &gt;` holds `priority` (default 0) and `enabled` (default true); ` &lt;section &gt;.map. &lt;Map &gt;.action. &lt;Action &gt;` holds `type` (Button, Axis1D, Axis2D or Axis3D, default Button); ` &lt;section &gt;.map. &lt;Map &gt;.action. &lt;Action &gt;.bindings. &lt;n &gt;` holds `kind` and its keys: `key` for key, `button` (Left, Right, Middle) for mouse, `negative` and `positive` for key_pair, `up`, `down`, `left` and `right` for key_quad, each a key name such as "Space" or "W". The input actions module evaluates the maps each tick.</summary>
+/// <summary>Creates the action maps, adding through the map's own slots every map settings describe: the child `map. &lt;Map &gt;` holds `priority` (default 0) and `enabled` (default true); `map. &lt;Map &gt;.action. &lt;Action &gt;` holds `type` (Button, Axis1D, Axis2D or Axis3D, default Button); `map. &lt;Map &gt;.action. &lt;Action &gt;.bindings. &lt;n &gt;` holds `kind` and its keys: `key` for key, `button` (Left, Right, Middle) for mouse, `negative` and `positive` for key_pair, `up`, `down`, `left` and `right` for key_quad, each a key name such as "Space" or "W". The input actions module evaluates the maps each tick.</summary>
 public sealed unsafe partial class DefaultInputActions : KernelEngine.Framework.InputActions
 {
 
@@ -50,22 +50,16 @@ public sealed unsafe partial class DefaultInputActions : KernelEngine.Framework.
         }
     }
 
-    /// <summary>Creates the action maps, adding through the map's own slots every map the configuration describes under the section: ` &lt;section &gt;.map. &lt;Map &gt;` holds `priority` (default 0) and `enabled` (default true); ` &lt;section &gt;.map. &lt;Map &gt;.action. &lt;Action &gt;` holds `type` (Button, Axis1D, Axis2D or Axis3D, default Button); ` &lt;section &gt;.map. &lt;Map &gt;.action. &lt;Action &gt;.bindings. &lt;n &gt;` holds `kind` and its keys: `key` for key, `button` (Left, Right, Middle) for mouse, `negative` and `positive` for key_pair, `up`, `down`, `left` and `right` for key_quad, each a key name such as "Space" or "W". The input actions module evaluates the maps each tick.</summary>
-    /// <param name="configuration">Read during the call only; NULL creates no map.</param>
-    /// <param name="section">The configuration section the maps are read from.</param>
-    public DefaultInputActions(KernelEngine.Configuration.INativeConfiguration? configuration = default, string? section = default) : base(Create(configuration, section))
+    /// <summary>Creates the action maps, adding through the map's own slots every map settings describe: the child `map. &lt;Map &gt;` holds `priority` (default 0) and `enabled` (default true); `map. &lt;Map &gt;.action. &lt;Action &gt;` holds `type` (Button, Axis1D, Axis2D or Axis3D, default Button); `map. &lt;Map &gt;.action. &lt;Action &gt;.bindings. &lt;n &gt;` holds `kind` and its keys: `key` for key, `button` (Left, Right, Middle) for mouse, `negative` and `positive` for key_pair, `up`, `down`, `left` and `right` for key_quad, each a key name such as "Space" or "W". The input actions module evaluates the maps each tick.</summary>
+    /// <param name="settings">Read once; holds no key and no child but `map`.</param>
+    public DefaultInputActions(KernelEngine.Settings.IPartSettings settings) : base(Create(settings))
     {
-        Hold(configuration?.Owner);
     }
 
-    private static KernelEngine.Framework.Native.ke_input_actions_handle Create(KernelEngine.Configuration.INativeConfiguration? configuration, string? section)
+    private static KernelEngine.Framework.Native.ke_input_actions_handle Create(KernelEngine.Settings.IPartSettings settings)
     {
-        var sectionBytes = section is null ? null : System.Text.Encoding.UTF8.GetBytes(section + "\0");
-        fixed (byte* sectionPtr = sectionBytes)
-        {
-            KernelEngine.Framework.Native.ke_input_actions_handle handle;
-            NativeResult.ThrowIfFailed(KernelEngine.Framework.Native.NativeMethods.input_actions_create((configuration is null ? null : configuration.Native), (sbyte*)sectionPtr, &handle), "ke_input_actions_create");
-            return handle;
-        }
+        KernelEngine.Framework.Native.ke_input_actions_handle handle;
+        NativeResult.ThrowIfFailed(KernelEngine.Framework.Native.NativeMethods.input_actions_create(((KernelEngine.Settings.INativeSettings)settings).Native, &handle), "ke_input_actions_create");
+        return handle;
     }
 }

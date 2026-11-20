@@ -8,5 +8,7 @@ const unsigned long long layout_values[] = {
     offsetof(ke_settings, get_double),
     offsetof(ke_settings, get_string),
     offsetof(ke_settings, for_each_key),
+    offsetof(ke_settings, child),
+    offsetof(ke_settings, for_each_child),
     0,
 };

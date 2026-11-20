@@ -3,6 +3,7 @@
 const abi_file_system = @import("file_system");
 const abi_io = @import("io");
 const abi_logger = @import("logger");
+const abi_part = @import("part");
 const abi_result = @import("result");
 const abi_settings = @import("settings");
 
@@ -24,3 +25,6 @@ pub extern fn ke_io_std_create(file_system: ?*abi_file_system.c.ke_file_system, 
 /// Sends every line ke_io_std logs to callback, with ctx; a NULL callback sends them back to
 /// stderr, where they go until this is called. Called once, before the library logs.
 pub extern fn ke_io_std_set_log_callback(callback: ke_log_callback, ctx: ?*anyopaque) void;
+
+/// Gives the parts ke_io_std contains: `io_std`, providing ke_io, with the slot `file_system`.
+pub extern fn ke_io_std_parts(out_count: ?*usize) ?*const abi_part.c.ke_part;

@@ -2,6 +2,7 @@
 
 const abi_async = @import("async");
 const abi_logger = @import("logger");
+const abi_part = @import("part");
 const abi_result = @import("result");
 const abi_settings = @import("settings");
 
@@ -23,6 +24,9 @@ pub const ke_log_callback = ?*const fn (?*anyopaque, abi_logger.c.ke_log_level, 
 /// Creates an async system that runs every operation on the creating thread, when it is waited
 /// on or drained.
 pub extern fn ke_async_inline_create(settings: ?*abi_settings.c.ke_settings, out_async: ?*abi_async.c.ke_async_handle) abi_result.c.ke_result;
+
+/// Gives the parts ke_async_inline contains: `async_inline`, providing ke_async.
+pub extern fn ke_async_inline_parts(out_count: ?*usize) ?*const abi_part.c.ke_part;
 
 /// Sends every line ke_async_inline logs to callback, with ctx; a NULL callback sends them back
 /// to stderr, where they go until this is called. Called once, before the library logs.

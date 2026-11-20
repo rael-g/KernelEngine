@@ -187,20 +187,20 @@ public unsafe partial class Schedule : IDisposable, INativeSchedule, ISchedule
         nameBytes[System.Text.Encoding.UTF8.GetBytes(nameText, nameBytes)] = 0;
         fixed (byte* namePtr = nameBytes)
         {
-            var queriesPins = new System.Buffers.MemoryHandle[queries.Length];
+            var queriesPins = new List<System.Buffers.MemoryHandle>();
             var queriesNative = new ke_ecs_query_desc[queries.Length];
             try
             {
                 for (var queriesAt = 0; queriesAt < queries.Length; queriesAt++)
                 {
-                    queriesPins[queriesAt] = queries[queriesAt].Terms.Pin();
-                    queriesNative[queriesAt].terms = (EcsQueryTerm*)queriesPins[queriesAt].Pointer;
+                    queriesPins.Add(queries[queriesAt].Terms.Pin());
+                    queriesNative[queriesAt].terms = (EcsQueryTerm*)queriesPins[^1].Pointer;
                     queriesNative[queriesAt].term_count = (uint)queries[queriesAt].Terms.Length;
-                    queriesPins[queriesAt] = queries[queriesAt].With.Pin();
-                    queriesNative[queriesAt].with = (ComponentId*)queriesPins[queriesAt].Pointer;
+                    queriesPins.Add(queries[queriesAt].With.Pin());
+                    queriesNative[queriesAt].with = (ComponentId*)queriesPins[^1].Pointer;
                     queriesNative[queriesAt].with_count = (uint)queries[queriesAt].With.Length;
-                    queriesPins[queriesAt] = queries[queriesAt].Without.Pin();
-                    queriesNative[queriesAt].without = (ComponentId*)queriesPins[queriesAt].Pointer;
+                    queriesPins.Add(queries[queriesAt].Without.Pin());
+                    queriesNative[queriesAt].without = (ComponentId*)queriesPins[^1].Pointer;
                     queriesNative[queriesAt].without_count = (uint)queries[queriesAt].Without.Length;
                     queriesNative[queriesAt].track_changes = queries[queriesAt].TrackChanges;
                 }
@@ -257,7 +257,7 @@ public unsafe partial class Schedule : IDisposable, INativeSchedule, ISchedule
             }
             finally
             {
-                for (var queriesAt = 0; queriesAt < queriesPins.Length; queriesAt++) queriesPins[queriesAt].Dispose();
+                foreach (var queriesPin in queriesPins) queriesPin.Dispose();
             }
         }
     }

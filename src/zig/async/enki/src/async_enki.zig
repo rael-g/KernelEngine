@@ -10,6 +10,8 @@ pub const _DllMainCRTStartup = @import("dll_entry")._DllMainCRTStartup;
 const c = @import("c");
 const abi_async = @import("abi_async");
 const abi_completion = @import("abi_completion");
+const abi_part = @import("abi_part");
+const part = @import("part");
 const abi_result = @import("abi_result");
 const completion_graph = @import("completion_graph");
 const heap = @import("heap");
@@ -222,6 +224,16 @@ fn create(settings: ?*abi_settings.c.ke_settings) R.Error!a.ke_async_handle {
     return .{ .ref = &self.api, .destroy = destroy };
 }
 
+pub const parts = [_]abi_part.c.ke_part{
+    part.of(ke_async_enki_create, .{ .name = "async_enki", .slots = &.{}, .set_log = @ptrCast(&@import("log").Destination("ke_async_enki").setLogCallback) }),
+};
+
+/// The library's parts.
+export fn ke_async_enki_parts(out_count: ?*usize) callconv(.c) ?*const abi_part.c.ke_part {
+    if (out_count) |n| n.* = parts.len;
+    return &parts[0];
+}
+
 const testing = std.testing;
 
 fn createdWith(workers: u32) !a.ke_async_handle {
@@ -254,6 +266,15 @@ test "a null config, a null handle or a submit_capacity of zero is refused" {
     try testing.expectError(error.InvalidArgument, R.check(ke_async_enki_create(&none.api, null)));
     var empty = settings_schema.Fixed.init(&.{.{ .key = "submit_capacity", .value = .{ .int = 0 } }});
     try testing.expectError(error.InvalidArgument, R.check(ke_async_enki_create(&empty.api, &h)));
+}
+
+test "the library's part is async_enki, built from its factory" {
+    var count: usize = 0;
+    const p = ke_async_enki_parts(&count).?;
+    try std.testing.expectEqual(@as(usize, 1), count);
+    try std.testing.expectEqualStrings("async_enki", std.mem.span(p.name.?));
+    try std.testing.expectEqual(@as(usize, 1), p.provides_count);
+    try std.testing.expectEqual(@as(usize, 0), p.slot_count);
 }
 
 test "creating and destroying async systems leaves no block allocated" {

@@ -5,6 +5,7 @@
 
 using KernelEngine.Audio.Native;
 using KernelEngine.Ecs;
+using KernelEngine.Ecs.Native;
 using KernelEngine.Input;
 using KernelEngine.Render;
 

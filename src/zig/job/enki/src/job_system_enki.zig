@@ -10,6 +10,8 @@ pub const _DllMainCRTStartup = @import("dll_entry")._DllMainCRTStartup;
 const c = @import("c");
 const abi_completion = @import("abi_completion");
 const abi_job = @import("abi_job");
+const abi_part = @import("abi_part");
+const part = @import("part");
 const abi_result = @import("abi_result");
 const completion_graph = @import("completion_graph");
 const heap = @import("heap");
@@ -225,6 +227,16 @@ fn create(settings: ?*abi_settings.c.ke_settings) R.Error!j.ke_job_system_handle
     return .{ .ref = &self.api, .destroy = destroy };
 }
 
+pub const parts = [_]abi_part.c.ke_part{
+    part.of(ke_job_system_enki_create, .{ .name = "job_system_enki", .slots = &.{}, .set_log = @ptrCast(&@import("log").Destination("ke_job_system_enki").setLogCallback) }),
+};
+
+/// The library's parts.
+export fn ke_job_system_enki_parts(out_count: ?*usize) callconv(.c) ?*const abi_part.c.ke_part {
+    if (out_count) |n| n.* = parts.len;
+    return &parts[0];
+}
+
 const testing = std.testing;
 
 var no_settings = settings_schema.Fixed.init(&.{});
@@ -269,6 +281,15 @@ test "null settings or a null handle are refused as an invalid argument" {
     var h: j.ke_job_system_handle = undefined;
     try testing.expectError(error.InvalidArgument, R.check(ke_job_system_enki_create(null, &h)));
     try testing.expectError(error.InvalidArgument, R.check(ke_job_system_enki_create(&no_settings.api, null)));
+}
+
+test "the library's part is job_system_enki, built from its factory" {
+    var count: usize = 0;
+    const p = ke_job_system_enki_parts(&count).?;
+    try std.testing.expectEqual(@as(usize, 1), count);
+    try std.testing.expectEqualStrings("job_system_enki", std.mem.span(p.name.?));
+    try std.testing.expectEqual(@as(usize, 1), p.provides_count);
+    try std.testing.expectEqual(@as(usize, 0), p.slot_count);
 }
 
 test "creating and destroying job systems leaves no block allocated" {

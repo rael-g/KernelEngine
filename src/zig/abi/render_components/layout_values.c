@@ -1,5 +1,6 @@
 #include <stddef.h>
 #include <kernel_engine/render/components.h>
+#include <kernel_engine/render/component_fields.h>
 const unsigned long long layout_values[] = {
     sizeof(ke_camera_component),
     offsetof(ke_camera_component, fov),

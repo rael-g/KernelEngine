@@ -7,7 +7,7 @@ const unsigned long long layout_values[] = {
     offsetof(ke_node_component, data),
     offsetof(ke_node_component, size),
     sizeof(ke_node_with),
-    offsetof(ke_node_with, name),
+    offsetof(ke_node_with, component),
     offsetof(ke_node_with, initial),
     offsetof(ke_node_with, initial_size),
     sizeof(ke_action_ref),

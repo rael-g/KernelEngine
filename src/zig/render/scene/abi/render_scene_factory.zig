@@ -4,9 +4,8 @@ const abi_asset_resolver = @import("asset_resolver");
 const abi_ecs = @import("ecs");
 const abi_extraction = @import("extraction");
 const abi_logger = @import("logger");
-const abi_module = @import("module");
+const abi_part = @import("part");
 const abi_render = @import("render");
-const abi_render_context = @import("render_context");
 const abi_render_graph = @import("render_graph");
 const abi_render_ui = @import("render_ui");
 const abi_result = @import("result");
@@ -20,11 +19,12 @@ pub const Error = abi_result.Error;
 const checkResult = abi_result.checkResult;
 const resultOf = abi_result.resultOf;
 
-/// Makes the label resolve. Attached, its system "render.label.resolve" gives each label of the
-/// main world, in the update set, the font it names.
-pub fn renderLabelResolveCreate(context: ?*const abi_render_context.c.ke_render_context, ui: ?*abi_render_ui.c.ke_render_ui, resolver: ?*abi_asset_resolver.c.ke_asset_resolver, settings: ?*abi_settings.c.ke_settings) Error!abi_module.c.ke_module_handle {
-    var written: abi_module.c.ke_module_handle = undefined;
-    try checkResult(c.ke_render_label_resolve_create(context, ui, resolver, settings, &written));
+/// Makes the label resolve, whose system "render.label.resolve", in update_set of update, gives
+/// each label of the main world the font it names. Every argument but out_resolve must outlive
+/// it.
+pub fn renderLabelResolveCreate(service: ?*abi_render.c.ke_render_service, scene: ?*abi_render.c.ke_render_scene_resolve, ui: ?*abi_render_ui.c.ke_render_ui, resolver: ?*abi_asset_resolver.c.ke_asset_resolver, update: ?*abi_schedule.c.ke_schedule, update_set: c.ke_schedule_set_id, settings: ?*abi_settings.c.ke_settings) Error!abi_part.c.ke_owner {
+    var written: abi_part.c.ke_owner = undefined;
+    try checkResult(c.ke_render_label_resolve_create(service, scene, ui, resolver, update, update_set, settings, &written));
     return written;
 }
 
@@ -42,11 +42,22 @@ pub fn renderSceneResolveCreate(main: ?*abi_ecs.c.ke_ecs, render: ?*abi_ecs.c.ke
     return written;
 }
 
-/// Creates the module of scene: attaching it registers, in the main world's update set,
-/// "render.sprite2d.resolve" and "render.mesh.resolve", the second after the first, which give a
-/// sprite and a mesh the GPU resources they name.
-pub fn renderSceneResolveSystemsCreate(scene: ?*abi_render.c.ke_render_scene_resolve) Error!abi_module.c.ke_module_handle {
-    var written: abi_module.c.ke_module_handle = undefined;
-    try checkResult(c.ke_render_scene_resolve_systems_create(scene, &written));
+/// Registers the systems of scene, which give a sprite and a mesh the GPU resources they name:
+/// "render.sprite2d.resolve" in update_set of update and "render.mesh.resolve" in
+/// post_update_set of post_update, after it. Every argument but out_systems must outlive the
+/// systems.
+pub fn renderSceneResolveSystemsCreate(scene: ?*abi_render.c.ke_render_scene_resolve, update: ?*abi_schedule.c.ke_schedule, update_set: c.ke_schedule_set_id, post_update: ?*abi_schedule.c.ke_schedule, post_update_set: c.ke_schedule_set_id) Error!abi_part.c.ke_owner {
+    var written: abi_part.c.ke_owner = undefined;
+    try checkResult(c.ke_render_scene_resolve_systems_create(scene, update, update_set, post_update, post_update_set, &written));
     return written;
+}
+
+/// Gives the parts ke_render_scene contains, each named after its factory and with its slots
+/// named after the factory's parameters: `render_scene_resolve` (ke_render_scene_resolve;
+/// `main`, `render`, `extraction`, `service` and `resolver`, optional);
+/// `render_scene_resolve_systems` (nothing; `scene`, `update` and `post_update`);
+/// `render_label_resolve` (nothing; `service`, `scene`, `ui`, `resolver`, optional, and
+/// `update`).
+pub fn renderSceneParts(out_count: ?*usize) ?*const abi_part.c.ke_part {
+    return c.ke_render_scene_parts(out_count);
 }

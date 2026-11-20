@@ -2,6 +2,7 @@
 
 const abi_input = @import("input");
 const abi_logger = @import("logger");
+const abi_part = @import("part");
 const abi_result = @import("result");
 
 /// The ABI as the headers declare it.
@@ -22,4 +23,9 @@ pub fn inputCreate() Error!abi_input.c.ke_input_handle {
 /// to stderr, where they go until this is called. Called once, before the library logs.
 pub fn inputDefaultSetLogCallback(callback: c.ke_log_callback, ctx: ?*anyopaque) void {
     return c.ke_input_default_set_log_callback(callback, ctx);
+}
+
+/// Gives the parts ke_input_default contains: `input_default`, providing ke_input.
+pub fn inputDefaultParts(out_count: ?*usize) ?*const abi_part.c.ke_part {
+    return c.ke_input_default_parts(out_count);
 }

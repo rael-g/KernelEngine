@@ -4,6 +4,8 @@
 const abi_asset_resolver = @import("abi_asset_resolver");
 const abi_render_gpu = @import("abi_render_gpu");
 const std = @import("std");
+const abi_part = @import("abi_part");
+const part = @import("part");
 
 pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @import("log").Destination("ke_gpu_device_webgpu").logFn };
 
@@ -1775,6 +1777,26 @@ fn queryExtension(_: [*c]abi_render_gpu.c.ke_gpu_device, _: [*c]const u8) callco
 var test_device_settings = settings_schema.Fixed.init(&.{.{ .key = "enable_validation", .value = .{ .boolean = true } }});
 var test_ready: ?*abi_completion.c.ke_completion = null;
 
+/// The device as its part creates it: ke_gpu_device_webgpu_create, whose device is ready once made, so the ready
+/// completion is released at once.
+fn createDevice(async_in: ?*abi_async.c.ke_async, settings: ?*abi_settings.c.ke_settings, out_device: ?*abi_render_gpu.c.ke_gpu_device_handle) callconv(.c) abi_result.c.ke_result {
+    var ready: ?*abi_completion.c.ke_completion = null;
+    const made = ke_gpu_device_webgpu_create(async_in, settings, &ready, out_device);
+    if (ready) |c| c.release.?(c);
+    return made;
+}
+
+pub const parts = [_]abi_part.c.ke_part{
+    part.of(createDevice, .{ .name = "gpu_device_webgpu", .slots = &.{"async"}, .optional = &.{"async"}, .set_log = @ptrCast(&@import("log").Destination("ke_gpu_device_webgpu").setLogCallback) }),
+    part.of(@import("window_target.zig").ke_gpu_render_target_webgpu_window_create, .{ .name = "gpu_render_target_webgpu_window", .slots = &.{"device", "window"}, .set_log = @ptrCast(&@import("log").Destination("ke_gpu_device_webgpu").setLogCallback) }),
+};
+
+/// The library's parts.
+export fn ke_gpu_device_webgpu_parts(out_count: ?*usize) callconv(.c) ?*const abi_part.c.ke_part {
+    if (out_count) |n| n.* = parts.len;
+    return &parts[0];
+}
+
 test "the device is ready as soon as the factory returns" {
     var handle: abi_render_gpu.c.ke_gpu_device_handle = undefined;
     var ready: ?*abi_completion.c.ke_completion = null;
@@ -1871,4 +1893,14 @@ test "a texture's pixels are read back through a copy to a buffer and an asynchr
     const mapped: [*]const u8 = @ptrCast(dev.?.map_buffer.?(dev, buf, 0, row_bytes * height).?);
     try std.testing.expectEqualSlices(u8, &pixels, mapped[0..pixels.len]);
     dev.?.unmap_buffer.?(dev, buf);
+}
+
+test "the library's parts name gpu_device_webgpu, gpu_render_target_webgpu_window and their slots" {
+    var count: usize = 0;
+    const all = ke_gpu_device_webgpu_parts(&count).?;
+    try std.testing.expectEqual(@as(usize, 2), count);
+    try std.testing.expectEqualStrings("gpu_device_webgpu", std.mem.span(@as([*]const abi_part.c.ke_part, @ptrCast(all))[0].name.?));
+    try std.testing.expectEqual(@as(usize, 1), @as([*]const abi_part.c.ke_part, @ptrCast(all))[0].slot_count);
+    try std.testing.expectEqualStrings("gpu_render_target_webgpu_window", std.mem.span(@as([*]const abi_part.c.ke_part, @ptrCast(all))[1].name.?));
+    try std.testing.expectEqual(@as(usize, 2), @as([*]const abi_part.c.ke_part, @ptrCast(all))[1].slot_count);
 }

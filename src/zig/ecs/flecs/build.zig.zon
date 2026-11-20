@@ -9,6 +9,8 @@
         .abi_ecs = .{ .path = "../../abi/ecs" },
         .abi_math = .{ .path = "../../abi/math" },
         .abi_result = .{ .path = "../../abi/result" },
+        .abi_part = .{ .path = "../../abi/part" },
+        .ke_part = .{ .path = "../../abi/../part" },
         .abi_settings = .{ .path = "../../abi/settings" },
         .ke_settings_schema = .{ .path = "../../settings/schema" },
         .abi_ecs_flecs_factory = .{ .path = "abi" },

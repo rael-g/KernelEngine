@@ -4,11 +4,12 @@
     .fingerprint = 0xa9c50ad9ce72f740,
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
+        .abi_part = .{ .path = "../../abi/part" },
+        .ke_part = .{ .path = "../../part" },
         .abi_completion = .{ .path = "../../abi/completion" },
         .abi_ecs = .{ .path = "../../abi/ecs" },
         .abi_ecs_variant = .{ .path = "../../abi/ecs_variant" },
         .abi_extraction = .{ .path = "../../abi/extraction" },
-        .abi_module = .{ .path = "../../abi/module" },
         .abi_result = .{ .path = "../../abi/result" },
         .abi_schedule = .{ .path = "../../abi/schedule" },
         .abi_scheduler = .{ .path = "../../abi/scheduler" },

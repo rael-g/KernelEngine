@@ -55,9 +55,9 @@ pub const ke_extraction = extern struct {
     /// render world's frame_local entities, pairs the newly synced entities and drops the pairs of
     /// the others, then runs the copies, the interpolations at alpha and the custom extractions.
     extract: ?*const fn (?*ke_extraction, f32) callconv(.c) abi_result.c.ke_result = null,
-    /// One run of the render stage, with the ABI of a scheduler's executable whose user is the
-    /// extraction: extracts at the scheduler's fixed alpha, then starts a run of the render
-    /// schedule.
+    /// One extraction, with the ABI of a scheduler's executable whose user is the extraction:
+    /// extracts at the scheduler's fixed alpha. What runs over the render world is added to the
+    /// scheduler after it.
     run: ?*const fn (?*ke_extraction, f32, ?*?*abi_completion.c.ke_completion) callconv(.c) abi_result.c.ke_result = null,
 };
 

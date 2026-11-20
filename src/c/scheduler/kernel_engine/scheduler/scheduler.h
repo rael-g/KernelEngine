@@ -32,6 +32,15 @@ typedef enum ke_scheduler_cadence {
 /// @return KE_OK, or the code the run could not start with.
 typedef ke_result (*ke_scheduler_run_fn)(void *user, float dt, ke_completion **out_completion);
 
+/// [bag] An executable as add takes it: a schedule, the extraction into a render world, a test. A part providing it
+/// is bound to one of the scheduler's cadences.
+typedef struct ke_scheduler_executable {
+    /// Starts one run of the executable.
+    ke_scheduler_run_fn run;
+    /// [context] Forwarded to @p run, and the name completed_since knows the executable by.
+    void *user;
+} ke_scheduler_executable;
+
 /// [interface] The frame loop: runs the executables it was given, each when its cadence says, tick
 /// by tick, waiting on each run before the next starts. It knows no schedule, render, event or
 /// component.

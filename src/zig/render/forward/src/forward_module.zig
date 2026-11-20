@@ -13,9 +13,9 @@ pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @imp
 
 const zm = @import("zmath");
 const abi_ecs = @import("abi_ecs");
-const abi_module = @import("abi_module");
+const abi_part = @import("abi_part");
+const part = @import("part");
 const abi_render = @import("abi_render");
-const abi_render_context = @import("abi_render_context");
 const abi_render_forward_factory = @import("abi_render_forward_factory");
 const abi_render_frame = @import("abi_render_frame");
 const abi_render_graph = @import("abi_render_graph");
@@ -24,7 +24,7 @@ const abi_settings = @import("abi_settings");
 const settings_schema = @import("settings_schema");
 const abi_schedule = @import("abi_schedule");
 const abi_spatial = @import("abi_spatial");
-const pass_systems = @import("pass_systems");
+const hooked_systems = @import("hooked_systems");
 const R = @import("result").Result(.{});
 
 const heap = @import("heap");
@@ -94,12 +94,12 @@ const Prepared = struct {
     slot: u32,
 };
 
-/// The state of one pass. `ke_render_forward_create` allocates it and `destroyHandle` frees it after
+/// The state of one pass. `ke_render_forward_create` allocates it and `destroyOwner` frees it after
 /// detaching `systems`. `color`, `copy`, `features`, `env_cubemap` and `prepared` are what
 /// `queueSystem` declared this frame, read by the two records; `frame_set` is replaced every frame,
 /// since the views it binds are the graph's for that frame.
 const ForwardModule = struct {
-    systems: pass_systems.Systems(1) = undefined,
+    systems: hooked_systems.Systems(1) = .{},
     core: *abi_render.c.ke_render_service = undefined,
     device: *abi_render_gpu.c.ke_gpu_device = undefined,
     frame: *abi_render_frame.c.ke_render_frame = undefined,
@@ -313,13 +313,13 @@ const Settings = struct {
     ibl_enabled: bool = true,
 };
 
-fn setup(fwd: *ForwardModule, p: *const abi_render_context.c.ke_render_context, config: *const Settings) R.Error!void {
-    const core: *abi_render.c.ke_render_service = p.service.?;
-    const dev: *abi_render_gpu.c.ke_gpu_device = p.device.?;
-    const ids = p.scene.?.render_component_ids.?(p.scene).?;
+fn setup(fwd: *ForwardModule, service: *abi_render.c.ke_render_service, device: *abi_render_gpu.c.ke_gpu_device, frame: *abi_render_frame.c.ke_render_frame, scene: *abi_render.c.ke_render_scene_resolve, config: *const Settings) R.Error!void {
+    const core: *abi_render.c.ke_render_service = service;
+    const dev: *abi_render_gpu.c.ke_gpu_device = device;
+    const ids = scene.render_component_ids.?(scene).?;
     fwd.core = core;
     fwd.device = dev;
-    fwd.frame = p.frame.?;
+    fwd.frame = frame;
     fwd.ibl_enabled = config.ibl_enabled;
 
     try R.check(fwd.groups.init(core.*.resource_binder.?(core).?, DEFAULT_MATERIAL_SHADER ++ "." ++ PASS_NAME));
@@ -391,12 +391,11 @@ fn destroyModule(fwd: *ForwardModule) void {
     fwd.groups.release();
 }
 
-/// The `destroy` slot of the handle that `ke_render_forward_create` returns: detaches the module and
-/// frees it with its GPU objects.
-fn destroyHandle(self: ?*abi_module.c.ke_module) callconv(.c) void {
-    const systems: *pass_systems.Systems(1) = @ptrCast(@alignCast((self orelse return).handle));
-    const fwd: *ForwardModule = @fieldParentPtr("systems", systems);
-    pass_systems.Systems(1).detach(self);
+/// The `destroy` of the owner `ke_render_forward_create` hands out: unregisters the systems, releases the GPU
+/// objects and frees the pass; a null argument is ignored.
+fn destroyOwner(ref: ?*anyopaque) callconv(.c) void {
+    const fwd: *ForwardModule = @ptrCast(@alignCast(ref orelse return));
+    fwd.systems.unregister();
     destroyModule(fwd);
     gpa.destroy(fwd);
 }
@@ -404,28 +403,54 @@ fn destroyHandle(self: ?*abi_module.c.ke_module) callconv(.c) void {
 /// Factory declared in the plugin's forward_create.h. A missing settings, scene, frame, service or
 /// device fails as an invalid argument; a failure in `setup` fails with its code, the module and its
 /// GPU objects released.
-export fn ke_render_forward_create(context_in: ?*const abi_render_context.c.ke_render_context, settings: ?*abi_settings.c.ke_settings, out_module: ?*abi_module.c.ke_module_handle) callconv(.c) abi_result.c.ke_result {
-    const out = out_module orelse return R.code(error.InvalidArgument);
-    out.* = std.mem.zeroes(abi_module.c.ke_module_handle);
-    const p = context_in orelse return R.code(error.InvalidArgument);
+export fn ke_render_forward_create(
+    service_in: ?*abi_render.c.ke_render_service,
+    device_in: ?*abi_render_gpu.c.ke_gpu_device,
+    frame_in: ?*abi_render_frame.c.ke_render_frame,
+    scene_in: ?*abi_render.c.ke_render_scene_resolve,
+    render_queue: ?*abi_schedule.c.ke_schedule,
+    render_queue_set: abi_schedule.c.ke_schedule_set_id,
+    settings: ?*abi_settings.c.ke_settings,
+    out_pass: ?*abi_part.c.ke_owner,
+) callconv(.c) abi_result.c.ke_result {
+    const out = out_pass orelse return R.code(error.InvalidArgument);
+    out.* = .{ .ref = null, .destroy = null };
     const values = settings_schema.read(Settings, settings orelse {
         log.warn("transparent-forward: no settings", .{});
         return R.code(error.InvalidArgument);
     }) catch |err| return R.code(err);
     const config = &values;
-    if (p.scene == null or p.frame == null or p.service == null or p.device == null)
-        return R.code(error.InvalidArgument);
+    const service = service_in orelse return R.code(error.InvalidArgument);
+    const device = device_in orelse return R.code(error.InvalidArgument);
+    const frame = frame_in orelse return R.code(error.InvalidArgument);
+    const scene = scene_in orelse return R.code(error.InvalidArgument);
+    if (render_queue == null) return R.code(error.InvalidArgument);
 
     const fwd = gpa.create(ForwardModule) catch |err| return R.code(err);
     fwd.* = .{};
-    setup(fwd, p, config) catch |err| {
+    setup(fwd, service, device, frame, scene, config) catch |err| {
         destroyModule(fwd);
         gpa.destroy(fwd);
         return R.code(err);
     };
-    fwd.systems.init(.{.{ .name = "render.forward_transparent", .execute = queueSystem, .user = fwd, .set = .queue, .queries = &fwd.queries, .access = &fwd.access }});
-    out.* = .{ .ref = &fwd.systems.module, .destroy = destroyHandle };
+    const registered = fwd.systems.register(.{.{ .name = "render.forward_transparent", .execute = queueSystem, .user = fwd, .hook = 0, .queries = &fwd.queries, .access = &fwd.access }}, &.{ .{ .schedule = render_queue, .set = render_queue_set } });
+    if (registered != R.ok) {
+        destroyModule(fwd);
+        gpa.destroy(fwd);
+        return registered;
+    }
+    out.* = .{ .ref = fwd, .destroy = destroyOwner };
     return R.ok;
+}
+
+pub const parts = [_]abi_part.c.ke_part{
+    part.of(ke_render_forward_create, .{ .name = "render_forward", .slots = &.{"service", "device", "frame", "scene"}, .hooks = &.{"render_queue"}, .set_log = @ptrCast(&@import("log").Destination("ke_render_forward").setLogCallback) }),
+};
+
+/// The library's parts.
+export fn ke_render_forward_parts(out_count: ?*usize) callconv(.c) ?*const abi_part.c.ke_part {
+    if (out_count) |n| n.* = parts.len;
+    return &parts[0];
 }
 
 const testing = std.testing;
@@ -744,14 +769,8 @@ const Rig = struct {
         self.dev.deinit();
     }
 
-    fn context(self: *Rig) abi_render_context.c.ke_render_context {
-        return std.mem.zeroInit(abi_render_context.c.ke_render_context, .{ .scene = &test_scene, .frame = self.frame.api(), .service = self.core.api(), .device = self.dev.api() });
-    }
-
-    fn targets(self: *Rig) abi_module.c.ke_module_targets {
-        var t = std.mem.zeroes(abi_module.c.ke_module_targets);
-        t.render = @ptrCast(self.schedule.api());
-        return t;
+    fn create(self: *Rig, settings: ?*abi_settings.c.ke_settings, out: *abi_part.c.ke_owner) abi_result.c.ke_result {
+        return ke_render_forward_create(self.core.api(), self.dev.api(), self.frame.api(), &test_scene, self.schedule.api(), 4, settings, out);
     }
 
     fn expectReleased(self: *Rig) !void {
@@ -763,20 +782,16 @@ const Rig = struct {
 
 var test_settings = settings_schema.Fixed.init(&.{});
 
-fn passOf(h: abi_module.c.ke_module_handle) *ForwardModule {
-    const systems: *pass_systems.Systems(1) = @ptrCast(@alignCast(h.ref.?.handle));
-    return @fieldParentPtr("systems", systems);
+fn passOf(h: abi_part.c.ke_owner) *ForwardModule {
+    return @ptrCast(@alignCast(h.ref.?));
 }
 
-test "the forward module attaches its system to the render schedule, and destroying it detaches it and releases the GPU objects" {
+test "the forward pass registers its system in its hook, and destroying it unregisters it and releases the GPU objects" {
     var rig: Rig = undefined;
     try rig.init();
     defer rig.deinit();
-    const p = rig.context();
-    var h: abi_module.c.ke_module_handle = undefined;
-    try R.check(ke_render_forward_create(&p, &test_settings.api, &h));
-    const t = rig.targets();
-    try R.check(h.ref.?.attach.?(h.ref, &t));
+    var h: abi_part.c.ke_owner = undefined;
+    try R.check(rig.create(&test_settings.api, &h));
     try rig.schedule.received(.register_system).times(1);
     h.destroy.?(h.ref);
     try rig.schedule.received(.unregister_system).times(1);
@@ -787,9 +802,8 @@ test "a blended mesh in view gets a copy of the frame's color and a transparent 
     var rig: Rig = undefined;
     try rig.init();
     defer rig.deinit();
-    const p = rig.context();
-    var h: abi_module.c.ke_module_handle = undefined;
-    try R.check(ke_render_forward_create(&p, &test_settings.api, &h));
+    var h: abi_part.c.ke_owner = undefined;
+    try R.check(rig.create(&test_settings.api, &h));
     defer h.destroy.?(h.ref);
     try testing.expectEqual(R.ok, queueSystem(&scene_ctx, passOf(h), 0));
     try rig.graph.received(.create_texture).times(1);
@@ -801,9 +815,8 @@ test "a frame not being declared gets no transparent pass" {
     try rig.init();
     defer rig.deinit();
     _ = rig.frame.when(.live).returns(false);
-    const p = rig.context();
-    var h: abi_module.c.ke_module_handle = undefined;
-    try R.check(ke_render_forward_create(&p, &test_settings.api, &h));
+    var h: abi_part.c.ke_owner = undefined;
+    try R.check(rig.create(&test_settings.api, &h));
     defer h.destroy.?(h.ref);
     try testing.expectEqual(R.ok, queueSystem(&scene_ctx, passOf(h), 0));
     try rig.graph.received(.add_pass).never();
@@ -814,9 +827,8 @@ test "a forward pass whose shader fails to load releases what it had created" {
     try rig.init();
     defer rig.deinit();
     _ = rig.core.when(.load_shader).returns(abi_result.c.KE_RESULT_GENERAL);
-    const p = rig.context();
-    var h: abi_module.c.ke_module_handle = undefined;
-    try testing.expect(ke_render_forward_create(&p, &test_settings.api, &h) != R.ok);
+    var h: abi_part.c.ke_owner = undefined;
+    try testing.expect(rig.create(&test_settings.api, &h) != R.ok);
     try testing.expect(h.ref == null);
     try rig.expectReleased();
 }
@@ -825,12 +837,18 @@ test "a forward pass missing its scene is refused" {
     var rig: Rig = undefined;
     try rig.init();
     defer rig.deinit();
-    var p = rig.context();
-    p.scene = null;
-    var h: abi_module.c.ke_module_handle = undefined;
-    try testing.expectError(error.InvalidArgument, R.check(ke_render_forward_create(&p, &test_settings.api, &h)));
+    var h: abi_part.c.ke_owner = undefined;
+    try testing.expectError(error.InvalidArgument, R.check(ke_render_forward_create(rig.core.api(), rig.dev.api(), rig.frame.api(), null, rig.schedule.api(), 4, &test_settings.api, &h)));
 }
 
 test "creating and destroying forward passes leaves no block allocated" {
     try heap.expectNoLeaks();
+}
+
+test "the library's parts name render_forward and their slots" {
+    var count: usize = 0;
+    const all = ke_render_forward_parts(&count).?;
+    try std.testing.expectEqual(@as(usize, 1), count);
+    try std.testing.expectEqualStrings("render_forward", std.mem.span(@as([*]const abi_part.c.ke_part, @ptrCast(all))[0].name.?));
+    try std.testing.expectEqual(@as(usize, 5), @as([*]const abi_part.c.ke_part, @ptrCast(all))[0].slot_count);
 }

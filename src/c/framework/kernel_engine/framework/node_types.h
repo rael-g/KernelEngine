@@ -24,9 +24,9 @@ extern "C"
     /// [borrowed] A component every node of a type carries beside its fields, and how it is born.
     typedef struct ke_node_with
     {
-        const char *name;         ///< [utf8] The registered component's name.
-        const void *initial;      ///< [array_of:initial_size] The bytes each node starts with; none starts it zeroed.
-        size_t      initial_size; ///< The component's registered size, or 0 to start it zeroed.
+        const ke_component_desc *component;    ///< [borrowed] How the component is registered: its name, size, alignment and field table.
+        const void              *initial;      ///< [array_of:initial_size] The bytes each node starts with; none starts it zeroed.
+        size_t                   initial_size; ///< The component's size, or 0 to start it zeroed.
     } ke_node_with;
 
     typedef struct ke_node_ctx ke_node_ctx;
@@ -204,8 +204,8 @@ extern "C"
         /// `fields_size`, or 0 to start them zeroed.
         size_t initial_size;
 
-        /// [array_of:with_count, default:empty] Registered components every node of the type
-        /// carries beside its fields, each with the value it is born with.
+        /// [array_of:with_count, default:empty] Components every node of the type carries beside
+        /// its fields, each with the value it is born with; registering the type registers each.
         const ke_node_with *with;
         uint32_t            with_count;
 
@@ -243,12 +243,13 @@ extern "C"
     {
         void *handle;
 
-        /// Registers a node type and the systems of its behaviours.
+        /// Registers a node type and the systems of its behaviours, and each component of `with` as the ecs's
+        /// component_register does: one already registered with the same name and layout keeps its id.
         /// @param desc [borrowed] Read during the call; `initial` and the field table are copied.
         /// @param out_type [out] Receives the id of the type's tag.
         /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null or nameless desc, a table or initial bytes
-        ///         without `fields_size`, `initial` without fields, an initial whose size is not its component's, or
-        ///         events without `on`; KE_RESULT_NOT_FOUND for a `with` name or an event never
+        ///         without `fields_size`, `initial` without fields, a `with` without its component, an initial whose
+        ///         size is not its component's, or events without `on`; KE_RESULT_NOT_FOUND for an event never
         ///         registered; the ecs's or the runtime's code when it refuses.
         ke_result (*register_type)(struct ke_node_types *self, const ke_node_type_desc *desc, ke_component_id *out_type);
 

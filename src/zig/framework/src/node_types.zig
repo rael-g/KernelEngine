@@ -8,9 +8,10 @@ const abi_ecs = @import("abi_ecs");
 const abi_framework = @import("abi_framework");
 const abi_framework_components = @import("abi_framework_components");
 const abi_input_actions = @import("abi_input_actions");
-const abi_module = @import("abi_module");
+const abi_part = @import("abi_part");
 const abi_ecs_variant = @import("abi_ecs_variant");
 const abi_result = @import("abi_result");
+const part = @import("part");
 const abi_schedule = @import("abi_schedule");
 const abi_scheduler = @import("abi_scheduler");
 const abi_scene_tree = @import("abi_scene_tree");
@@ -81,17 +82,17 @@ const Event = struct {
 
 /// Created by `ke_node_types_create` and freed by `vtDestroy`, which detaches first. It owns the
 /// types and events, whose addresses the schedules hold as user data. While `attached`, a ready,
-/// exit and event-clearing system runs in `first`, a fixed update in `fixed`, and an update, event
-/// and reaping system in `main`, each in the set the module's targets named; `loop` takes the
-/// requests to exit. `module` is the module the second factory hands out over this state.
+/// exit and event-clearing system runs in `first`, a fixed update in `fixed`, an update in `main`,
+/// and an event and reaping system in `post`, each in the set of its hook; `loop` takes the
+/// requests to exit. The systems module the second factory creates is this state's.
 const State = struct {
     api: abi_framework.c.ke_node_types,
-    module: abi_module.c.ke_module = undefined,
     loop: *abi_scheduler.c.ke_scheduler,
     attached: bool = false,
     first: *abi_schedule.c.ke_schedule = undefined,
     fixed: *abi_schedule.c.ke_schedule = undefined,
     main: *abi_schedule.c.ke_schedule = undefined,
+    post: *abi_schedule.c.ke_schedule = undefined,
     pre_update: [1]abi_schedule.c.ke_schedule_set_id = .{0},
     update: [1]abi_schedule.c.ke_schedule_set_id = .{0},
     fixed_update: [1]abi_schedule.c.ke_schedule_set_id = .{0},
@@ -575,7 +576,7 @@ fn clearEvents(sys: ?*abi_schedule.c.ke_schedule_ctx, user: ?*anyopaque, _: f32)
 /// later, each schedule being the user its executable was added to the scheduler with.
 fn seenByEveryReader(s: *State, cid: Cid, stamp: u64) bool {
     if (!s.attached) return true;
-    for ([_]*abi_schedule.c.ke_schedule{ s.first, s.fixed, s.main }) |schedule| {
+    for ([_]*abi_schedule.c.ke_schedule{ s.first, s.fixed, s.main, s.post }) |schedule| {
         if (!schedule.reads.?(schedule, cid)) continue;
         if (!s.loop.completed_since.?(s.loop, schedule, stamp)) return false;
     }
@@ -586,7 +587,8 @@ fn scheduleOf(s: *State, kind: Kind) *abi_schedule.c.ke_schedule {
     return switch (kind) {
         .ready, .exit => s.first,
         .fixed_update => s.fixed,
-        .update, .on => s.main,
+        .update => s.main,
+        .on => s.post,
     };
 }
 
@@ -713,15 +715,16 @@ fn registerType(s: *State, desc: *const abi_framework.c.ke_node_type_desc) R.Err
     for (t.prototypes) |*p| p.* = &.{};
 
     for (0..desc.with_count) |i| {
-        const with_name = desc.with.?[i].name orelse return error.InvalidArgument;
-        var meta = std.mem.zeroes(abi_ecs.c.ke_component_meta);
-        if (!s.ecs.component_lookup.?(s.ecs, with_name, &meta)) {
-            log.warn("node types: type {s} carries {s}, which is not registered", .{ name, with_name });
-            return error.NotFound;
-        }
-        t.columns[own + i] = meta.cid;
-        t.sizes[own + i] = meta.size;
-        t.prototypes[own + i] = try prototypeOf(meta.size, desc.with.?[i].initial, desc.with.?[i].initial_size, name);
+        const carried = desc.with.?[i].component orelse {
+            log.warn("node types: type {s} carries a component it does not describe", .{name});
+            return error.InvalidArgument;
+        };
+        R.check(s.ecs.component_register.?(s.ecs, carried, &t.columns[own + i])) catch |err| {
+            log.warn("node types: type {s} carries {s}, which the ecs refused", .{ name, std.mem.span(carried.*.name.?) });
+            return err;
+        };
+        t.sizes[own + i] = carried.*.size;
+        t.prototypes[own + i] = try prototypeOf(carried.*.size, desc.with.?[i].initial, desc.with.?[i].initial_size, name);
     }
     const tag_name = std.fmt.allocPrintSentinel(heap.gpa, "node.{s}", .{name}, 0) catch return error.OutOfMemory;
     defer heap.gpa.free(tag_name);
@@ -877,19 +880,33 @@ fn detachFrom(s: *State) void {
         _ = s.first.unregister_system.?(s.first, e.system);
         e.registered = false;
     };
-    _ = s.main.unregister_system.?(s.main, s.reap);
+    _ = s.post.unregister_system.?(s.post, s.reap);
     s.attached = false;
 }
 
-fn attachTo(s: *State, targets: *const abi_module.c.ke_module_targets) R.Error!void {
+const Hooks = struct {
+    first: *abi_schedule.c.ke_schedule,
+    first_set: abi_schedule.c.ke_schedule_set_id,
+    fixed: *abi_schedule.c.ke_schedule,
+    fixed_set: abi_schedule.c.ke_schedule_set_id,
+    main: *abi_schedule.c.ke_schedule,
+    main_set: abi_schedule.c.ke_schedule_set_id,
+    post: *abi_schedule.c.ke_schedule,
+    post_set: abi_schedule.c.ke_schedule_set_id,
+};
+
+/// Registers the reaping system, then the systems of every event and type registered so far; a
+/// failure leaves none registered.
+fn attachTo(s: *State, hooks: Hooks) R.Error!void {
     if (s.attached) return error.NotSupported;
-    s.first = @ptrCast(targets.pre_update orelse return error.InvalidArgument);
-    s.fixed = @ptrCast(targets.fixed orelse return error.InvalidArgument);
-    s.main = @ptrCast(targets.update orelse return error.InvalidArgument);
-    s.pre_update = .{targets.pre_update_set};
-    s.fixed_update = .{targets.fixed_update_set};
-    s.update = .{targets.update_set};
-    s.post_update = .{targets.post_update_set};
+    s.first = hooks.first;
+    s.fixed = hooks.fixed;
+    s.main = hooks.main;
+    s.post = hooks.post;
+    s.pre_update = .{hooks.first_set};
+    s.fixed_update = .{hooks.fixed_set};
+    s.update = .{hooks.main_set};
+    s.post_update = .{hooks.post_set};
     var reap = std.mem.zeroes(abi_schedule.c.ke_schedule_system_desc);
     reap.name = "nodes.reap";
     reap.sets = &s.post_update;
@@ -899,57 +916,62 @@ fn attachTo(s: *State, targets: *const abi_module.c.ke_module_targets) R.Error!v
     reap.queries = &s.reap_queries;
     reap.query_count = 1;
     reap.exclusive = true;
-    try R.check(s.main.register_system.?(s.main, &reap, &s.reap));
+    try R.check(s.post.register_system.?(s.post, &reap, &s.reap));
     s.attached = true;
     errdefer detachFrom(s);
     for (s.events.items) |e| try registerClear(s, e);
     for (s.types.items) |t| for (t.behaviours.items) |b| try registerBehaviour(s, b);
 }
 
-/// Slot `attach` of the module: registers the reaping system, then the systems of every event and
-/// type registered so far; a failure leaves none registered.
-fn moduleAttach(self: ?*abi_module.c.ke_module, targets_in: ?*const abi_module.c.ke_module_targets) callconv(.c) abi_result.c.ke_result {
-    const s: *State = @ptrCast(@alignCast((self orelse return R.code(error.InvalidArgument)).handle));
-    const targets = targets_in orelse return R.code(error.InvalidArgument);
-    attachTo(s, targets) catch |err| {
-        log.warn("attaching the node types failed: {t}", .{err});
-        return R.code(err);
-    };
-    return R.ok;
+/// The owner's destroy: unregisters every system the node types registered; the types, the events
+/// and the state stay with the node types.
+fn moduleDestroy(ref: ?*anyopaque) callconv(.c) void {
+    detachFrom(@ptrCast(@alignCast(ref orelse return)));
 }
 
-/// Slot `detach` of the module: unregisters every system the node types registered; the types and
-/// events stay.
-fn moduleDetach(self: ?*abi_module.c.ke_module) callconv(.c) void {
-    detachFrom(@ptrCast(@alignCast((self orelse return).handle)));
-}
-
-/// The module handle's `destroy`: detaches; the state stays with the node types.
-fn moduleDestroy(self: ?*abi_module.c.ke_module) callconv(.c) void {
-    moduleDetach(self);
-}
-
-/// Factory of the module that attaches the systems of the node types, which this library created.
-/// The module lives in the node types' state and must be destroyed before them.
-export fn ke_node_types_systems_create(types_in: ?*abi_framework.c.ke_node_types, out_module: ?*abi_module.c.ke_module_handle) callconv(.c) abi_result.c.ke_result {
+/// Factory of the module that registers the systems of node types this library created, in the set
+/// of each hook. The module lives in the node types' state and must be destroyed before them; a
+/// second one over the same node types while the first lives is not supported.
+export fn ke_node_types_systems_create(
+    types_in: ?*abi_framework.c.ke_node_types,
+    pre_update: ?*abi_schedule.c.ke_schedule,
+    pre_update_set: abi_schedule.c.ke_schedule_set_id,
+    fixed_update: ?*abi_schedule.c.ke_schedule,
+    fixed_update_set: abi_schedule.c.ke_schedule_set_id,
+    update: ?*abi_schedule.c.ke_schedule,
+    update_set: abi_schedule.c.ke_schedule_set_id,
+    post_update: ?*abi_schedule.c.ke_schedule,
+    post_update_set: abi_schedule.c.ke_schedule_set_id,
+    out_module: ?*abi_part.c.ke_owner,
+) callconv(.c) abi_result.c.ke_result {
     const out = out_module orelse return R.code(error.InvalidArgument);
-    out.* = std.mem.zeroes(abi_module.c.ke_module_handle);
+    out.* = std.mem.zeroes(abi_part.c.ke_owner);
     const types = types_in orelse return R.code(error.InvalidArgument);
     if (types.register_type != &vtRegisterType) {
         log.warn("node types module: the node types were not created by this library", .{});
         return R.code(error.InvalidArgument);
     }
     const s = stateOf(types) orelse return R.code(error.InvalidArgument);
-    out.* = .{ .ref = &s.module, .destroy = moduleDestroy };
+    attachTo(s, .{
+        .first = pre_update orelse return R.code(error.InvalidArgument),
+        .first_set = pre_update_set,
+        .fixed = fixed_update orelse return R.code(error.InvalidArgument),
+        .fixed_set = fixed_update_set,
+        .main = update orelse return R.code(error.InvalidArgument),
+        .main_set = update_set,
+        .post = post_update orelse return R.code(error.InvalidArgument),
+        .post_set = post_update_set,
+    }) catch |err| {
+        log.warn("creating the node types systems failed: {t}", .{err});
+        return R.code(err);
+    };
+    out.* = .{ .ref = s, .destroy = moduleDestroy };
     return R.ok;
 }
 
 fn create(loop: *abi_scheduler.c.ke_scheduler, ecs: *abi_ecs.c.ke_ecs, tree: *abi_scene_tree.c.ke_scene_tree, actions: ?*abi_input_actions.c.ke_input_actions) R.Error!abi_framework.c.ke_node_types_handle {
-    var name_meta = std.mem.zeroes(abi_ecs.c.ke_component_meta);
-    if (!ecs.component_lookup.?(ecs, abi_framework_components.c.KE_COMPONENT_NAME_NAME, &name_meta)) {
-        log.warn("node types: the scene tree components are not registered on this ecs", .{});
-        return error.NotFound;
-    }
+    var name_component: Cid = 0;
+    try R.check(ecs.component_register.?(ecs, &abi_framework_components.c.ke_name_component_desc, &name_component));
     var status_cid: Cid = 0;
     var status_meta = std.mem.zeroes(abi_ecs.c.ke_component_meta);
     if (ecs.component_lookup.?(ecs, status_name, &status_meta)) {
@@ -976,10 +998,9 @@ fn create(loop: *abi_scheduler.c.ke_scheduler, ecs: *abi_ecs.c.ke_ecs, tree: *ab
         .actions = actions,
         .status_cid = status_cid,
         .stamp_cid = stamp_cid,
-        .name_cid = name_meta.cid,
+        .name_cid = name_component,
     };
     s.api.handle = s;
-    s.module = .{ .handle = s, .attach = moduleAttach, .detach = moduleDetach };
     errdefer vtDestroy(&s.api);
     s.reap_terms = .{.{ .component = status_cid, .access = abi_ecs.c.KE_ECS_ACCESS_WRITE }};
     s.reap_queries = .{.{ .terms = &s.reap_terms, .term_count = 1 }};
@@ -989,9 +1010,8 @@ fn create(loop: *abi_scheduler.c.ke_scheduler, ecs: *abi_ecs.c.ke_ecs, tree: *ab
     return .{ .ref = &s.api, .destroy = vtDestroy };
 }
 
-/// Factory. A null scheduler, ecs, scene tree or out handle fails as an invalid argument; an ecs
-/// without the scene tree components fails as not found; a refused registration fails with the
-/// ecs's code. Each leaves the handle zeroed.
+/// Factory. A null scheduler, ecs, scene tree or out handle fails as an invalid argument; a refused
+/// registration fails with the ecs's code. Each leaves the handle zeroed.
 export fn ke_node_types_create(
     loop_in: ?*abi_scheduler.c.ke_scheduler,
     ecs_in: ?*abi_ecs.c.ke_ecs,
@@ -1008,6 +1028,16 @@ export fn ke_node_types_create(
     return R.ok;
 }
 
+pub const parts = [_]abi_part.c.ke_part{
+    part.of(ke_node_types_create, .{ .name = "node_types", .slots = &.{ "scheduler", "ecs", "scene_tree", "input_actions" }, .optional = &.{"input_actions"} }),
+    part.of(ke_node_types_systems_create, .{ .name = "node_types_systems", .slots = &.{"types"}, .hooks = &.{
+        "pre_update",
+        "fixed_update",
+        "update",
+        "post_update",
+    } }),
+};
+
 const testing = std.testing;
 const zsub = @import("zsub");
 
@@ -1020,17 +1050,9 @@ const test_sets = .{ .pre_update = 11, .update = 12, .fixed_update = 13, .post_u
 
 fn createAttached(f: *Fixture, actions: ?*abi_input_actions.c.ke_input_actions, out: *abi_framework.c.ke_node_types_handle) !void {
     try R.check(ke_node_types_create(f.loop.api(), f.ecs.api(), f.tree.api(), actions, out));
-    var module: abi_module.c.ke_module_handle = undefined;
-    try R.check(ke_node_types_systems_create(out.ref, &module));
-    var targets = std.mem.zeroes(abi_module.c.ke_module_targets);
-    targets.pre_update = @ptrCast(f.rt.api());
-    targets.fixed = @ptrCast(f.rt.api());
-    targets.update = @ptrCast(f.rt.api());
-    targets.pre_update_set = test_sets.pre_update;
-    targets.update_set = test_sets.update;
-    targets.fixed_update_set = test_sets.fixed_update;
-    targets.post_update_set = test_sets.post_update;
-    try R.check(module.ref.?.attach.?(module.ref, &targets));
+    var module: abi_part.c.ke_owner = undefined;
+    const rt = f.rt.api();
+    try R.check(ke_node_types_systems_create(out.ref, rt, test_sets.pre_update, rt, test_sets.fixed_update, rt, test_sets.update, rt, test_sets.post_update, &module));
 }
 
 var registered: [8]abi_schedule.c.ke_schedule_system_desc = undefined;
@@ -1051,8 +1073,12 @@ var tag_cids: [16]Cid = undefined;
 var tag_count: usize = 0;
 
 fn registerComponent(args: zsub.For(abi_ecs.c.ke_ecs).Args(.component_register)) abi_result.c.ke_result {
-    args[2].?.* = next_cid;
     const name = std.mem.span(args[1].?.name.?);
+    if (std.mem.eql(u8, name, "transform2d")) {
+        args[2].?.* = transform2d_cid;
+        return R.ok;
+    }
+    args[2].?.* = next_cid;
     if (tag_count < tag_names.len and name.len < tag_names[0].len) {
         @memset(&tag_names[tag_count], 0);
         @memcpy(tag_names[tag_count][0..name.len], name);
@@ -1115,7 +1141,8 @@ const Fixture = struct {
     }
 };
 
-const with_transform = [_]abi_framework.c.ke_node_with{.{ .name = "transform2d", .initial = null }};
+const transform2d_desc: abi_ecs.c.ke_component_desc = .{ .name = "transform2d", .size = 8, .alignment = 4 };
+const with_transform = [_]abi_framework.c.ke_node_with{.{ .component = &transform2d_desc, .initial = null }};
 
 fn paddleDesc() abi_framework.c.ke_node_type_desc {
     var d = std.mem.zeroes(abi_framework.c.ke_node_type_desc);
@@ -1200,7 +1227,7 @@ test "registering a node type registers one exclusive system per behaviour in it
     for (registered[0..3]) |p| try testing.expect(p.exclusive);
 }
 
-test "a type registered before the systems are attached gets its systems on attach, and detaching removes them while the type stays" {
+test "a type registered before the systems module gets its systems when the module is created, and destroying the module removes them while the type stays" {
     var f: Fixture = .{};
     try f.init();
     defer f.deinit();
@@ -1212,14 +1239,9 @@ test "a type registered before the systems are attached gets its systems on atta
     var cid: Cid = 0;
     try R.check(detached.ref.?.register_type.?(detached.ref, &d, &cid));
     try testing.expectEqual(@as(usize, 0), registered_count);
-    var module: abi_module.c.ke_module_handle = undefined;
-    try R.check(ke_node_types_systems_create(detached.ref, &module));
-    var targets = std.mem.zeroes(abi_module.c.ke_module_targets);
-    targets.pre_update = @ptrCast(f.rt.api());
-    targets.fixed = @ptrCast(f.rt.api());
-    targets.update = @ptrCast(f.rt.api());
-    targets.update_set = test_sets.update;
-    try R.check(module.ref.?.attach.?(module.ref, &targets));
+    var module: abi_part.c.ke_owner = undefined;
+    const rt = f.rt.api();
+    try R.check(ke_node_types_systems_create(detached.ref, rt, 0, rt, 0, rt, test_sets.update, rt, 0, &module));
     try testing.expectEqual(@as(usize, 2), registered_count);
     try testing.expectEqual(test_sets.update, registered[1].sets.?[0]);
     module.destroy.?(module.ref);
@@ -1230,8 +1252,11 @@ test "a type registered before the systems are attached gets its systems on atta
 
 test "the systems module refuses node types this library did not create" {
     var foreign = std.mem.zeroes(abi_framework.c.ke_node_types);
-    var module: abi_module.c.ke_module_handle = undefined;
-    try testing.expectEqual(R.code(error.InvalidArgument), ke_node_types_systems_create(&foreign, &module));
+    var module: abi_part.c.ke_owner = undefined;
+    var rt: zsub.For(abi_schedule.c.ke_schedule) = undefined;
+    try rt.init();
+    defer rt.deinit();
+    try testing.expectEqual(R.code(error.InvalidArgument), ke_node_types_systems_create(&foreign, rt.api(), 0, rt.api(), 0, rt.api(), 0, rt.api(), 0, &module));
     try testing.expect(module.ref == null);
 }
 
@@ -1738,17 +1763,27 @@ test "a nameless node type, or a field table without fields, is refused" {
     try testing.expectEqual(@as(usize, 0), registered_count);
 }
 
-test "a node type carrying an unregistered component is refused and registers nothing" {
+test "a node type carrying a component it does not describe is refused and registers nothing" {
     var f: Fixture = .{};
     try f.init();
     defer f.deinit();
-    const missing = [_]abi_framework.c.ke_node_with{.{ .name = "missing", .initial = null }};
+    const undescribed = [_]abi_framework.c.ke_node_with{.{ .component = null, .initial = null }};
     var d = paddleDesc();
-    d.with = &missing;
+    d.with = &undescribed;
     d.update = countVisits;
     var cid: Cid = 0;
-    try testing.expectEqual(abi_result.c.KE_RESULT_NOT_FOUND, f.types.ref.?.register_type.?(f.types.ref, &d, &cid));
+    try testing.expectEqual(abi_result.c.KE_RESULT_INVALID_ARGUMENT, f.types.ref.?.register_type.?(f.types.ref, &d, &cid));
     try testing.expectEqual(@as(usize, 0), registered_count);
+}
+
+test "a node type registers the components it carries, so none has to be registered before it" {
+    var f: Fixture = .{};
+    try f.init();
+    defer f.deinit();
+    var d = paddleDesc();
+    var cid: Cid = 0;
+    try R.check(f.types.ref.?.register_type.?(f.types.ref, &d, &cid));
+    try f.ecs.received(.component_register).where(zsub.argIs(1, @as(?*const abi_ecs.c.ke_component_desc, &transform2d_desc))).times(1);
 }
 
 test "destroying the node types unregisters every system they registered" {

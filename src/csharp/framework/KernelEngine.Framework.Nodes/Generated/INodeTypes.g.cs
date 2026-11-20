@@ -17,13 +17,13 @@ public delegate void NodeBehaviour(INodeCtx ctx);
 /// <summary>The nodetypes contract game code depends on, so a caller names a capability rather than the <see cref="NodeTypes"/> that carries it.</summary>
 public interface INodeTypes : IDisposable
 {
-    /// <summary>Registers a node type and the systems of its behaviours.</summary>
+    /// <summary>Registers a node type and the systems of its behaviours, and each component of `with` as the ecs's component_register does: one already registered with the same name and layout keeps its id.</summary>
     /// <param name="name">The type's name; its nodes carry a tag registered as `node. &lt;name &gt;`.</param>
     /// <param name="fieldsSize">The bytes of the type's own fields, registered as a component under the type's name; 0 for a type made only of the components it names in `with`.</param>
     /// <param name="fieldsAlignment">The alignment of the fields, a power of two when `fields_size` is not 0.</param>
     /// <param name="fields">The fields' table, copied by the ecs.</param>
     /// <param name="initial">The bytes copied into the fields of each node spawned; none starts them zeroed.</param>
-    /// <param name="with">Registered components every node of the type carries beside its fields, each with the value it is born with.</param>
+    /// <param name="with">Components every node of the type carries beside its fields, each with the value it is born with; registering the type registers each.</param>
     /// <param name="ready">Runs once per node, in the PreUpdate after the node is created, before its first update.</param>
     /// <param name="update">Runs every tick, in Update.</param>
     /// <param name="fixedUpdate">Runs every fixed step, in FixedUpdate.</param>

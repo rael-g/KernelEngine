@@ -6,6 +6,7 @@ using global::KernelEngine.Logger;
 using KernelEngine.Completion.Native;
 using KernelEngine.Ecs.Native;
 using KernelEngine.Job.Native;
+using KernelEngine.Part.Native;
 using KernelEngine.Result.Native;
 using KernelEngine.Settings.Native;
 

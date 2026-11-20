@@ -4,6 +4,7 @@ using System.Runtime.InteropServices;
 using global::KernelEngine.Logger;
 
 using KernelEngine.Io.Native;
+using KernelEngine.Part.Native;
 using KernelEngine.Result.Native;
 using KernelEngine.Text.Native;
 
@@ -17,4 +18,8 @@ public static unsafe partial class NativeMethods
 
     [DllImport("ke_text_stb_truetype", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_text_stb_truetype_set_log_callback", ExactSpelling = true)]
     public static extern void text_stb_truetype_set_log_callback([NativeTypeName("ke_log_callback")] delegate* unmanaged[Cdecl]<void*, global::KernelEngine.Logger.LogLevel, sbyte*, sbyte*, void> callback, void* ctx);
+
+    [DllImport("ke_text_stb_truetype", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_text_stb_truetype_parts", ExactSpelling = true)]
+    [return: NativeTypeName("const ke_part *")]
+    public static extern KernelEngine.Part.Native.ke_part* text_stb_truetype_parts([NativeTypeName("size_t *")] nuint* out_count);
 }

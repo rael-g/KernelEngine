@@ -3,6 +3,7 @@
 const abi_audio = @import("audio");
 const abi_io = @import("io");
 const abi_logger = @import("logger");
+const abi_part = @import("part");
 const abi_result = @import("result");
 
 pub const ke_audio_sound = u32;
@@ -15,6 +16,9 @@ pub const ke_audio_voice = u32;
 /// thread logged.
 pub const ke_log_callback = ?*const fn (?*anyopaque, abi_logger.c.ke_log_level, ?[*:0]const u8, ?[*:0]const u8) callconv(.c) void;
 
+/// Receives one key the settings hold.
+pub const ke_settings_key_func = ?*const fn (?[*:0]const u8, ?*anyopaque) callconv(.c) void;
+
 /// Sends every line ke_audio_miniaudio logs to callback, with ctx; a NULL callback sends them
 /// back to stderr, where they go until this is called. Called once, before the library logs.
 pub extern fn ke_audio_miniaudio_set_log_callback(callback: ke_log_callback, ctx: ?*anyopaque) void;
@@ -22,3 +26,7 @@ pub extern fn ke_audio_miniaudio_set_log_callback(callback: ke_log_callback, ctx
 /// Creates a ke_audio backend for the audio output device, reading each sound file through io
 /// and decoding it from memory.
 pub extern fn ke_audio_miniaudio_create(io: ?*abi_io.c.ke_io, out_audio: ?*abi_audio.c.ke_audio_handle) abi_result.c.ke_result;
+
+/// Gives the parts ke_audio_miniaudio contains: `audio_miniaudio`, providing ke_audio, with the
+/// slot `io`.
+pub extern fn ke_audio_miniaudio_parts(out_count: ?*usize) ?*const abi_part.c.ke_part;

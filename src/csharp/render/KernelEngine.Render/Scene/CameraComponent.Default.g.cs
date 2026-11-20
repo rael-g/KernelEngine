@@ -4,6 +4,7 @@
 #nullable enable
 
 using KernelEngine.Ecs;
+using KernelEngine.Ecs.Native;
 using KernelEngine.Input;
 using KernelEngine.Render.Native;
 

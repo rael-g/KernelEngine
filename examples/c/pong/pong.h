@@ -4,6 +4,14 @@
 #include <kernel_engine/framework/node_types.h>
 
 #include <stdbool.h>
+#include <stdint.h>
+
+/** The event a match raises when a side scores: the score after the goal. */
+typedef struct pong_score_changed
+{
+    int32_t left;
+    int32_t right;
+} pong_score_changed;
 
 /** What Pong's node types are given: the node types they register into and the ids of their events. */
 typedef struct pong_game

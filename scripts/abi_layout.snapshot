@@ -451,6 +451,9 @@ ke_io_handle size=16 align=8
   destroy 8
 
 [scheduler]
+ke_scheduler_executable size=16 align=8
+  run 0
+  user 8
 ke_scheduler size=72 align=8
   handle 0
   add 8
@@ -483,6 +486,9 @@ ke_schedule_system_desc size=80 align=8
   set_count 72
   per_entity 76
   exclusive 77
+ke_schedule_set size=16 align=8
+  schedule 0
+  id 8
 ke_schedule size=56 align=8
   handle 0
   register_set 8
@@ -970,7 +976,7 @@ ke_node_component size=24 align=8
   data 8
   size 16
 ke_node_with size=24 align=8
-  name 0
+  component 0
   initial 8
   initial_size 16
 ke_action_ref size=40 align=4
@@ -1220,86 +1226,58 @@ ke_render_frame_handle size=16 align=8
   ref 0
   destroy 8
 
-[module]
-ke_module_targets size=96 align=8
-  startup 0
-  pre_update 8
-  fixed 16
-  update 24
-  shutdown 32
-  render 40
-  startup_set 48
-  pre_update_set 52
-  fixed_pre_update_set 56
-  fixed_update_set 60
-  fixed_post_update_set 64
-  update_set 68
-  post_update_set 72
-  shutdown_set 76
-  render_begin_set 80
-  render_prepare_set 84
-  render_queue_set 88
-  render_submit_set 92
-ke_module size=24 align=8
-  handle 0
-  attach 8
-  detach 16
-ke_module_handle size=16 align=8
-  ref 0
-  destroy 8
-
 [part]
 ke_part_slot size=24 align=8
   name 0
   contract 8
   cardinality 16
-ke_part_hook size=16 align=8
-  name 0
-  default_set 8
-ke_part_set size=24 align=8
-  name 0
-  hook 8
-  after 16
-ke_part_bound size=16 align=8
+ke_part_bound size=24 align=8
   instances 0
-  count 8
-ke_part_hooked size=16 align=8
-  schedule 0
-  set 8
-ke_part_instance size=16 align=8
+  positions 8
+  count 16
+ke_owner size=16 align=8
   ref 0
   destroy 8
-ke_part size=96 align=8
+ke_part size=80 align=8
   name 0
   provides 8
-  slots 16
-  slot_count 24
-  hooks 32
-  hook_count 40
-  sets 48
-  set_count 56
-  create 64
-  ready 72
-  pump 80
-  set_log 88
+  provides_count 16
+  slots 24
+  slot_count 32
+  create 40
+  provided 48
+  ready 56
+  pump 64
+  set_log 72
 
 [assembly]
-ke_assembly size=112 align=8
+ke_assembly size=88 align=8
   handle 0
   route_log 8
   add_part 16
   add_instance 24
   add_external 32
   bind 40
-  hook 48
-  order 56
-  add_set 64
-  order_set 72
-  set_default 80
-  resolve 88
-  advance 96
-  get 104
+  order 48
+  set_default 56
+  resolve 64
+  advance 72
+  get 80
 ke_assembly_handle size=16 align=8
+  ref 0
+  destroy 8
+ke_composition_source size=16 align=8
+  handle 0
+  load 8
+ke_composition_source_handle size=16 align=8
+  ref 0
+  destroy 8
+
+[runner]
+ke_runner size=16 align=8
+  handle 0
+  run 8
+ke_runner_handle size=16 align=8
   ref 0
   destroy 8
 
@@ -1311,13 +1289,15 @@ ke_completion size=32 align=8
   release 24
 
 [settings]
-ke_settings size=48 align=8
+ke_settings size=64 align=8
   handle 0
   get_bool 8
   get_int 16
   get_double 24
   get_string 32
   for_each_key 40
+  child 48
+  for_each_child 56
 
 [job]
 ke_job_ctx size=16 align=8

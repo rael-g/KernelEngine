@@ -4,7 +4,7 @@ const abi_completion = @import("completion");
 const abi_ecs = @import("ecs");
 const abi_extraction = @import("extraction");
 const abi_logger = @import("logger");
-const abi_module = @import("module");
+const abi_part = @import("part");
 const abi_result = @import("result");
 const abi_schedule = @import("schedule");
 const abi_scheduler = @import("scheduler");
@@ -29,6 +29,12 @@ pub const ke_extraction_custom_fn = ?*const fn (?*anyopaque, ?*abi_extraction.c.
 /// thread logged.
 pub const ke_log_callback = ?*const fn (?*anyopaque, abi_logger.c.ke_log_level, ?[*:0]const u8, ?[*:0]const u8) callconv(.c) void;
 
+/// One run of an executable: a schedule, a render, a script, a test.
+pub const ke_scheduler_run_fn = ?*const fn (?*anyopaque, f32, ?*?*abi_completion.c.ke_completion) callconv(.c) abi_result.c.ke_result;
+
+/// Receives one key the settings hold.
+pub const ke_settings_key_func = ?*const fn (?[*:0]const u8, ?*anyopaque) callconv(.c) void;
+
 /// A structural operation applied when the queue holding it is drained. `user` points at the
 /// copy of the payload passed to defer; `ecs` is the live world. A failure is returned, and the
 /// queue stops there: the operations recorded after it are dropped.
@@ -43,20 +49,23 @@ pub const ke_schedule_execute_fn = ?*const fn (?*abi_schedule.c.ke_schedule_ctx,
 /// on the thread that called run. A failure fails the run before any wave starts.
 pub const ke_schedule_condition_fn = ?*const fn (?*anyopaque, ?*bool) callconv(.c) abi_result.c.ke_result;
 
-/// One run of an executable: a schedule, a render, a script, a test.
-pub const ke_scheduler_run_fn = ?*const fn (?*anyopaque, f32, ?*?*abi_completion.c.ke_completion) callconv(.c) abi_result.c.ke_result;
-
 /// Sends every line ke_extraction_default logs to callback, with ctx; a NULL callback sends them
 /// back to stderr, where they go until this is called. Called once, before the library logs.
 pub extern fn ke_extraction_default_set_log_callback(callback: ke_log_callback, ctx: ?*anyopaque) void;
 
 /// Creates the extraction from main into render, registering its tags in each world, whose
-/// render stage extracts at scheduler's fixed alpha and runs render_schedule. Every argument but
-/// out_extraction must outlive the extraction.
-pub extern fn ke_extraction_create(main: ?*abi_ecs.c.ke_ecs, render: ?*abi_ecs.c.ke_ecs, scheduler: ?*abi_scheduler.c.ke_scheduler, render_schedule: ?*abi_schedule.c.ke_schedule, out_extraction: ?*abi_extraction.c.ke_extraction_handle) abi_result.c.ke_result;
+/// render stage extracts at scheduler's fixed alpha. Every argument but out_extraction must
+/// outlive the extraction.
+pub extern fn ke_extraction_create(main: ?*abi_ecs.c.ke_ecs, render: ?*abi_ecs.c.ke_ecs, scheduler: ?*abi_scheduler.c.ke_scheduler, out_extraction: ?*abi_extraction.c.ke_extraction_handle) abi_result.c.ke_result;
 
-/// Creates the module that keeps the previous value of every interpolation of extraction:
-/// attaching it registers, in the fixed schedule's fixed_pre_update set, one system per
-/// interpolation registered before or after, which copies each entity's current value into its
-/// previous one before the step.
-pub extern fn ke_extraction_history_create(extraction: ?*abi_extraction.c.ke_extraction, out_module: ?*abi_module.c.ke_module_handle) abi_result.c.ke_result;
+/// Creates the module that keeps the previous value of every interpolation of extraction: it
+/// registers, in fixed_pre_update_set of fixed_pre_update, one system per interpolation
+/// registered before or after, which copies each entity's current value into its previous one
+/// before the step. Destroying the module removes them.
+pub extern fn ke_extraction_history_create(extraction: ?*abi_extraction.c.ke_extraction, fixed_pre_update: ?*abi_schedule.c.ke_schedule, fixed_pre_update_set: ke_schedule_set_id, out_module: ?*abi_part.c.ke_owner) abi_result.c.ke_result;
+
+/// Gives the parts ke_extraction_default contains, each named after its factory and with its
+/// slots named after the factory's parameters: `extraction` (ke_extraction and
+/// ke_scheduler_executable; `main`, `render` and `scheduler`); `extraction_history` (nothing;
+/// `extraction` and `fixed_pre_update`).
+pub extern fn ke_extraction_default_parts(out_count: ?*usize) ?*const abi_part.c.ke_part;

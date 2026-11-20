@@ -3,6 +3,7 @@
 const abi_async = @import("async");
 const abi_completion = @import("completion");
 const abi_logger = @import("logger");
+const abi_part = @import("part");
 const abi_render_gpu = @import("render_gpu");
 const abi_result = @import("result");
 const abi_settings = @import("settings");
@@ -48,3 +49,8 @@ pub extern fn ke_gpu_device_webgpu_set_log_callback(callback: ke_log_callback, c
 
 /// Creates a render target presenting into a window, sized to the window's client area.
 pub extern fn ke_gpu_render_target_webgpu_window_create(device: ?*abi_render_gpu.c.ke_gpu_device, window: ?*abi_window.c.ke_window, settings: ?*abi_settings.c.ke_settings, out_target: ?*abi_render_gpu.c.ke_gpu_render_target_handle) abi_result.c.ke_result;
+
+/// Gives the parts ke_gpu_device_webgpu contains, each named after its factory and with its
+/// slots named after the factory's parameters: `gpu_device_webgpu` (ke_gpu_device; `async`,
+/// optional); `gpu_render_target_webgpu_window` (ke_gpu_render_target; `device` and `window`).
+pub extern fn ke_gpu_device_webgpu_parts(out_count: ?*usize) ?*const abi_part.c.ke_part;

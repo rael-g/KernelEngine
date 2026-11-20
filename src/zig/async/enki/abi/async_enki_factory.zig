@@ -2,6 +2,7 @@
 
 const abi_async = @import("async");
 const abi_logger = @import("logger");
+const abi_part = @import("part");
 const abi_result = @import("result");
 const abi_settings = @import("settings");
 
@@ -23,4 +24,9 @@ pub fn asyncEnkiCreate(settings: ?*abi_settings.c.ke_settings) Error!abi_async.c
 /// stderr, where they go until this is called. Called once, before the library logs.
 pub fn asyncEnkiSetLogCallback(callback: c.ke_log_callback, ctx: ?*anyopaque) void {
     return c.ke_async_enki_set_log_callback(callback, ctx);
+}
+
+/// Gives the parts ke_async_enki contains: `async_enki`, providing ke_async.
+pub fn asyncEnkiParts(out_count: ?*usize) ?*const abi_part.c.ke_part {
+    return c.ke_async_enki_parts(out_count);
 }

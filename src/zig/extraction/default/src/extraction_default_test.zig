@@ -5,7 +5,7 @@ const abi_completion = @import("abi_completion");
 const abi_ecs = @import("abi_ecs");
 const abi_ecs_variant = @import("abi_ecs_variant");
 const abi_extraction = @import("abi_extraction");
-const abi_module = @import("abi_module");
+const abi_part = @import("abi_part");
 const abi_result = @import("abi_result");
 const abi_schedule = @import("abi_schedule");
 const abi_scheduler = @import("abi_scheduler");
@@ -221,7 +221,6 @@ const Fixture = struct {
     main: World = undefined,
     render: World = undefined,
     scheduler: zsub.For(abi_scheduler.c.ke_scheduler) = undefined,
-    schedule: zsub.For(abi_schedule.c.ke_schedule) = undefined,
     handle: x.ke_extraction_handle = undefined,
     main_position: Cid = 0,
     render_position: Cid = 0,
@@ -230,19 +229,17 @@ const Fixture = struct {
         f.main.init();
         f.render.init();
         try f.scheduler.init();
-        try f.schedule.init();
         f.main_position = f.main.register("position", @sizeOf(Position), &position_fields);
         f.render_position = f.render.register("position", @sizeOf(Position), &position_fields);
         try R.check(extraction_create(f));
     }
 
     fn extraction_create(f: *Fixture) Result {
-        return ke_extraction_create(&f.main.api, &f.render.api, f.scheduler.api(), f.schedule.api(), &f.handle);
+        return ke_extraction_create(&f.main.api, &f.render.api, f.scheduler.api(), &f.handle);
     }
 
     fn deinit(f: *Fixture) void {
         f.handle.destroy.?(f.handle.ref);
-        f.schedule.deinit();
         f.scheduler.deinit();
         f.render.deinit();
         f.main.deinit();
@@ -271,8 +268,8 @@ const Fixture = struct {
     }
 };
 
-extern fn ke_extraction_create(?*e.ke_ecs, ?*e.ke_ecs, ?*abi_scheduler.c.ke_scheduler, ?*abi_schedule.c.ke_schedule, ?*x.ke_extraction_handle) Result;
-extern fn ke_extraction_history_create(?*x.ke_extraction, ?*abi_module.c.ke_module_handle) Result;
+extern fn ke_extraction_create(?*e.ke_ecs, ?*e.ke_ecs, ?*abi_scheduler.c.ke_scheduler, ?*x.ke_extraction_handle) Result;
+extern fn ke_extraction_history_create(?*x.ke_extraction, ?*abi_schedule.c.ke_schedule, abi_schedule.c.ke_schedule_set_id, ?*abi_part.c.ke_owner) Result;
 
 test "a synced entity gets a pair, the pair carries a copy, and the pair goes when the tag does" {
     var f: Fixture = .{};
@@ -413,7 +410,7 @@ test "a custom extraction runs at each extraction, and its failure is the extrac
     try testing.expectEqual(R.code(error.InvalidArgument), f.ref().extract_custom.?(f.ref(), null, null));
 }
 
-test "the render stage extracts at the scheduler's alpha and starts the render schedule's run" {
+test "a run extracts at the scheduler's alpha and hands over a completion already finished with KE_OK" {
     var f: Fixture = .{};
     try f.init();
     defer f.deinit();
@@ -424,7 +421,11 @@ test "the render stage extracts at the scheduler's alpha and starts the render s
     try R.check(f.ref().run.?(f.ref(), 0.016, &completion));
     try testing.expectEqual(@as(u32, 1), custom_ran);
     try f.scheduler.received(.fixed_alpha).times(1);
-    try f.schedule.received(.run).times(1);
+    var result: Result = R.code(error.General);
+    try testing.expect(completion.?.poll.?(completion, &result));
+    try testing.expectEqual(R.ok, result);
+    try testing.expectEqual(R.ok, completion.?.wait.?(completion));
+    completion.?.release.?(completion);
 }
 
 var history_desc: abi_schedule.c.ke_schedule_system_desc = undefined;
@@ -434,7 +435,7 @@ fn keepHistory(args: zsub.For(abi_schedule.c.ke_schedule).Args(.register_system)
     return R.ok;
 }
 
-test "the history module registers one system per interpolation in fixed_pre_update, and detaching removes them" {
+test "the history module registers one system per interpolation in the hook's set, and destroying it removes them" {
     var f: Fixture = .{};
     try f.init();
     defer f.deinit();
@@ -444,18 +445,27 @@ test "the history module registers one system per interpolation in fixed_pre_upd
     try fixed.init();
     defer fixed.deinit();
     _ = fixed.when(.register_system).does(keepHistory);
-    var module: abi_module.c.ke_module_handle = undefined;
-    try R.check(ke_extraction_history_create(f.ref(), &module));
-    var targets = std.mem.zeroes(abi_module.c.ke_module_targets);
-    targets.fixed = @ptrCast(fixed.api());
-    targets.fixed_pre_update_set = 4;
-    try R.check(module.ref.?.attach.?(module.ref, &targets));
+    var module: abi_part.c.ke_owner = undefined;
+    try R.check(ke_extraction_history_create(f.ref(), fixed.api(), 4, &module));
     try testing.expectEqual(@as(abi_schedule.c.ke_schedule_set_id, 4), history_desc.sets.?[0]);
     module.destroy.?(module.ref);
     try fixed.received(.unregister_system).where(zsub.argIs(1, @as(abi_schedule.c.ke_schedule_system_id, 9))).times(1);
 
     var foreign = std.mem.zeroes(x.ke_extraction);
-    try testing.expectEqual(R.code(error.InvalidArgument), ke_extraction_history_create(&foreign, &module));
+    try testing.expectEqual(R.code(error.InvalidArgument), ke_extraction_history_create(&foreign, fixed.api(), 4, &module));
+}
+
+test "the extraction's part provides the extraction and, after it, the executable a scheduler runs, named by the extraction" {
+    var f: Fixture = .{};
+    try f.init();
+    defer f.deinit();
+    const p = &extraction.parts[0];
+    try testing.expectEqual(@as(usize, 2), p.provides_count);
+    try testing.expectEqual(@as(usize, 3), p.slot_count);
+    const ref: ?*anyopaque = f.handle.ref;
+    try testing.expectEqual(ref, p.provided.?(ref, 0));
+    const exec: *abi_scheduler.c.ke_scheduler_executable = @ptrCast(@alignCast(p.provided.?(ref, 1).?));
+    try testing.expectEqual(ref, exec.user);
 }
 
 test "creating and destroying extractions leaves no block allocated" {

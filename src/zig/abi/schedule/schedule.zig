@@ -114,7 +114,9 @@ pub const Schedule = struct {
         return self.ptr.reads.?(self.ptr, component);
     }
 
-    /// Creates a schedule over ecs whose runs go to job_system, both borrowed for its lifetime.
+    /// Creates a schedule over ecs whose runs go to job_system, both borrowed for its lifetime. It
+    /// starts with one set, `schedule`, which its part provides as the ke_schedule_set a module
+    /// joins.
     pub fn create(ecs: ?*abi_ecs.c.ke_ecs, job_system: ?*abi_job.c.ke_job_system, settings: ?*abi_settings.c.ke_settings) Error!Schedule {
         var written: c.ke_schedule_handle = undefined;
         try checkResult(c.ke_schedule_create(ecs, job_system, settings, &written));
@@ -159,4 +161,5 @@ pub const ScheduleCtx = struct {
 
 pub const ScheduleSetDesc = c.ke_schedule_set_desc;
 pub const ScheduleSystemDesc = c.ke_schedule_system_desc;
+pub const ScheduleSet = c.ke_schedule_set;
 pub const ScheduleHandle = c.ke_schedule_handle;

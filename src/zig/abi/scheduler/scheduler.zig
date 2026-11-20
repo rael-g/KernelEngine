@@ -143,4 +143,5 @@ pub const Scheduler = struct {
 
 };
 
+pub const SchedulerExecutable = c.ke_scheduler_executable;
 pub const SchedulerHandle = c.ke_scheduler_handle;

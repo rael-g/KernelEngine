@@ -4,6 +4,7 @@ using global::KernelEngine.Logger;
 using global::KernelEngine.Render;
 
 using KernelEngine.Common.Native;
+using KernelEngine.Part.Native;
 using KernelEngine.Result.Native;
 
 namespace KernelEngine.View.Native;

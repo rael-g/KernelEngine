@@ -1,7 +1,6 @@
 using System.Numerics;
 
 using global::KernelEngine.Assembly;
-using global::KernelEngine.Ecs;
 using global::KernelEngine.Logger;
 
 using KernelEngine.Part.Native;
@@ -29,16 +28,7 @@ public unsafe partial struct ke_assembly
     public delegate* unmanaged[Cdecl]<ke_assembly*, sbyte*, sbyte*, sbyte*, KernelEngine.Result.Native.Result> bind;
 
     [NativeTypeName("ke_result (*)(struct ke_assembly *, const char *, const char *, const char *, const char *)")]
-    public delegate* unmanaged[Cdecl]<ke_assembly*, sbyte*, sbyte*, sbyte*, sbyte*, KernelEngine.Result.Native.Result> hook;
-
-    [NativeTypeName("ke_result (*)(struct ke_assembly *, const char *, const char *, const char *, const char *)")]
     public delegate* unmanaged[Cdecl]<ke_assembly*, sbyte*, sbyte*, sbyte*, sbyte*, KernelEngine.Result.Native.Result> order;
-
-    [NativeTypeName("ke_result (*)(struct ke_assembly *, const char *, const char *)")]
-    public delegate* unmanaged[Cdecl]<ke_assembly*, sbyte*, sbyte*, KernelEngine.Result.Native.Result> add_set;
-
-    [NativeTypeName("ke_result (*)(struct ke_assembly *, const char *, const char *, const char *)")]
-    public delegate* unmanaged[Cdecl]<ke_assembly*, sbyte*, sbyte*, sbyte*, KernelEngine.Result.Native.Result> order_set;
 
     [NativeTypeName("ke_result (*)(struct ke_assembly *, const char *, const char *)")]
     public delegate* unmanaged[Cdecl]<ke_assembly*, sbyte*, sbyte*, KernelEngine.Result.Native.Result> set_default;
@@ -49,6 +39,6 @@ public unsafe partial struct ke_assembly
     [NativeTypeName("ke_result (*)(struct ke_assembly *)")]
     public delegate* unmanaged[Cdecl]<ke_assembly*, KernelEngine.Result.Native.Result> advance;
 
-    [NativeTypeName("ke_result (*)(struct ke_assembly *, const char *, void **)")]
-    public delegate* unmanaged[Cdecl]<ke_assembly*, sbyte*, void**, KernelEngine.Result.Native.Result> get;
+    [NativeTypeName("ke_result (*)(struct ke_assembly *, const char *, const char *, void **)")]
+    public delegate* unmanaged[Cdecl]<ke_assembly*, sbyte*, sbyte*, void**, KernelEngine.Result.Native.Result> get;
 }

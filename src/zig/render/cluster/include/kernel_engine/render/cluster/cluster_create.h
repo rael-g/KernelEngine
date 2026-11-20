@@ -3,7 +3,6 @@
 
 #include <kernel_engine/settings/settings.h>
 #include <kernel_engine/result/result.h>
-#include <kernel_engine/render/context.h>
 #include <kernel_engine/ecs/ecs.h>
 #include <kernel_engine/render/frame.h>
 #include <kernel_engine/render/resource_groups.h>
@@ -12,7 +11,8 @@
 #include <kernel_engine/render/gpu/gpu_device.h>
 #include <kernel_engine/render/camera.h>
 #include <kernel_engine/view/view_space.h>
-#include <kernel_engine/module/module.h>
+#include <kernel_engine/part/part.h>
+#include <kernel_engine/schedule/schedule.h>
 
 #if defined(_WIN32) || defined(__CYGWIN__)
     #ifdef KE_RENDER_CLUSTER_EXPORT
@@ -31,19 +31,20 @@ extern "C"
 {
 #endif
 
-    /**
-     * @brief Makes a light-cluster pass. Attached, it publishes the light lists and the grid in the render
-     * prepare set and declares the compute pass that fills them in the render queue set.
-     * @param context [borrowed] The parts the pass is built on; read during the call.
-     * @param settings [borrowed] Read once; each absent key takes its default, each an integer of
-     *        1 or more: `grid_x` 16 and `grid_y` 9, clusters across and down the screen; `grid_z` 24,
-     *        depth slices; `max_lights_per_cluster` 64, the lights one cluster can list.
-     * @param out_module [out] Receives the pass; left zeroed on failure.
-     * @return KE_OK, or on failure; KE_RESULT_INVALID_ARGUMENT when the context or a part of it is NULL, or a
-     *         setting is refused.
-     */
+    /// Makes a light-cluster pass, which publishes the light lists and the grid in @p render_prepare_set of
+    /// @p render_prepare and declares the compute pass that fills them in @p render_queue_set of @p render_queue.
+    /// Every argument but @p out_pass must outlive the pass.
+    /// @param settings [borrowed] Read once; each absent key takes its default, each an integer of 1 or more:
+    ///        `grid_x` 16 and `grid_y` 9, clusters across and down the screen; `grid_z` 24, depth slices;
+    ///        `max_lights_per_cluster` 64, the lights one cluster can list.
+    /// @param out_pass [out] Receives the pass, whose destroy unregisters its systems; left zeroed on failure.
+    /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a NULL pointer or a refused setting; the code of the schedule
+    ///         that refused a system.
     KE_RENDER_CLUSTER_API ke_result ke_render_cluster_create(
-        const ke_render_context *context, ke_settings *settings, ke_module_handle *out_module);
+        ke_render_service *service, ke_gpu_device *device, ke_render_frame *frame, ke_render_scene_resolve *scene,
+        ke_render_camera *camera, ke_view_space *view_space, ke_schedule *render_prepare,
+        ke_schedule_set_id render_prepare_set, ke_schedule *render_queue, ke_schedule_set_id render_queue_set,
+        ke_settings *settings, ke_owner *out_pass);
 
 #ifdef __cplusplus
 }

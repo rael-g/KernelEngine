@@ -10,7 +10,12 @@ const abi_ecs_variant = @import("abi_ecs_variant");
 const abi_framework = @import("abi_framework");
 const abi_io = @import("abi_io");
 const abi_result = @import("abi_result");
+const part = @import("part");
+const abi_part = @import("abi_part");
+const abi_schedule = @import("abi_schedule");
+const abi_settings = @import("abi_settings");
 const heap = @import("heap");
+const settings_schema = @import("settings_schema");
 const pending_reads = @import("pending_reads");
 const fields_apply = @import("component_fields_apply.zig");
 const values = @import("scene_values.zig");
@@ -31,7 +36,9 @@ const format_version: i64 = 2;
 const component_alignment: std.mem.Alignment = .@"16";
 
 /// Created by `ke_scene_files_create` and freed by `vtDestroy`. It holds only borrowed services;
-/// what one instantiate reads lives in an arena of that call.
+/// what one instantiate reads lives in an arena of that call. With a first scene, `opener` is the
+/// system of the first scene hook, whose user data is this record, and `opened` turns true on its
+/// first run.
 const State = struct {
     api: abi_framework.c.ke_scene_files,
     ecs: *abi_ecs.c.ke_ecs,
@@ -39,6 +46,17 @@ const State = struct {
     assets: *abi_asset_resolver.c.ke_asset_resolver,
     io: *abi_io.c.ke_io,
     reads: pending_reads.Reads,
+    first_schedule: *abi_schedule.c.ke_schedule,
+    first_set: [1]abi_schedule.c.ke_schedule_set_id,
+    first_scene: @FieldType(abi_framework.c.ke_scene_slot_component, "path") = std.mem.zeroes(@FieldType(abi_framework.c.ke_scene_slot_component, "path")),
+    opener: ?abi_schedule.c.ke_schedule_system_id = null,
+    opened: bool = false,
+};
+
+/// The settings' own shape: the `res://` path of the scene opened on the first run of the first
+/// scene hook, none by default.
+const Settings = struct {
+    first_scene: ?[:0]const u8 = null,
 };
 
 fn stateOf(self: ?*abi_framework.c.ke_scene_files) ?*State {
@@ -345,8 +363,21 @@ fn instantiate(self: ?*abi_framework.c.ke_scene_files, path_in: ?[*:0]const u8, 
     return R.ok;
 }
 
+/// The system of the first scene hook: on its first run, opens the first scene into the run's
+/// commands; on every later run, nothing.
+fn openFirst(ctx: ?*abi_schedule.c.ke_schedule_ctx, user_data: ?*anyopaque, _: f32) callconv(.c) abi_result.c.ke_result {
+    const s: *State = @ptrCast(@alignCast(user_data orelse return R.code(error.InvalidArgument)));
+    if (s.opened) return R.ok;
+    s.opened = true;
+    const run = ctx orelse return R.code(error.InvalidArgument);
+    const opened = open(&s.api, run.commands, @ptrCast(&s.first_scene), null);
+    if (opened != R.ok) log.warn("scene files: opening the first scene {s} failed", .{std.mem.sliceTo(&s.first_scene, 0)});
+    return opened;
+}
+
 fn vtDestroy(self: ?*abi_framework.c.ke_scene_files) callconv(.c) void {
     const s = stateOf(self) orelse return;
+    if (s.opener) |id| _ = s.first_schedule.unregister_system.?(s.first_schedule, id);
     s.reads.deinit(s.io);
     heap.gpa.destroy(s);
 }
@@ -398,14 +429,20 @@ fn slotUpdate(ctx: ?*abi_framework.c.ke_node_ctx, user_data: ?*anyopaque) callco
     return R.ok;
 }
 
-/// Factory. It registers the `scene_slot` node type through the node types. A null ecs, node
-/// types, asset resolver, io or out handle fails as an invalid argument, a failed allocation as out
-/// of memory, and a refused registration with the node types' code; each leaves the handle zeroed.
+/// Factory. It registers the `scene_slot` node type through the node types and, with a first scene
+/// in the settings, the system that opens it in `first_scene_set` of `first_scene`. A null ecs, node
+/// types, asset resolver, io, schedule, settings or out handle fails as an invalid argument, as do
+/// settings it refuses or a first scene longer than a slot holds; a failed allocation fails as out
+/// of memory, and a refused registration with the node types' or the schedule's code; each leaves
+/// the handle zeroed.
 export fn ke_scene_files_create(
     ecs_in: ?*abi_ecs.c.ke_ecs,
     types_in: ?*abi_framework.c.ke_node_types,
     assets_in: ?*abi_asset_resolver.c.ke_asset_resolver,
     io_in: ?*abi_io.c.ke_io,
+    first_scene_in: ?*abi_schedule.c.ke_schedule,
+    first_scene_set: abi_schedule.c.ke_schedule_set_id,
+    settings_in: ?*abi_settings.c.ke_settings,
     out_files: ?*abi_framework.c.ke_scene_files_handle,
 ) callconv(.c) abi_result.c.ke_result {
     const out = out_files orelse return R.code(error.InvalidArgument);
@@ -414,9 +451,35 @@ export fn ke_scene_files_create(
     const types = types_in orelse return R.code(error.InvalidArgument);
     const assets = assets_in orelse return R.code(error.InvalidArgument);
     const io = io_in orelse return R.code(error.InvalidArgument);
+    const first = first_scene_in orelse return R.code(error.InvalidArgument);
+    const settings = settings_schema.read(Settings, settings_in orelse return R.code(error.InvalidArgument)) catch |err| return R.code(err);
     const s = heap.gpa.create(State) catch return R.code(error.OutOfMemory);
-    s.* = .{ .api = .{ .instantiate = &instantiate, .open = &open }, .ecs = ecs, .types = types, .assets = assets, .io = io, .reads = .{ .gpa = heap.gpa } };
+    s.* = .{ .api = .{ .instantiate = &instantiate, .open = &open }, .ecs = ecs, .types = types, .assets = assets, .io = io, .reads = .{ .gpa = heap.gpa }, .first_schedule = first, .first_set = .{first_scene_set} };
     s.api.handle = s;
+    if (settings.first_scene) |path| {
+        if (path.len >= s.first_scene.len) {
+            log.warn("scene files: first scene {s} is longer than a slot holds", .{path});
+            heap.gpa.destroy(s);
+            return R.code(error.InvalidArgument);
+        }
+        @memcpy(s.first_scene[0..path.len], path);
+        const desc: abi_schedule.c.ke_schedule_system_desc = .{
+            .name = "scene.first",
+            .user_data = s,
+            .execute = openFirst,
+            .sets = &s.first_set,
+            .set_count = 1,
+            .exclusive = true,
+        };
+        var id: abi_schedule.c.ke_schedule_system_id = 0;
+        const hooked = first.register_system.?(first, &desc, &id);
+        if (hooked != R.ok) {
+            log.warn("scene files: the schedule refused the first scene system", .{});
+            heap.gpa.destroy(s);
+            return hooked;
+        }
+        s.opener = id;
+    }
     var slot_desc = std.mem.zeroes(abi_framework.c.ke_node_type_desc);
     slot_desc.name = abi_framework.c.KE_COMPONENT_NAME_SCENE_SLOT;
     slot_desc.fields_size = @sizeOf(Slot);
@@ -428,12 +491,16 @@ export fn ke_scene_files_create(
     var tag: Cid = abi_ecs.c.KE_COMPONENT_INVALID;
     const registered = types.register_type.?(types, &slot_desc, &tag);
     if (registered != R.ok) {
-        heap.gpa.destroy(s);
+        vtDestroy(&s.api);
         return registered;
     }
     out.* = .{ .ref = &s.api, .destroy = vtDestroy };
     return R.ok;
 }
+
+pub const parts = [_]abi_part.c.ke_part{
+    part.of(ke_scene_files_create, .{ .name = "scene_files", .slots = &.{ "ecs", "node_types", "assets", "io" }, .hooks = &.{"first_scene"} }),
+};
 
 const testing = std.testing;
 const zsub = @import("zsub");
@@ -571,9 +638,16 @@ const Fixture = struct {
     types: zsub.For(abi_framework.c.ke_node_types) = undefined,
     assets: zsub.For(abi_asset_resolver.c.ke_asset_resolver) = undefined,
     commands: zsub.For(abi_ecs.c.ke_ecs_commands) = undefined,
+    first: zsub.For(abi_schedule.c.ke_schedule) = undefined,
+    settings: settings_schema.Fixed = settings_schema.Fixed.init(&.{}),
     files: abi_framework.c.ke_scene_files_handle = undefined,
 
     fn init(f: *Fixture) !void {
+        try f.prepare();
+        try R.check(ke_scene_files_create(f.ecs.api(), f.types.api(), f.assets.api(), served_files.io(), f.first.api(), 7, &f.settings.api, &f.files));
+    }
+
+    fn prepare(f: *Fixture) !void {
         spawned_count = 0;
         attached_count = 0;
         try f.ecs.init();
@@ -588,11 +662,12 @@ const Fixture = struct {
         _ = f.types.when(.register_type).does(keepSlotType);
         _ = f.assets.when(.resolve_path).does(resolveRes);
         _ = f.commands.when(.attach).does(recordAttach);
-        try R.check(ke_scene_files_create(f.ecs.api(), f.types.api(), f.assets.api(), served_files.io(), &f.files));
+        try f.first.init();
     }
 
     fn deinit(f: *Fixture) void {
         f.files.destroy.?(f.files.ref);
+        f.first.deinit();
         f.commands.deinit();
         f.assets.deinit();
         f.types.deinit();
@@ -798,6 +873,50 @@ test "open spawns a scene slot at the root holding the path, and refuses one lon
     try testing.expectEqualStrings("res://scenes/Menu.scene.toml", std.mem.sliceTo(&opened_path, 0));
     const long = "x" ** abi_framework.c.KE_SCENE_SLOT_MAX_PATH;
     try testing.expectEqual(R.code(error.InvalidArgument), f.files.ref.?.open.?(f.files.ref, f.commands.api(), long, &slot));
+}
+
+var first_desc: abi_schedule.c.ke_schedule_system_desc = undefined;
+
+fn keepFirst(args: zsub.For(abi_schedule.c.ke_schedule).Args(.register_system)) abi_result.c.ke_result {
+    first_desc = args[1].?.*;
+    args[2].?.* = 12;
+    return R.ok;
+}
+
+test "with a first scene, a system in the hook's set opens it on its first run only, and destroying the scene files unregisters it" {
+    var f: Fixture = .{};
+    try f.prepare();
+    _ = f.first.when(.register_system).does(keepFirst);
+    _ = f.types.when(.find_type).does(findSlot);
+    _ = f.types.when(.find_component).does(findSlotComponent);
+    _ = f.types.when(.spawn).does(recordOpen);
+    const pairs = [_]settings_schema.Pair{.{ .key = "first_scene", .value = .{ .string = "res://scenes/Menu.scene.toml" } }};
+    f.settings = settings_schema.Fixed.init(&pairs);
+    try R.check(ke_scene_files_create(f.ecs.api(), f.types.api(), f.assets.api(), served_files.io(), f.first.api(), 7, &f.settings.api, &f.files));
+    try testing.expectEqual(@as(abi_schedule.c.ke_schedule_set_id, 7), first_desc.sets.?[0]);
+    try testing.expect(first_desc.exclusive);
+    var ctx = std.mem.zeroes(abi_schedule.c.ke_schedule_ctx);
+    ctx.commands = f.commands.api();
+    opened_path = std.mem.zeroes(@TypeOf(opened_path));
+    try R.check(first_desc.execute.?(&ctx, first_desc.user_data, 0));
+    try testing.expectEqualStrings("res://scenes/Menu.scene.toml", std.mem.sliceTo(&opened_path, 0));
+    try R.check(first_desc.execute.?(&ctx, first_desc.user_data, 0));
+    try f.types.received(.spawn).times(1);
+    f.deinit();
+    try f.first.received(.unregister_system).where(zsub.argIs(1, @as(abi_schedule.c.ke_schedule_system_id, 12))).times(1);
+}
+
+test "without a first scene no system is registered, and one longer than a slot holds is refused" {
+    var f: Fixture = .{};
+    try f.init();
+    try f.first.received(.register_system).never();
+    const long = "x" ** abi_framework.c.KE_SCENE_SLOT_MAX_PATH;
+    const pairs = [_]settings_schema.Pair{.{ .key = "first_scene", .value = .{ .string = long } }};
+    var too_long = settings_schema.Fixed.init(&pairs);
+    var refused: abi_framework.c.ke_scene_files_handle = undefined;
+    try testing.expectEqual(R.code(error.InvalidArgument), ke_scene_files_create(f.ecs.api(), f.types.api(), f.assets.api(), served_files.io(), f.first.api(), 7, &too_long.api, &refused));
+    try testing.expect(refused.ref == null);
+    f.deinit();
 }
 
 test "the scene files leak nothing" {

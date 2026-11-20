@@ -3,8 +3,10 @@
 const abi_ecs = @import("ecs");
 const abi_extraction = @import("extraction");
 const abi_logger = @import("logger");
-const abi_module = @import("module");
-const abi_render_context = @import("render_context");
+const abi_part = @import("part");
+const abi_render = @import("render");
+const abi_render_frame = @import("render_frame");
+const abi_render_gpu = @import("render_gpu");
 const abi_render_graph = @import("render_graph");
 const abi_render_ui = @import("render_ui");
 const abi_result = @import("result");
@@ -23,21 +25,29 @@ pub fn renderUiSetLogCallback(callback: c.ke_log_callback, ctx: ?*anyopaque) voi
     return c.ke_render_ui_set_log_callback(callback, ctx);
 }
 
-/// Makes the ui pass and registers its quad and label components in the main and the render
-/// world, with a copy of each in the extraction. Its systems come from
-/// ke_render_ui_systems_create.
-pub fn renderUiCreate(context: ?*const abi_render_context.c.ke_render_context) Error!abi_render_ui.c.ke_render_ui_handle {
+/// Makes the ui pass and registers its quad and label components in main and render, with a copy
+/// of each in extraction. Its systems come from ke_render_ui_systems_create. Every argument but
+/// out_ui must outlive the pass.
+pub fn renderUiCreate(main: ?*abi_ecs.c.ke_ecs, render: ?*abi_ecs.c.ke_ecs, extraction: ?*abi_extraction.c.ke_extraction, service: ?*abi_render.c.ke_render_service, device: ?*abi_render_gpu.c.ke_gpu_device, frame: ?*abi_render_frame.c.ke_render_frame) Error!abi_render_ui.c.ke_render_ui_handle {
     var written: abi_render_ui.c.ke_render_ui_handle = undefined;
-    try checkResult(c.ke_render_ui_create(context, &written));
+    try checkResult(c.ke_render_ui_create(main, render, extraction, service, device, frame, &written));
     return written;
 }
 
-/// Creates the module of ui: attaching it registers, in the render schedule, "render.ui.labels"
-/// in the render prepare set, which lays out each label's text, and "render.ui" in the render
-/// queue set, which declares, at KE_RENDER_STAGE_OVERLAY, the pass drawing the quads and the
-/// labels over the frame's colour.
-pub fn renderUiSystemsCreate(ui: ?*abi_render_ui.c.ke_render_ui) Error!abi_module.c.ke_module_handle {
-    var written: abi_module.c.ke_module_handle = undefined;
-    try checkResult(c.ke_render_ui_systems_create(ui, &written));
+/// Registers the systems of ui: "render.ui.labels" in render_prepare_set of render_prepare,
+/// which lays out each label's text, and "render.ui" in render_queue_set of render_queue, which
+/// declares, at KE_RENDER_STAGE_OVERLAY, the pass drawing the quads and the labels over the
+/// frame's colour. Every argument but out_systems must outlive the systems.
+pub fn renderUiSystemsCreate(ui: ?*abi_render_ui.c.ke_render_ui, render_prepare: ?*abi_schedule.c.ke_schedule, render_prepare_set: c.ke_schedule_set_id, render_queue: ?*abi_schedule.c.ke_schedule, render_queue_set: c.ke_schedule_set_id) Error!abi_part.c.ke_owner {
+    var written: abi_part.c.ke_owner = undefined;
+    try checkResult(c.ke_render_ui_systems_create(ui, render_prepare, render_prepare_set, render_queue, render_queue_set, &written));
     return written;
+}
+
+/// Gives the parts ke_render_ui contains, each named after its factory and with its slots named
+/// after the factory's parameters: `render_ui` (ke_render_ui; `main`, `render`, `extraction`,
+/// `service`, `device` and `frame`); `render_ui_systems` (nothing; `ui`, `render_prepare` and
+/// `render_queue`).
+pub fn renderUiParts(out_count: ?*usize) ?*const abi_part.c.ke_part {
+    return c.ke_render_ui_parts(out_count);
 }

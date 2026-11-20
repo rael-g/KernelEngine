@@ -2,8 +2,11 @@
 #define KERNEL_ENGINE_RENDER_COMPONENT_FIELDS_H_
 
 #include <kernel_engine/ecs/component_field.h>
+#include <kernel_engine/ecs/ecs.h>
 #include <kernel_engine/render/components.h>
+#include <stdalign.h>
 #include <stddef.h>
+#include <stdint.h>
 
 /// The fields of `ke_camera_component` a scene or the game writes by name: each name, kind, place, size, default
 /// and, for an enumeration, its value names.
@@ -77,5 +80,29 @@ static const ke_component_field ke_sprite2d_component_fields[] = {
     { "alpha_cutoff", KE_VARIANT_FLOAT, offsetof(ke_sprite2d_component, alpha_cutoff), sizeof(((ke_sprite2d_component *)0)->alpha_cutoff), { KE_VARIANT_FLOAT, { .f = 0.5 } }, NULL, 0 },
     { "attached", KE_VARIANT_BOOL, offsetof(ke_sprite2d_component, attached), sizeof(((ke_sprite2d_component *)0)->attached), { KE_VARIANT_NULL, { 0 } }, NULL, 0 },
 };
+
+/// How `ke_camera_component` is registered: its name, size, alignment and field table.
+static const ke_component_desc ke_camera_component_desc = { KE_COMPONENT_NAME_CAMERA, sizeof(ke_camera_component), alignof(ke_camera_component), ke_camera_component_fields, (uint32_t)(sizeof ke_camera_component_fields / sizeof ke_camera_component_fields[0]) };
+
+/// How `ke_directional_light_component` is registered: its name, size, alignment and field table.
+static const ke_component_desc ke_directional_light_component_desc = { KE_COMPONENT_NAME_DIRECTIONAL_LIGHT, sizeof(ke_directional_light_component), alignof(ke_directional_light_component), ke_directional_light_component_fields, (uint32_t)(sizeof ke_directional_light_component_fields / sizeof ke_directional_light_component_fields[0]) };
+
+/// How `ke_point_light_component` is registered: its name, size, alignment and field table.
+static const ke_component_desc ke_point_light_component_desc = { KE_COMPONENT_NAME_POINT_LIGHT, sizeof(ke_point_light_component), alignof(ke_point_light_component), ke_point_light_component_fields, (uint32_t)(sizeof ke_point_light_component_fields / sizeof ke_point_light_component_fields[0]) };
+
+/// How `ke_spot_light_component` is registered: its name, size, alignment and field table.
+static const ke_component_desc ke_spot_light_component_desc = { KE_COMPONENT_NAME_SPOT_LIGHT, sizeof(ke_spot_light_component), alignof(ke_spot_light_component), ke_spot_light_component_fields, (uint32_t)(sizeof ke_spot_light_component_fields / sizeof ke_spot_light_component_fields[0]) };
+
+/// How `ke_ambient_light_component` is registered: its name, size, alignment and field table.
+static const ke_component_desc ke_ambient_light_component_desc = { KE_COMPONENT_NAME_AMBIENT_LIGHT, sizeof(ke_ambient_light_component), alignof(ke_ambient_light_component), ke_ambient_light_component_fields, (uint32_t)(sizeof ke_ambient_light_component_fields / sizeof ke_ambient_light_component_fields[0]) };
+
+/// How `ke_mesh_component` is registered: its name, size, alignment and field table.
+static const ke_component_desc ke_mesh_component_desc = { KE_COMPONENT_NAME_MESH, sizeof(ke_mesh_component), alignof(ke_mesh_component), ke_mesh_component_fields, (uint32_t)(sizeof ke_mesh_component_fields / sizeof ke_mesh_component_fields[0]) };
+
+/// How `ke_sprite2d_component` is registered: its name, size, alignment and field table.
+static const ke_component_desc ke_sprite2d_component_desc = { KE_COMPONENT_NAME_SPRITE2D, sizeof(ke_sprite2d_component), alignof(ke_sprite2d_component), ke_sprite2d_component_fields, (uint32_t)(sizeof ke_sprite2d_component_fields / sizeof ke_sprite2d_component_fields[0]) };
+
+/// How `ke_skybox_component` is registered: its name, size, alignment, and no field table.
+static const ke_component_desc ke_skybox_component_desc = { KE_COMPONENT_NAME_SKYBOX, sizeof(ke_skybox_component), alignof(ke_skybox_component), NULL, 0 };
 
 #endif

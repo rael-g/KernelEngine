@@ -5,7 +5,7 @@
 
 namespace KernelEngine.Schedule;
 
-/// <summary>Creates a schedule over ecs whose runs go to job_system, both borrowed for its lifetime.</summary>
+/// <summary>Creates a schedule over ecs whose runs go to job_system, both borrowed for its lifetime. It starts with one set, `schedule`, which its part provides as the ke_schedule_set a module joins.</summary>
 public sealed unsafe partial class DefaultSchedule : KernelEngine.Schedule.Schedule
 {
 
@@ -50,7 +50,7 @@ public sealed unsafe partial class DefaultSchedule : KernelEngine.Schedule.Sched
         }
     }
 
-    /// <summary>Creates a schedule over ecs whose runs go to job_system, both borrowed for its lifetime.</summary>
+    /// <summary>Creates a schedule over ecs whose runs go to job_system, both borrowed for its lifetime. It starts with one set, `schedule`, which its part provides as the ke_schedule_set a module joins.</summary>
     /// <param name="ecs"></param>
     /// <param name="jobSystem"></param>
     /// <param name="settings">Read once. `refuse_ambiguity`, a boolean, default false: an ambiguity between two writers fails the run instead of being logged.</param>

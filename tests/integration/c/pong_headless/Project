@@ -1,0 +1,44 @@
+[physics]
+gravity_x = 0.0
+gravity_y = 0.0
+
+[actions.map.Pong.action.PaddleLeftMove]
+type = "Axis1D"
+bindings = [{ kind = "key_pair", negative = "S", positive = "W" }]
+
+[actions.map.Pong.action.PaddleRightMove]
+type = "Axis1D"
+bindings = [{ kind = "key_pair", negative = "Down", positive = "Up" }]
+
+[actions.map.Pong.action.Launch]
+bindings = [{ kind = "key", key = "Space" }]
+
+[actions.map.Pong.action.Quit]
+bindings = [{ kind = "key", key = "Escape" }]
+
+[scene_files]
+first_scene = "res://scenes/Menu.scene.toml"
+
+[runner]
+frames = 900
+dt = 0.016666668
+
+[[runner.script]]
+frame = 10
+key = "Space"
+action = "down"
+
+[[runner.script]]
+frame = 12
+key = "Space"
+action = "up"
+
+[[runner.script]]
+frame = 70
+key = "Space"
+action = "down"
+
+[[runner.script]]
+frame = 72
+key = "Space"
+action = "up"

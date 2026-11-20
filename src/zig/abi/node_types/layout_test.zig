@@ -53,7 +53,7 @@ test "every size and offset is the one C computes" {
         @offsetOf(abi.c.ke_node_component, "data"),
         @offsetOf(abi.c.ke_node_component, "size"),
         @sizeOf(abi.c.ke_node_with),
-        @offsetOf(abi.c.ke_node_with, "name"),
+        @offsetOf(abi.c.ke_node_with, "component"),
         @offsetOf(abi.c.ke_node_with, "initial"),
         @offsetOf(abi.c.ke_node_with, "initial_size"),
         @sizeOf(abi.c.ke_action_ref),

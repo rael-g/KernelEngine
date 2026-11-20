@@ -2,6 +2,7 @@
 
 const abi_ecs = @import("ecs");
 const abi_logger = @import("logger");
+const abi_part = @import("part");
 const abi_result = @import("result");
 const abi_settings = @import("settings");
 
@@ -26,4 +27,9 @@ pub fn ecsFlecsCreate(settings: ?*abi_settings.c.ke_settings) Error!abi_ecs.c.ke
     var written: abi_ecs.c.ke_ecs_handle = undefined;
     try checkResult(c.ke_ecs_flecs_create(settings, &written));
     return written;
+}
+
+/// Gives the parts ke_ecs_flecs contains: `ecs_flecs`, providing ke_ecs.
+pub fn ecsFlecsParts(out_count: ?*usize) ?*const abi_part.c.ke_part {
+    return c.ke_ecs_flecs_parts(out_count);
 }

@@ -5,9 +5,9 @@ pub fn build(b: *std.Build) void {
     _ = ke_build.plugin(b, .{
         .name = "ke_asset_assimp",
         .root = "src/assimp_loader.zig",
-        .abi = &.{ "abi_mesh_data", "abi_mesh", "abi_asset_loader", "abi_io", "abi_render", "abi_result" },
+        .abi = &.{ "abi_part", "abi_mesh_data", "abi_mesh", "abi_asset_loader", "abi_io", "abi_render", "abi_result" },
         .translations = &.{.{ .name = "c", .header = "src/c.h" }},
-        .packages = &.{.{ .name = "zsub", .dependency = "zsub", .module = "zsub" }},
+        .packages = &.{ .{ .name = "part", .dependency = "ke_part", .module = "part" }, .{ .name = "zsub", .dependency = "zsub", .module = "zsub" }},
         .third_party = thirdParty,
         .tests = "Run the assimp conversion unit tests",
     });

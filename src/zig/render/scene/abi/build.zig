@@ -9,9 +9,8 @@ pub fn build(b: *std.Build) void {
     abi.addImport("ecs", b.dependency("abi_ecs", .{}).module("abi"));
     abi.addImport("extraction", b.dependency("abi_extraction", .{}).module("abi"));
     abi.addImport("logger", b.dependency("abi_logger", .{}).module("abi"));
-    abi.addImport("module", b.dependency("abi_module", .{}).module("abi"));
+    abi.addImport("part", b.dependency("abi_part", .{}).module("abi"));
     abi.addImport("render", b.dependency("abi_render", .{}).module("abi"));
-    abi.addImport("render_context", b.dependency("abi_render_context", .{}).module("abi"));
     abi.addImport("render_graph", b.dependency("abi_render_graph", .{}).module("abi"));
     abi.addImport("render_ui", b.dependency("abi_render_ui", .{}).module("abi"));
     abi.addImport("render_ui_factory", b.dependency("abi_render_ui_factory", .{}).module("abi"));
@@ -24,6 +23,7 @@ pub fn build(b: *std.Build) void {
         \\#include <kernel_engine/render/scene/render_scene_log.h>
         \\#include <kernel_engine/render/scene/scene_resolve_create.h>
         \\#include <kernel_engine/render/scene/scene_resolve_systems_create.h>
+        \\#include <kernel_engine/render/scene/render_scene_parts.h>
     );
     const translated = b.addTranslateC(.{ .root_source_file = headers, .target = target, .optimize = optimize });
     translated.addIncludePath(b.path("../../../../c/asset"));
@@ -34,7 +34,7 @@ pub fn build(b: *std.Build) void {
     translated.addIncludePath(b.path("../../../../c/logger"));
     translated.addIncludePath(b.path("../../../../c/math"));
     translated.addIncludePath(b.path("../../../../c/render"));
-    translated.addIncludePath(b.path("../../../../c/module"));
+    translated.addIncludePath(b.path("../../../../c/part"));
     translated.addIncludePath(b.path("../../../../c/render_graph"));
     translated.addIncludePath(b.path("../include"));
     translated.addIncludePath(b.path("../../../common/include"));
@@ -45,7 +45,6 @@ pub fn build(b: *std.Build) void {
     translated.addIncludePath(b.path("../../../../c/settings"));
     translated.addIncludePath(b.path("../../../../c/spatial"));
     translated.addIncludePath(b.path("../../../../c/text"));
-    translated.addIncludePath(b.path("../../../../c/view"));
     const tests = b.addTest(.{ .root_module = b.createModule(.{
         .root_source_file = b.path("layout_test.zig"),
         .link_libc = true,
@@ -65,7 +64,7 @@ pub fn build(b: *std.Build) void {
     tests.root_module.addIncludePath(b.path("../../../../c/logger"));
     tests.root_module.addIncludePath(b.path("../../../../c/math"));
     tests.root_module.addIncludePath(b.path("../../../../c/render"));
-    tests.root_module.addIncludePath(b.path("../../../../c/module"));
+    tests.root_module.addIncludePath(b.path("../../../../c/part"));
     tests.root_module.addIncludePath(b.path("../../../../c/render_graph"));
     tests.root_module.addIncludePath(b.path("../include"));
     tests.root_module.addIncludePath(b.path("../../../common/include"));
@@ -76,6 +75,5 @@ pub fn build(b: *std.Build) void {
     tests.root_module.addIncludePath(b.path("../../../../c/settings"));
     tests.root_module.addIncludePath(b.path("../../../../c/spatial"));
     tests.root_module.addIncludePath(b.path("../../../../c/text"));
-    tests.root_module.addIncludePath(b.path("../../../../c/view"));
     b.step("test", "Check the render_scene_factory ABI against its headers").dependOn(&b.addRunArtifact(tests).step);
 }

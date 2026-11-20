@@ -2,7 +2,6 @@
 
 const abi_asset_resolver = @import("asset_resolver");
 const abi_completion = @import("completion");
-const abi_configuration = @import("configuration");
 const abi_ecs = @import("ecs");
 const abi_framework = @import("framework");
 const abi_image_loader = @import("image_loader");
@@ -10,11 +9,12 @@ const abi_input = @import("input");
 const abi_input_actions = @import("input_actions");
 const abi_io = @import("io");
 const abi_logger = @import("logger");
-const abi_module = @import("module");
+const abi_part = @import("part");
 const abi_result = @import("result");
 const abi_scene_tree = @import("scene_tree");
 const abi_schedule = @import("schedule");
 const abi_scheduler = @import("scheduler");
+const abi_settings = @import("settings");
 const abi_text = @import("text");
 
 pub const ke_component_id = u32;
@@ -56,9 +56,6 @@ pub const ke_log_callback = ?*const fn (?*anyopaque, abi_logger.c.ke_log_level, 
 /// Receives one key the settings hold.
 pub const ke_settings_key_func = ?*const fn (?[*:0]const u8, ?*anyopaque) callconv(.c) void;
 
-/// Receives one child section of the section being listed.
-pub const ke_configuration_child_func = ?*const fn (?[*:0]const u8, ?*anyopaque) callconv(.c) void;
-
 /// A structural operation applied when the queue holding it is drained. `user` points at the
 /// copy of the payload passed to defer; `ecs` is the live world. A failure is returned, and the
 /// queue stops there: the operations recorded after it are dropped.
@@ -91,27 +88,26 @@ pub extern fn ke_asset_resolver_create(image_loader: ?*abi_image_loader.c.ke_ima
 /// stderr, where they go until this is called. Called once, before the library logs.
 pub extern fn ke_framework_set_log_callback(callback: ke_log_callback, ctx: ?*anyopaque) void;
 
-/// Creates the action maps, adding through the map's own slots every map the configuration
-/// describes under the section: ` <section >.map. <Map >` holds `priority` (default 0) and
-/// `enabled` (default true); ` <section >.map. <Map >.action. <Action >` holds `type` (Button,
-/// Axis1D, Axis2D or Axis3D, default Button); ` <section >.map. <Map >.action. <Action
-/// >.bindings. <n >` holds `kind` and its keys: `key` for key, `button` (Left, Right, Middle)
-/// for mouse, `negative` and `positive` for key_pair, `up`, `down`, `left` and `right` for
-/// key_quad, each a key name such as "Space" or "W". The input actions module evaluates the maps
-/// each tick.
-pub extern fn ke_input_actions_create(configuration: ?*abi_configuration.c.ke_configuration, section: ?[*:0]const u8, out_actions: ?*abi_input_actions.c.ke_input_actions_handle) abi_result.c.ke_result;
+/// Creates the action maps, adding through the map's own slots every map settings describe: the
+/// child `map. <Map >` holds `priority` (default 0) and `enabled` (default true); `map. <Map
+/// >.action. <Action >` holds `type` (Button, Axis1D, Axis2D or Axis3D, default Button); `map.
+/// <Map >.action. <Action >.bindings. <n >` holds `kind` and its keys: `key` for key, `button`
+/// (Left, Right, Middle) for mouse, `negative` and `positive` for key_pair, `up`, `down`, `left`
+/// and `right` for key_quad, each a key name such as "Space" or "W". The input actions module
+/// evaluates the maps each tick.
+pub extern fn ke_input_actions_create(settings: ?*abi_settings.c.ke_settings, out_actions: ?*abi_input_actions.c.ke_input_actions_handle) abi_result.c.ke_result;
 
-/// Creates the module that evaluates actions each tick: attaching it registers the exclusive
-/// system "input.actions" in the pre_update schedule's pre_update set, which advances input's
-/// frame and evaluates the maps against its snapshot.
-pub extern fn ke_input_actions_evaluation_create(actions: ?*abi_input_actions.c.ke_input_actions, input: ?*abi_input.c.ke_input, out_module: ?*abi_module.c.ke_module_handle) abi_result.c.ke_result;
+/// Creates the module that evaluates actions: it registers the exclusive system "input.actions"
+/// in pre_update_set of pre_update, which each run advances input's frame and evaluates the maps
+/// against its snapshot. Destroying the module unregisters it.
+pub extern fn ke_input_actions_evaluation_create(actions: ?*abi_input_actions.c.ke_input_actions, input: ?*abi_input.c.ke_input, pre_update: ?*abi_schedule.c.ke_schedule, pre_update_set: ke_schedule_set_id, out_module: ?*abi_part.c.ke_owner) abi_result.c.ke_result;
 
 /// Creates the module that keeps every world transform equal to its local transform composed
-/// with its parent's world transform; attaching it registers one system in the update schedule's
-/// post_update set, which orders the entities parents-before-children each tick and walks them
-/// once. The transform and hierarchy components are resolved by the names a scene_tree registers
-/// them under, so a scene_tree must exist on ecs first.
-pub extern fn ke_scene_hierarchy_create(ecs: ?*abi_ecs.c.ke_ecs, out_module: ?*abi_module.c.ke_module_handle) abi_result.c.ke_result;
+/// with its parent's world transform: it registers one system in post_update_set of post_update,
+/// which orders the entities parents-before-children each run and walks them once. It registers
+/// the transform and hierarchy components on ecs as a scene_tree does, so either may be created
+/// first. Destroying the module unregisters the system; components and entities stay.
+pub extern fn ke_scene_hierarchy_create(ecs: ?*abi_ecs.c.ke_ecs, post_update: ?*abi_schedule.c.ke_schedule, post_update_set: ke_schedule_set_id, out_module: ?*abi_part.c.ke_owner) abi_result.c.ke_result;
 
 /// Creates a scene_tree backed by the supplied ecs. Registers the transform, hierarchy and name
 /// components by name; when a previous scene_tree on the same ecs already registered them, the
@@ -120,23 +116,37 @@ pub extern fn ke_scene_hierarchy_create(ecs: ?*abi_ecs.c.ke_ecs, out_module: ?*a
 pub extern fn ke_scene_tree_create(ecs: ?*abi_ecs.c.ke_ecs, out_tree: ?*abi_scene_tree.c.ke_scene_tree_handle) abi_result.c.ke_result;
 
 /// Creates the node types of `ecs`, whose nodes live in `scene_tree` and whose axis and pressed
-/// read `input_actions`. Their systems run once the node types module is attached; a node's exit
-/// request goes to `scheduler`, which runs each schedule of the module's targets as an
-/// executable whose user is the schedule. Every argument but `input_actions` and `out_types`
-/// must outlive the node types.
+/// read `input_actions`. Their systems run once the node types systems module is created; a
+/// node's exit request goes to `scheduler`, which runs each schedule a hook of that module names
+/// as an executable whose user is the schedule. Every argument but `input_actions` and
+/// `out_types` must outlive the node types.
 pub extern fn ke_node_types_create(scheduler: ?*abi_scheduler.c.ke_scheduler, ecs: ?*abi_ecs.c.ke_ecs, scene_tree: ?*abi_scene_tree.c.ke_scene_tree, input_actions: ?*abi_input_actions.c.ke_input_actions, out_types: ?*abi_framework.c.ke_node_types_handle) abi_result.c.ke_result;
 
-/// Creates the module of types: attaching it registers the ready and exit behaviours and the
-/// systems that clear the last tick's events in the pre_update schedule's pre_update set, fixed
-/// update behaviours in the fixed schedule's fixed_update set, update behaviours in the update
-/// schedule's update set, and event behaviours and the system that frees the nodes that left the
-/// tree in its post_update set, for every type and event registered before or after. Detaching
+/// Creates the module of types: it registers the ready and exit behaviours and the systems that
+/// clear the last tick's events in pre_update_set of pre_update, fixed update behaviours in
+/// fixed_update_set of fixed_update, update behaviours in update_set of update, and event
+/// behaviours and the system that frees the nodes that left the tree in post_update_set of
+/// post_update, for every type and event registered before or after. Destroying the module
 /// removes them all; the types and events stay.
-pub extern fn ke_node_types_systems_create(types: ?*abi_framework.c.ke_node_types, out_module: ?*abi_module.c.ke_module_handle) abi_result.c.ke_result;
+pub extern fn ke_node_types_systems_create(types: ?*abi_framework.c.ke_node_types, pre_update: ?*abi_schedule.c.ke_schedule, pre_update_set: ke_schedule_set_id, fixed_update: ?*abi_schedule.c.ke_schedule, fixed_update_set: ke_schedule_set_id, update: ?*abi_schedule.c.ke_schedule, update_set: ke_schedule_set_id, post_update: ?*abi_schedule.c.ke_schedule, post_update_set: ke_schedule_set_id, out_module: ?*abi_part.c.ke_owner) abi_result.c.ke_result;
 
 /// Creates scene files that spawn through `node_types`, look components up and write their
 /// fields through `ecs`, resolve a `res://` path through `assets` and read every file through
 /// `io`; each must outlive the scene files. It registers through `node_types` the node type
 /// `scene_slot`, carrying a ke_scene_slot_component, whose update replaces a slot's children
-/// when its path changes; the scene files must outlive every tick that runs it.
-pub extern fn ke_scene_files_create(ecs: ?*abi_ecs.c.ke_ecs, node_types: ?*abi_framework.c.ke_node_types, assets: ?*abi_asset_resolver.c.ke_asset_resolver, io: ?*abi_io.c.ke_io, out_files: ?*abi_framework.c.ke_scene_files_handle) abi_result.c.ke_result;
+/// when its path changes; the scene files must outlive every tick that runs it. With the setting
+/// `first_scene`, a `res://` path, it also registers in first_scene_set of first_scene an
+/// exclusive system that, on its first run, does what `open` does with that path, and nothing on
+/// any later run; without it, no system. Destroying the scene files unregisters that system.
+pub extern fn ke_scene_files_create(ecs: ?*abi_ecs.c.ke_ecs, node_types: ?*abi_framework.c.ke_node_types, assets: ?*abi_asset_resolver.c.ke_asset_resolver, io: ?*abi_io.c.ke_io, first_scene: ?*abi_schedule.c.ke_schedule, first_scene_set: ke_schedule_set_id, settings: ?*abi_settings.c.ke_settings, out_files: ?*abi_framework.c.ke_scene_files_handle) abi_result.c.ke_result;
+
+/// Gives the parts ke_framework contains, each named after its factory and with its slots named
+/// after the factory's parameters: `scene_tree` (ke_scene_tree; `ecs`); `asset_resolver`
+/// (ke_asset_resolver; `image_loader` and `font_loader`, optional, and `io`); `input_actions`
+/// (ke_input_actions); `input_actions_evaluation` (nothing; `actions`, `input`, `pre_update`);
+/// `scene_hierarchy` (nothing; `ecs`, `post_update`); `node_types` (ke_node_types; `scheduler`,
+/// `ecs`, `scene_tree` and `input_actions`, optional); `node_types_systems` (nothing; `types`,
+/// `pre_update`, `fixed_update`, `update` and `post_update`); and `scene_files` (ke_scene_files;
+/// `ecs`, `node_types`, `assets`, `io`, `first_scene`). A slot named after a phase takes the
+/// ke_schedule_set its systems join.
+pub extern fn ke_framework_parts(out_count: ?*usize) ?*const abi_part.c.ke_part;

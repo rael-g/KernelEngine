@@ -25,17 +25,10 @@ test "every record is laid out as the header lays it out" {
     @setEvalBranchQuota(100_000_000);
     try expectSameLayout(abi.c.ke_assembly, translated("ke_assembly"));
     try expectSameLayout(abi.c.ke_assembly_handle, translated("ke_assembly_handle"));
+    try expectSameLayout(abi.c.ke_composition_source, translated("ke_composition_source"));
+    try expectSameLayout(abi.c.ke_composition_source_handle, translated("ke_composition_source_handle"));
     if (@hasDecl(c, "ke_assembly_report_fn")) try expectSameLayout(abi.c.ke_assembly_report_fn, c.ke_assembly_report_fn);
-    if (@hasDecl(c, "ke_component_id")) try expectSameLayout(abi.c.ke_component_id, c.ke_component_id);
-    if (@hasDecl(c, "ke_defer_fn")) try expectSameLayout(abi.c.ke_defer_fn, c.ke_defer_fn);
-    if (@hasDecl(c, "ke_entity")) try expectSameLayout(abi.c.ke_entity, c.ke_entity);
     if (@hasDecl(c, "ke_log_callback")) try expectSameLayout(abi.c.ke_log_callback, c.ke_log_callback);
-    if (@hasDecl(c, "ke_query_id")) try expectSameLayout(abi.c.ke_query_id, c.ke_query_id);
-    if (@hasDecl(c, "ke_removal_tracker")) try expectSameLayout(abi.c.ke_removal_tracker, c.ke_removal_tracker);
-    if (@hasDecl(c, "ke_schedule_condition_fn")) try expectSameLayout(abi.c.ke_schedule_condition_fn, c.ke_schedule_condition_fn);
-    if (@hasDecl(c, "ke_schedule_execute_fn")) try expectSameLayout(abi.c.ke_schedule_execute_fn, c.ke_schedule_execute_fn);
-    if (@hasDecl(c, "ke_schedule_set_id")) try expectSameLayout(abi.c.ke_schedule_set_id, c.ke_schedule_set_id);
-    if (@hasDecl(c, "ke_schedule_system_id")) try expectSameLayout(abi.c.ke_schedule_system_id, c.ke_schedule_system_id);
     if (@hasDecl(c, "ke_settings_key_func")) try expectSameLayout(abi.c.ke_settings_key_func, c.ke_settings_key_func);
 }
 
@@ -47,7 +40,8 @@ test "every enum value is the header's value" {
     try std.testing.expectEqual(@as(i64, c.KE_ASSEMBLY_FAILURE_AMBIGUOUS), @as(i64, abi.c.KE_ASSEMBLY_FAILURE_AMBIGUOUS));
     try std.testing.expectEqual(@as(i64, c.KE_ASSEMBLY_FAILURE_WRONG_CONTRACT), @as(i64, abi.c.KE_ASSEMBLY_FAILURE_WRONG_CONTRACT));
     try std.testing.expectEqual(@as(i64, c.KE_ASSEMBLY_FAILURE_CYCLE), @as(i64, abi.c.KE_ASSEMBLY_FAILURE_CYCLE));
-    try std.testing.expectEqual(@as(i64, c.KE_ASSEMBLY_FAILURE_UNHOOKED), @as(i64, abi.c.KE_ASSEMBLY_FAILURE_UNHOOKED));
+    try std.testing.expectEqual(@as(i64, c.KE_ASSEMBLY_FAILURE_DUPLICATE), @as(i64, abi.c.KE_ASSEMBLY_FAILURE_DUPLICATE));
+    try std.testing.expectEqual(@as(i64, c.KE_ASSEMBLY_FAILURE_SHARED_SECTION), @as(i64, abi.c.KE_ASSEMBLY_FAILURE_SHARED_SECTION));
 }
 
 test "every constant is the header's value" {
@@ -55,7 +49,7 @@ test "every constant is the header's value" {
     try std.testing.expectEqual(@as(i128, c.KE_RESULT_ASSEMBLY_UNRESOLVED), @as(i128, abi.c.KE_RESULT_ASSEMBLY_UNRESOLVED));
 }
 
-extern const layout_values: [19]c_ulonglong;
+extern const layout_values: [22]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
@@ -67,10 +61,7 @@ test "every size and offset is the one C computes" {
         @offsetOf(abi.c.ke_assembly, "add_instance"),
         @offsetOf(abi.c.ke_assembly, "add_external"),
         @offsetOf(abi.c.ke_assembly, "bind"),
-        @offsetOf(abi.c.ke_assembly, "hook"),
         @offsetOf(abi.c.ke_assembly, "order"),
-        @offsetOf(abi.c.ke_assembly, "add_set"),
-        @offsetOf(abi.c.ke_assembly, "order_set"),
         @offsetOf(abi.c.ke_assembly, "set_default"),
         @offsetOf(abi.c.ke_assembly, "resolve"),
         @offsetOf(abi.c.ke_assembly, "advance"),
@@ -78,6 +69,12 @@ test "every size and offset is the one C computes" {
         @sizeOf(abi.c.ke_assembly_handle),
         @offsetOf(abi.c.ke_assembly_handle, "ref"),
         @offsetOf(abi.c.ke_assembly_handle, "destroy"),
+        @sizeOf(abi.c.ke_composition_source),
+        @offsetOf(abi.c.ke_composition_source, "handle"),
+        @offsetOf(abi.c.ke_composition_source, "load"),
+        @sizeOf(abi.c.ke_composition_source_handle),
+        @offsetOf(abi.c.ke_composition_source_handle, "ref"),
+        @offsetOf(abi.c.ke_composition_source_handle, "destroy"),
     };
     for (expected, 0..) |value, at| try std.testing.expectEqual(layout_values[at], value);
 }

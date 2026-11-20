@@ -1,0 +1,259 @@
+[defaults]
+ke_ecs = "world"
+
+[instance.job]
+part = "job_system_enki"
+section = "job"
+
+[instance.async]
+part = "async_enki"
+section = "async"
+
+[instance.io]
+part = "io_std"
+section = "io"
+
+[instance.input]
+part = "input_default"
+
+[instance.world]
+part = "ecs_flecs"
+section = "ecs"
+
+[instance.render_world]
+part = "ecs_flecs"
+section = "ecs"
+
+[instance.startup]
+part = "schedule"
+section = "schedule"
+
+[instance.pre_update]
+part = "schedule"
+section = "schedule"
+
+[instance.fixed_pre_update]
+part = "schedule"
+section = "schedule"
+
+[instance.fixed_update]
+part = "schedule"
+section = "schedule"
+
+[instance.fixed_post_update]
+part = "schedule"
+section = "schedule"
+
+[instance.update]
+part = "schedule"
+section = "schedule"
+
+[instance.post_update]
+part = "schedule"
+section = "schedule"
+
+[instance.render_begin]
+part = "schedule"
+section = "schedule"
+[instance.render_begin.bind]
+ecs = "render_world"
+
+[instance.render_prepare]
+part = "schedule"
+section = "schedule"
+[instance.render_prepare.bind]
+ecs = "render_world"
+
+[instance.render_queue]
+part = "schedule"
+section = "schedule"
+[instance.render_queue.bind]
+ecs = "render_world"
+
+[instance.render_submit]
+part = "schedule"
+section = "schedule"
+[instance.render_submit.bind]
+ecs = "render_world"
+
+[instance.shutdown]
+part = "schedule"
+section = "schedule"
+
+[instance.scheduler]
+part = "scheduler"
+section = "scheduler"
+
+[instance.layout]
+part = "scheduler_layout"
+order = ["startup", "pre_update", "fixed_pre_update", "fixed_update", "fixed_post_update", "update", "post_update", "extraction", "render_begin", "render_prepare", "render_queue", "render_submit", "shutdown"]
+[instance.layout.bind]
+startup = "startup"
+every_tick = ["pre_update", "update", "post_update", "extraction", "render_begin", "render_prepare", "render_queue", "render_submit"]
+fixed = ["fixed_pre_update", "fixed_update", "fixed_post_update"]
+shutdown = "shutdown"
+
+[instance.extraction]
+part = "extraction"
+[instance.extraction.bind]
+render = "render_world"
+
+[instance.extraction_history]
+part = "extraction_history"
+[instance.extraction_history.bind]
+fixed_pre_update = "fixed_pre_update"
+
+[instance.scene_tree]
+part = "scene_tree"
+
+[instance.hierarchy]
+part = "scene_hierarchy"
+[instance.hierarchy.bind]
+post_update = "post_update"
+
+[instance.physics]
+part = "physics_2d_box2d"
+section = "physics"
+
+[instance.bodies]
+part = "physics_body2d"
+[instance.bodies.bind]
+fixed_post_update = "fixed_post_update"
+
+[instance.actions]
+part = "input_actions"
+section = "actions"
+
+[instance.action_evaluation]
+part = "input_actions_evaluation"
+[instance.action_evaluation.bind]
+pre_update = "pre_update"
+
+[instance.node_types]
+part = "node_types"
+
+[instance.node_systems]
+part = "node_types_systems"
+[instance.node_systems.bind]
+pre_update = "pre_update"
+fixed_update = "fixed_update"
+update = "update"
+post_update = "post_update"
+
+[instance.engine_nodes]
+part = "engine_nodes"
+
+[instance.fonts]
+part = "font_loader_stb"
+
+[instance.assets]
+part = "asset_resolver"
+
+[instance.scene_files]
+part = "scene_files"
+section = "scene_files"
+[instance.scene_files.bind]
+first_scene = "startup"
+
+[instance.window]
+part = "window_glfw"
+section = "window"
+
+[instance.device]
+part = "gpu_device_webgpu"
+section = "device"
+
+[instance.target]
+part = "gpu_render_target_webgpu_window"
+section = "target"
+
+[instance.binder]
+part = "render_binder_grouped"
+section = "binder"
+
+[instance.service]
+part = "render_service"
+section = "service"
+
+[instance.graph]
+part = "render_graph_simple"
+
+[instance.view_space]
+part = "view_space_rh"
+
+[instance.camera]
+part = "render_camera"
+
+[instance.scene]
+part = "render_scene_resolve"
+[instance.scene.bind]
+render = "render_world"
+
+[instance.scene_systems]
+part = "render_scene_resolve_systems"
+[instance.scene_systems.bind]
+update = "update"
+post_update = "post_update"
+
+[instance.frame]
+part = "render_frame"
+section = "frame"
+[instance.frame.bind]
+ecs = "render_world"
+
+[instance.frame_systems]
+part = "render_frame_systems"
+[instance.frame_systems.bind]
+render_begin = "render_begin"
+render_submit = "render_submit"
+
+[instance.gbuffer]
+part = "render_gbuffer"
+[instance.gbuffer.bind]
+render_prepare = "render_prepare"
+render_queue = "render_queue"
+
+[instance.deferred_lighting]
+part = "render_deferred_lighting"
+section = "deferred_lighting"
+[instance.deferred_lighting.bind]
+render_queue = "render_queue"
+
+[instance.forward]
+part = "render_forward"
+section = "forward"
+[instance.forward.bind]
+render_queue = "render_queue"
+
+[instance.tonemap]
+part = "render_tonemap"
+[instance.tonemap.bind]
+render_queue = "render_queue"
+
+[instance.ui]
+part = "render_ui"
+[instance.ui.bind]
+render = "render_world"
+
+[instance.ui_systems]
+part = "render_ui_systems"
+[instance.ui_systems.bind]
+render_prepare = "render_prepare"
+render_queue = "render_queue"
+
+[instance.labels]
+part = "render_label_resolve"
+section = "labels"
+[instance.labels.bind]
+update = "update"
+
+[instance.audio]
+part = "audio_miniaudio"
+
+[instance.sound]
+part = "sound"
+[instance.sound.bind]
+post_update = "post_update"
+
+[instance.runner]
+part = "runner_window"

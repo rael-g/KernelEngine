@@ -21,7 +21,7 @@ public unsafe interface INativeSettings
     global::System.Runtime.InteropServices.SafeHandle? Owner { get; }
 }
 
-/// <summary>The values one part is created with, each under a key and of one type. A part reads them once, when it is created; a value that changes afterwards is a slot of the part's own contract.</summary>
+/// <summary>The values one part is created with, each under a key and of one type, and the settings nested under it, each under a name. A list of values is a key per element, named by its index after a dot ("tint.0"); a list of tables is a child per element, named by its index ("0"). A part reads them once, when it is created; a value that changes afterwards is a slot of the part's own contract.</summary>
 public unsafe partial class PartSettings : IDisposable, INativeSettings, IPartSettings
 {
 
@@ -218,6 +218,63 @@ public unsafe partial class PartSettings : IDisposable, INativeSettings, IPartSe
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static void ForEachKeyEachTrampoline(sbyte* arg0, void* ctx)
+    {
+        try
+        {
+            if (GCHandle.FromIntPtr((nint)ctx).Target is SettingsKey handler)
+                handler(Marshal.PtrToStringUTF8((nint)arg0) ?? "");
+        }
+        catch (Exception ex)
+        {
+            s_parkedCallbackException ??= ex;
+        }
+    }
+
+    /// <summary>Gives the settings nested under name, empty when nothing is.</summary>
+    /// <param name="name">The child's name.</param>
+    /// <returns>Receives the child, lent while these settings live.</returns>
+    /// <exception cref="Exception">The native call failed.</exception>
+    public IPartSettings Child(string name)
+    {
+        var nameText = name ?? "";
+        var nameSize = System.Text.Encoding.UTF8.GetMaxByteCount(nameText.Length) + 1;
+        Span<byte> nameBytes = nameSize <= 512 ? stackalloc byte[512] : new byte[nameSize];
+        nameBytes[System.Text.Encoding.UTF8.GetBytes(nameText, nameBytes)] = 0;
+        fixed (byte* namePtr = nameBytes)
+        {
+            ke_settings* resultOut = default;
+            NativeResult.ThrowIfFailed(Handle->child(Handle, (sbyte*)namePtr, &resultOut), "child");
+            return PartSettings.Borrow((ke_settings*)resultOut);
+        }
+    }
+
+    /// <summary>Calls each once for every child that holds a key or a child of its own, in the order it was first written.</summary>
+    /// <param name="each">Called once per child, with its name.</param>
+    /// <exception cref="Exception">The native call failed.</exception>
+    public void ForEachChild(SettingsKey? each)
+    {
+        var eachHandle = each is null ? default : GCHandle.Alloc(each);
+        s_parkedCallbackException = null;
+        KernelEngine.Result.Native.Result rc;
+        bool ok;
+        try
+        {
+            ok = (rc = Handle->for_each_child(Handle, each is null ? null : (delegate* unmanaged[Cdecl]<sbyte*, void*, void>)&ForEachChildEachTrampoline, (void*)GCHandle.ToIntPtr(eachHandle))) == KernelEngine.Result.Native.Result.Ok;
+        }
+        finally
+        {
+            if (eachHandle.IsAllocated) eachHandle.Free();
+        }
+        if (s_parkedCallbackException is { } parked)
+        {
+            s_parkedCallbackException = null;
+            throw parked;
+        }
+        if (!ok) throw NativeResult.FromCode(rc, "for_each_child");
+    }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static void ForEachChildEachTrampoline(sbyte* arg0, void* ctx)
     {
         try
         {

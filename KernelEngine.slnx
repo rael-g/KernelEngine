@@ -15,6 +15,7 @@
     <Project Path="src/csharp/configuration/KernelEngine.Configuration/KernelEngine.Configuration.csproj" />
     <Project Path="src/csharp/framework/KernelEngine.Framework/KernelEngine.Framework.csproj" />
     <Project Path="src/csharp/framework/KernelEngine.Framework.Nodes/KernelEngine.Framework.Nodes.csproj" />
+    <Project Path="src/csharp/engine_nodes/KernelEngine.EngineNodes/KernelEngine.EngineNodes.csproj" />
     <Project Path="src/csharp/generators/KernelEngine.Framework.Nodes.Generator/KernelEngine.Framework.Nodes.Generator.csproj" />
     <Project Path="src/csharp/sdk/KernelEngine.Sdk/KernelEngine.Sdk.csproj" />
     <Project Path="src/csharp/sdk/KernelEngine.Sdk.Defaults/KernelEngine.Sdk.Defaults.csproj" />
@@ -33,10 +34,13 @@
     <Project Path="src/csharp/schedule/KernelEngine.Schedule/KernelEngine.Schedule.csproj" />
     <Project Path="src/csharp/completion/KernelEngine.Completion/KernelEngine.Completion.csproj" />
     <Project Path="src/csharp/settings/KernelEngine.Settings/KernelEngine.Settings.csproj" />
-    <Project Path="src/csharp/module/KernelEngine.Module/KernelEngine.Module.csproj" />
     <Project Path="src/csharp/part/KernelEngine.Part/KernelEngine.Part.csproj" />
     <Project Path="src/csharp/assembly/KernelEngine.Assembly/KernelEngine.Assembly.csproj" />
     <Project Path="src/csharp/assembly/KernelEngine.Assembly.Default/KernelEngine.Assembly.Default.csproj" />
+    <Project Path="src/csharp/assembly/KernelEngine.Assembly.Toml/KernelEngine.Assembly.Toml.csproj" />
+    <Project Path="src/csharp/runner/KernelEngine.Runner/KernelEngine.Runner.csproj" />
+    <Project Path="src/csharp/runner/KernelEngine.Runner.Headless/KernelEngine.Runner.Headless.csproj" />
+    <Project Path="src/csharp/runner/KernelEngine.Runner.Window/KernelEngine.Runner.Window.csproj" />
     <Project Path="src/csharp/extraction/KernelEngine.Extraction/KernelEngine.Extraction.csproj" />
     <Project Path="src/csharp/render_graph/KernelEngine.RenderGraph/KernelEngine.RenderGraph.csproj" />
     <Project Path="src/csharp/render_graph/KernelEngine.RenderGraph.Simple/KernelEngine.RenderGraph.Simple.csproj" />
