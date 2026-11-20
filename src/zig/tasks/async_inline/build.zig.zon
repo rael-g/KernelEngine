@@ -1,0 +1,23 @@
+.{
+    .name = .ke_async_inline,
+    .version = "0.1.0",
+    .fingerprint = 0x5507c159c587beae,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .abi_part = .{ .path = "../../abi/part" },
+        .ke_part = .{ .path = "../../assembly/part" },
+        .abi_settings = .{ .path = "../../abi/settings" },
+        .ke_settings_schema = .{ .path = "../../configuration/settings_schema" },
+        .abi_completion = .{ .path = "../../abi/completion" },
+        .abi_async = .{ .path = "../../abi/async" },
+        .abi_async_inline_factory = .{ .path = "abi" },
+        .abi_result = .{ .path = "../../abi/result" },
+        .ke_completion_graph = .{ .path = "../completion_graph" },
+        .ke_async_suite = .{ .path = "../../test/async_suite" },
+        .ke_common = .{ .path = "../../common" },
+        .ke_build = .{ .path = "../../build" },
+        .ke_logger = .{ .path = "../../logger" },
+        .ke_result = .{ .path = "../../result" },
+    },
+    .paths = .{"."},
+}

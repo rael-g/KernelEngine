@@ -11,8 +11,8 @@
   <ItemGroup>
     <ProjectReference Include="..\KernelEngine.Sdk\KernelEngine.Sdk.csproj" />
     <ProjectReference Include="..\..\ecs\KernelEngine.Ecs.Flecs\KernelEngine.Ecs.Flecs.csproj" />
-    <ProjectReference Include="..\..\job\KernelEngine.Job.Enki\KernelEngine.Job.Enki.csproj" />
-    <ProjectReference Include="..\..\async\KernelEngine.Async.Enki\KernelEngine.Async.Enki.csproj" />
+    <ProjectReference Include="..\..\tasks\KernelEngine.Job.Enki\KernelEngine.Job.Enki.csproj" />
+    <ProjectReference Include="..\..\tasks\KernelEngine.Async.Enki\KernelEngine.Async.Enki.csproj" />
     <ProjectReference Include="..\..\file_system\KernelEngine.FileSystem.Std\KernelEngine.FileSystem.Std.csproj" />
     <ProjectReference Include="..\..\io\KernelEngine.Io.Std\KernelEngine.Io.Std.csproj" />
     <ProjectReference Include="..\..\window\KernelEngine.Window.Glfw\KernelEngine.Window.Glfw.csproj" />

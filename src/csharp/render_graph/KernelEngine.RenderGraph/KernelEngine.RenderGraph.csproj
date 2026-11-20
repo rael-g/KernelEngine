@@ -12,6 +12,6 @@
     <ProjectReference Include="..\..\result\KernelEngine.Result\KernelEngine.Result.csproj" />
     <ProjectReference Include="..\..\render\KernelEngine.Render.Abstractions\KernelEngine.Render.Abstractions.csproj" />
     <ProjectReference Include="..\..\render\KernelEngine.Render.Native\KernelEngine.Render.Native.csproj" />
-    <ProjectReference Include="..\..\completion\KernelEngine.Completion\KernelEngine.Completion.csproj" />
+    <ProjectReference Include="..\..\tasks\KernelEngine.Completion\KernelEngine.Completion.csproj" />
   </ItemGroup>
 </Project>

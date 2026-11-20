@@ -1,7 +1,7 @@
 #ifndef KERNEL_ENGINE_ASSEMBLY_PART_H_
 #define KERNEL_ENGINE_ASSEMBLY_PART_H_
 
-#include <kernel_engine/completion/completion.h>
+#include <kernel_engine/tasks/completion.h>
 #include <kernel_engine/logger/log_callback.h>
 #include <kernel_engine/result/result.h>
 #include <kernel_engine/configuration/settings.h>

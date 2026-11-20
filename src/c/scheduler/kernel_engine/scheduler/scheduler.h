@@ -1,7 +1,7 @@
 #ifndef KERNEL_ENGINE_SCHEDULER_SCHEDULER_H_
 #define KERNEL_ENGINE_SCHEDULER_SCHEDULER_H_
 
-#include <kernel_engine/completion/completion.h>
+#include <kernel_engine/tasks/completion.h>
 #include <kernel_engine/result/result.h>
 #include <stdbool.h>
 #include <stdint.h>

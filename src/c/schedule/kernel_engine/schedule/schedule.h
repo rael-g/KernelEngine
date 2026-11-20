@@ -1,7 +1,7 @@
 #ifndef KERNEL_ENGINE_SCHEDULE_SCHEDULE_H_
 #define KERNEL_ENGINE_SCHEDULE_SCHEDULE_H_
 
-#include <kernel_engine/completion/completion.h>
+#include <kernel_engine/tasks/completion.h>
 #include <kernel_engine/result/result.h>
 #include <kernel_engine/ecs/ecs.h>
 #include <kernel_engine/ecs/ke_ecs.h>

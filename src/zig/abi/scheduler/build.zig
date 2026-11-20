@@ -16,9 +16,7 @@ pub fn build(b: *std.Build) void {
         \\#include <kernel_engine/scheduler/scheduler_create.h>
     );
     const translated = b.addTranslateC(.{ .root_source_file = headers, .target = target, .optimize = optimize });
-    translated.addIncludePath(b.path("../../../c/async"));
-    translated.addIncludePath(b.path("../../../c/completion"));
-    translated.addIncludePath(b.path("../../../c/job"));
+    translated.addIncludePath(b.path("../../../c/tasks"));
     translated.addIncludePath(b.path("../../../c/result"));
     translated.addIncludePath(b.path("../../../c/scheduler"));
     translated.addIncludePath(b.path("../../scheduler/include"));
@@ -35,9 +33,7 @@ pub fn build(b: *std.Build) void {
         },
     }) });
     tests.root_module.addCSourceFile(.{ .file = b.path("layout_values.c") });
-    tests.root_module.addIncludePath(b.path("../../../c/async"));
-    tests.root_module.addIncludePath(b.path("../../../c/completion"));
-    tests.root_module.addIncludePath(b.path("../../../c/job"));
+    tests.root_module.addIncludePath(b.path("../../../c/tasks"));
     tests.root_module.addIncludePath(b.path("../../../c/result"));
     tests.root_module.addIncludePath(b.path("../../../c/scheduler"));
     tests.root_module.addIncludePath(b.path("../../scheduler/include"));

@@ -15,7 +15,7 @@ pub fn build(b: *std.Build) void {
     );
     const translated = b.addTranslateC(.{ .root_source_file = headers, .target = target, .optimize = optimize });
     translated.addIncludePath(b.path("../../../c/assembly"));
-    translated.addIncludePath(b.path("../../../c/completion"));
+    translated.addIncludePath(b.path("../../../c/tasks"));
     translated.addIncludePath(b.path("../../../c/logger"));
     translated.addIncludePath(b.path("../../../c/result"));
     translated.addIncludePath(b.path("../../../c/configuration"));
@@ -31,7 +31,7 @@ pub fn build(b: *std.Build) void {
     }) });
     tests.root_module.addCSourceFile(.{ .file = b.path("layout_values.c") });
     tests.root_module.addIncludePath(b.path("../../../c/assembly"));
-    tests.root_module.addIncludePath(b.path("../../../c/completion"));
+    tests.root_module.addIncludePath(b.path("../../../c/tasks"));
     tests.root_module.addIncludePath(b.path("../../../c/logger"));
     tests.root_module.addIncludePath(b.path("../../../c/result"));
     tests.root_module.addIncludePath(b.path("../../../c/configuration"));

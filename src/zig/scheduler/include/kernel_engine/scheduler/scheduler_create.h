@@ -3,8 +3,8 @@
 
 #include <kernel_engine/configuration/settings.h>
 #include <kernel_engine/common/export.h>
-#include <kernel_engine/async/async.h>
-#include <kernel_engine/job/job_system.h>
+#include <kernel_engine/tasks/async.h>
+#include <kernel_engine/tasks/job_system.h>
 #include <kernel_engine/scheduler/scheduler.h>
 
 #ifdef __cplusplus

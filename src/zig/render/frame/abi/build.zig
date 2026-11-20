@@ -23,9 +23,8 @@ pub fn build(b: *std.Build) void {
         \\#include <kernel_engine/render/frame/render_frame_parts.h>
     );
     const translated = b.addTranslateC(.{ .root_source_file = headers, .target = target, .optimize = optimize });
-    translated.addIncludePath(b.path("../../../../c/completion"));
+    translated.addIncludePath(b.path("../../../../c/tasks"));
     translated.addIncludePath(b.path("../../../../c/ecs"));
-    translated.addIncludePath(b.path("../../../../c/job"));
     translated.addIncludePath(b.path("../../../../c/logger"));
     translated.addIncludePath(b.path("../../../../c/math"));
     translated.addIncludePath(b.path("../../../../c/render"));
@@ -49,9 +48,8 @@ pub fn build(b: *std.Build) void {
         },
     }) });
     tests.root_module.addCSourceFile(.{ .file = b.path("layout_values.c") });
-    tests.root_module.addIncludePath(b.path("../../../../c/completion"));
+    tests.root_module.addIncludePath(b.path("../../../../c/tasks"));
     tests.root_module.addIncludePath(b.path("../../../../c/ecs"));
-    tests.root_module.addIncludePath(b.path("../../../../c/job"));
     tests.root_module.addIncludePath(b.path("../../../../c/logger"));
     tests.root_module.addIncludePath(b.path("../../../../c/math"));
     tests.root_module.addIncludePath(b.path("../../../../c/render"));

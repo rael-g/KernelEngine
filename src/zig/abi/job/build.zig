@@ -9,11 +9,10 @@ pub fn build(b: *std.Build) void {
     abi.addImport("result", b.dependency("abi_result", .{}).module("abi"));
 
     const headers = b.addWriteFiles().add("layout.h",
-        \\#include <kernel_engine/job/job_system.h>
+        \\#include <kernel_engine/tasks/job_system.h>
     );
     const translated = b.addTranslateC(.{ .root_source_file = headers, .target = target, .optimize = optimize });
-    translated.addIncludePath(b.path("../../../c/completion"));
-    translated.addIncludePath(b.path("../../../c/job"));
+    translated.addIncludePath(b.path("../../../c/tasks"));
     translated.addIncludePath(b.path("../../../c/result"));
     const tests = b.addTest(.{ .root_module = b.createModule(.{
         .root_source_file = b.path("layout_test.zig"),
@@ -26,8 +25,7 @@ pub fn build(b: *std.Build) void {
         },
     }) });
     tests.root_module.addCSourceFile(.{ .file = b.path("layout_values.c") });
-    tests.root_module.addIncludePath(b.path("../../../c/completion"));
-    tests.root_module.addIncludePath(b.path("../../../c/job"));
+    tests.root_module.addIncludePath(b.path("../../../c/tasks"));
     tests.root_module.addIncludePath(b.path("../../../c/result"));
     b.step("test", "Check the job ABI against its headers").dependOn(&b.addRunArtifact(tests).step);
 }

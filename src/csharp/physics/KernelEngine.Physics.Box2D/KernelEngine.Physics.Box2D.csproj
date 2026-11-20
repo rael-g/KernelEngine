@@ -17,8 +17,8 @@
     <ProjectReference Include="..\..\configuration\KernelEngine.Configuration\KernelEngine.Configuration.csproj" />
     <ProjectReference Include="..\..\logger\KernelEngine.Logger\KernelEngine.Logger.csproj" />
     <ProjectReference Include="..\..\physics\KernelEngine.Physics\KernelEngine.Physics.csproj" />
-    <ProjectReference Include="..\..\job\KernelEngine.Job\KernelEngine.Job.csproj" />
-    <ProjectReference Include="..\..\completion\KernelEngine.Completion\KernelEngine.Completion.csproj" />
+    <ProjectReference Include="..\..\tasks\KernelEngine.Job\KernelEngine.Job.csproj" />
+    <ProjectReference Include="..\..\tasks\KernelEngine.Completion\KernelEngine.Completion.csproj" />
   </ItemGroup>
 
   <ItemGroup>

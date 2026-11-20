@@ -20,9 +20,9 @@
     <ProjectReference Include="..\KernelEngine.Scheduler.Abstractions\KernelEngine.Scheduler.Abstractions.csproj" />
     <ProjectReference Include="..\..\common\KernelEngine.Common\KernelEngine.Common.csproj" />
     <ProjectReference Include="..\..\assembly\KernelEngine.Part\KernelEngine.Part.csproj" />
-    <ProjectReference Include="..\..\completion\KernelEngine.Completion\KernelEngine.Completion.csproj" />
-    <ProjectReference Include="..\..\job\KernelEngine.Job\KernelEngine.Job.csproj" />
-    <ProjectReference Include="..\..\async\KernelEngine.Async\KernelEngine.Async.csproj" />
+    <ProjectReference Include="..\..\tasks\KernelEngine.Completion\KernelEngine.Completion.csproj" />
+    <ProjectReference Include="..\..\tasks\KernelEngine.Job\KernelEngine.Job.csproj" />
+    <ProjectReference Include="..\..\tasks\KernelEngine.Async\KernelEngine.Async.csproj" />
     <ProjectReference Include="..\..\logger\KernelEngine.Logger.Abstractions\KernelEngine.Logger.Abstractions.csproj" />
     <ProjectReference Include="..\..\logger\KernelEngine.Logger\KernelEngine.Logger.csproj" />
   </ItemGroup>

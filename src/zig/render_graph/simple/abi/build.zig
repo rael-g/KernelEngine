@@ -17,7 +17,7 @@ pub fn build(b: *std.Build) void {
         \\#include <kernel_engine/render_graph/simple/render_graph_simple_parts.h>
     );
     const translated = b.addTranslateC(.{ .root_source_file = headers, .target = target, .optimize = optimize });
-    translated.addIncludePath(b.path("../../../../c/completion"));
+    translated.addIncludePath(b.path("../../../../c/tasks"));
     translated.addIncludePath(b.path("../../../../c/logger"));
     translated.addIncludePath(b.path("../../../../c/assembly"));
     translated.addIncludePath(b.path("../../../../c/render"));
@@ -37,7 +37,7 @@ pub fn build(b: *std.Build) void {
         },
     }) });
     tests.root_module.addCSourceFile(.{ .file = b.path("layout_values.c") });
-    tests.root_module.addIncludePath(b.path("../../../../c/completion"));
+    tests.root_module.addIncludePath(b.path("../../../../c/tasks"));
     tests.root_module.addIncludePath(b.path("../../../../c/logger"));
     tests.root_module.addIncludePath(b.path("../../../../c/assembly"));
     tests.root_module.addIncludePath(b.path("../../../../c/render"));

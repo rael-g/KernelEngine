@@ -43,7 +43,7 @@
     <ProjectReference Include="..\..\ecs\KernelEngine.Ecs\KernelEngine.Ecs.csproj" />
     <ProjectReference Include="..\..\window\KernelEngine.Window\KernelEngine.Window.csproj" />
     <ProjectReference Include="..\..\io\KernelEngine.Io\KernelEngine.Io.csproj" />
-    <ProjectReference Include="..\..\async\KernelEngine.Async\KernelEngine.Async.csproj" />
+    <ProjectReference Include="..\..\tasks\KernelEngine.Async\KernelEngine.Async.csproj" />
     <ProjectReference Include="..\..\text\KernelEngine.Text\KernelEngine.Text.csproj" />
   </ItemGroup>
 

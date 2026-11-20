@@ -2,7 +2,7 @@
 #define KERNEL_ENGINE_PHYSICS_BOX2D_BOX2D_PHYSICS_H_
 
 #include <kernel_engine/configuration/settings.h>
-#include <kernel_engine/job/job_system.h>
+#include <kernel_engine/tasks/job_system.h>
 #include <kernel_engine/physics/physics_2d.h>
 
 #ifndef KE_PHYSICS_BOX2D_API

@@ -1,7 +1,7 @@
 #ifndef KERNEL_ENGINE_RENDER_GRAPH_RENDER_GRAPH_H_
 #define KERNEL_ENGINE_RENDER_GRAPH_RENDER_GRAPH_H_
 
-#include <kernel_engine/completion/completion.h>
+#include <kernel_engine/tasks/completion.h>
 #include <kernel_engine/render/gpu/gpu_device.h>
 #include <kernel_engine/result/result.h>
 #include <stdbool.h>

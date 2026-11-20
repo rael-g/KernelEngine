@@ -1,5 +1,5 @@
 #include <stddef.h>
-#include <kernel_engine/completion/completion.h>
+#include <kernel_engine/tasks/completion.h>
 const unsigned long long layout_values[] = {
     sizeof(ke_completion),
     offsetof(ke_completion, handle),

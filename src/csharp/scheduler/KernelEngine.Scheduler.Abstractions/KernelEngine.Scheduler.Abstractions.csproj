@@ -11,6 +11,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\completion\KernelEngine.Completion\KernelEngine.Completion.csproj" />
+    <ProjectReference Include="..\..\tasks\KernelEngine.Completion\KernelEngine.Completion.csproj" />
   </ItemGroup>
 </Project>

@@ -20,7 +20,7 @@ pub fn build(b: *std.Build) void {
         \\#include <kernel_engine/render/service/render_service_parts.h>
     );
     const translated = b.addTranslateC(.{ .root_source_file = headers, .target = target, .optimize = optimize });
-    translated.addIncludePath(b.path("../../../../c/completion"));
+    translated.addIncludePath(b.path("../../../../c/tasks"));
     translated.addIncludePath(b.path("../../../../c/ecs"));
     translated.addIncludePath(b.path("../../../../c/file_system"));
     translated.addIncludePath(b.path("../../../../c/io"));
@@ -44,7 +44,7 @@ pub fn build(b: *std.Build) void {
         },
     }) });
     tests.root_module.addCSourceFile(.{ .file = b.path("layout_values.c") });
-    tests.root_module.addIncludePath(b.path("../../../../c/completion"));
+    tests.root_module.addIncludePath(b.path("../../../../c/tasks"));
     tests.root_module.addIncludePath(b.path("../../../../c/ecs"));
     tests.root_module.addIncludePath(b.path("../../../../c/file_system"));
     tests.root_module.addIncludePath(b.path("../../../../c/io"));

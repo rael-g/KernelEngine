@@ -20,12 +20,10 @@ pub fn build(b: *std.Build) void {
         \\#include <kernel_engine/runner/headless/runner_headless_parts.h>
     );
     const translated = b.addTranslateC(.{ .root_source_file = headers, .target = target, .optimize = optimize });
-    translated.addIncludePath(b.path("../../../../c/async"));
-    translated.addIncludePath(b.path("../../../../c/completion"));
+    translated.addIncludePath(b.path("../../../../c/tasks"));
     translated.addIncludePath(b.path("../../../../c/input"));
     translated.addIncludePath(b.path("../../../input/default/include"));
     translated.addIncludePath(b.path("../../../common/include"));
-    translated.addIncludePath(b.path("../../../../c/job"));
     translated.addIncludePath(b.path("../../../../c/logger"));
     translated.addIncludePath(b.path("../../../../c/math"));
     translated.addIncludePath(b.path("../../../../c/assembly"));
@@ -46,12 +44,10 @@ pub fn build(b: *std.Build) void {
         },
     }) });
     tests.root_module.addCSourceFile(.{ .file = b.path("layout_values.c") });
-    tests.root_module.addIncludePath(b.path("../../../../c/async"));
-    tests.root_module.addIncludePath(b.path("../../../../c/completion"));
+    tests.root_module.addIncludePath(b.path("../../../../c/tasks"));
     tests.root_module.addIncludePath(b.path("../../../../c/input"));
     tests.root_module.addIncludePath(b.path("../../../input/default/include"));
     tests.root_module.addIncludePath(b.path("../../../common/include"));
-    tests.root_module.addIncludePath(b.path("../../../../c/job"));
     tests.root_module.addIncludePath(b.path("../../../../c/logger"));
     tests.root_module.addIncludePath(b.path("../../../../c/math"));
     tests.root_module.addIncludePath(b.path("../../../../c/assembly"));

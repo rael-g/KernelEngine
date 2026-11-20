@@ -36,8 +36,7 @@ pub fn build(b: *std.Build) void {
     );
     const translated = b.addTranslateC(.{ .root_source_file = headers, .target = target, .optimize = optimize });
     translated.addIncludePath(b.path("../../../c/asset"));
-    translated.addIncludePath(b.path("../../../c/async"));
-    translated.addIncludePath(b.path("../../../c/completion"));
+    translated.addIncludePath(b.path("../../../c/tasks"));
     translated.addIncludePath(b.path("../../../c/ecs"));
     translated.addIncludePath(b.path("../../../c/file_system"));
     translated.addIncludePath(b.path("../../../c/framework"));
@@ -46,7 +45,6 @@ pub fn build(b: *std.Build) void {
     translated.addIncludePath(b.path("../../../c/input"));
     translated.addIncludePath(b.path("../../input/default/include"));
     translated.addIncludePath(b.path("../../../c/io"));
-    translated.addIncludePath(b.path("../../../c/job"));
     translated.addIncludePath(b.path("../../../c/logger"));
     translated.addIncludePath(b.path("../../../c/math"));
     translated.addIncludePath(b.path("../../../c/render"));
@@ -71,8 +69,7 @@ pub fn build(b: *std.Build) void {
     }) });
     tests.root_module.addCSourceFile(.{ .file = b.path("layout_values.c") });
     tests.root_module.addIncludePath(b.path("../../../c/asset"));
-    tests.root_module.addIncludePath(b.path("../../../c/async"));
-    tests.root_module.addIncludePath(b.path("../../../c/completion"));
+    tests.root_module.addIncludePath(b.path("../../../c/tasks"));
     tests.root_module.addIncludePath(b.path("../../../c/ecs"));
     tests.root_module.addIncludePath(b.path("../../../c/file_system"));
     tests.root_module.addIncludePath(b.path("../../../c/framework"));
@@ -81,7 +78,6 @@ pub fn build(b: *std.Build) void {
     tests.root_module.addIncludePath(b.path("../../../c/input"));
     tests.root_module.addIncludePath(b.path("../../input/default/include"));
     tests.root_module.addIncludePath(b.path("../../../c/io"));
-    tests.root_module.addIncludePath(b.path("../../../c/job"));
     tests.root_module.addIncludePath(b.path("../../../c/logger"));
     tests.root_module.addIncludePath(b.path("../../../c/math"));
     tests.root_module.addIncludePath(b.path("../../../c/render"));

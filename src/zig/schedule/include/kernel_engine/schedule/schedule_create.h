@@ -3,7 +3,7 @@
 
 #include <kernel_engine/configuration/settings.h>
 #include <kernel_engine/common/export.h>
-#include <kernel_engine/job/job_system.h>
+#include <kernel_engine/tasks/job_system.h>
 #include <kernel_engine/schedule/schedule.h>
 #include <kernel_engine/ecs/ke_ecs.h>
 
