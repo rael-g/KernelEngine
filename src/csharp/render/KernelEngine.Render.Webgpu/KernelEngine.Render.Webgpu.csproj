@@ -34,7 +34,6 @@
     <ProjectReference Include="..\KernelEngine.Render.Frame\KernelEngine.Render.Frame.csproj" />
     <ProjectReference Include="..\..\render_graph\KernelEngine.RenderGraph\KernelEngine.RenderGraph.csproj" />
     <ProjectReference Include="..\..\extraction\KernelEngine.Extraction\KernelEngine.Extraction.csproj" />
-    <ProjectReference Include="..\..\module\KernelEngine.Module\KernelEngine.Module.csproj" />
     <ProjectReference Include="..\..\common\KernelEngine.Common\KernelEngine.Common.csproj" />
     <ProjectReference Include="..\..\view\KernelEngine.View\KernelEngine.View.csproj" />
     <ProjectReference Include="..\KernelEngine.Render.Abstractions\KernelEngine.Render.Abstractions.csproj" />

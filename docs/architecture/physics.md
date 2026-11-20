@@ -18,8 +18,8 @@ and a transform; a shape is its own entity, a descendant of the body's entity, w
 `ke_collider2d_component` and a transform. The body id the world returns is stored in the `body`
 field of the component and is the only link between the two sides.
 
-**The module is two systems.** Attaching the `ke_module` that `ke_physics_body2d_create` returns
-registers "physics.body2d" and "physics.collider2d" in the fixed schedule's fixed_post_update set,
+**The module is two systems.** `ke_physics_body2d_create` registers "physics.body2d" and
+"physics.collider2d" on the schedule and set of its hook, `fixed_post_update` in the default composition,
 after the scripts' fixed update, so the world steps by the fixed step whatever the frame time. The first reads and writes "body2d"
 and "transform2d"; the second writes "collider2d" and reads "body2d", "transform2d" and "hierarchy".
 They conflict on "body2d", so the schedule orders them, the writer first.

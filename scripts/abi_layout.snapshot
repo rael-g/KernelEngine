@@ -1226,34 +1226,6 @@ ke_render_frame_handle size=16 align=8
   ref 0
   destroy 8
 
-[module]
-ke_module_targets size=96 align=8
-  startup 0
-  pre_update 8
-  fixed 16
-  update 24
-  shutdown 32
-  render 40
-  startup_set 48
-  pre_update_set 52
-  fixed_pre_update_set 56
-  fixed_update_set 60
-  fixed_post_update_set 64
-  update_set 68
-  post_update_set 72
-  shutdown_set 76
-  render_begin_set 80
-  render_prepare_set 84
-  render_queue_set 88
-  render_submit_set 92
-ke_module size=24 align=8
-  handle 0
-  attach 8
-  detach 16
-ke_module_handle size=16 align=8
-  ref 0
-  destroy 8
-
 [part]
 ke_part_slot size=24 align=8
   name 0
@@ -1292,6 +1264,12 @@ ke_assembly size=88 align=8
   advance 72
   get 80
 ke_assembly_handle size=16 align=8
+  ref 0
+  destroy 8
+ke_composition_source size=16 align=8
+  handle 0
+  load 8
+ke_composition_source_handle size=16 align=8
   ref 0
   destroy 8
 
