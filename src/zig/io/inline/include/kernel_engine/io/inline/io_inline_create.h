@@ -2,7 +2,7 @@
 #define KERNEL_ENGINE_IO_INLINE_IO_INLINE_CREATE_H_
 
 #include <kernel_engine/common/export.h>
-#include <kernel_engine/file_system/file_system.h>
+#include <kernel_engine/io/file_system.h>
 #include <kernel_engine/io/io.h>
 #include <kernel_engine/configuration/settings.h>
 

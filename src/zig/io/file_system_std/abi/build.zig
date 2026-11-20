@@ -14,7 +14,7 @@ pub fn build(b: *std.Build) void {
         \\#include <kernel_engine/file_system/std/file_system_std_log.h>
     );
     const translated = b.addTranslateC(.{ .root_source_file = headers, .target = target, .optimize = optimize });
-    translated.addIncludePath(b.path("../../../../c/file_system"));
+    translated.addIncludePath(b.path("../../../../c/io"));
     translated.addIncludePath(b.path("../include"));
     translated.addIncludePath(b.path("../../../common/include"));
     translated.addIncludePath(b.path("../../../../c/logger"));
@@ -30,7 +30,7 @@ pub fn build(b: *std.Build) void {
         },
     }) });
     tests.root_module.addCSourceFile(.{ .file = b.path("layout_values.c") });
-    tests.root_module.addIncludePath(b.path("../../../../c/file_system"));
+    tests.root_module.addIncludePath(b.path("../../../../c/io"));
     tests.root_module.addIncludePath(b.path("../include"));
     tests.root_module.addIncludePath(b.path("../../../common/include"));
     tests.root_module.addIncludePath(b.path("../../../../c/logger"));

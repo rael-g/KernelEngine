@@ -51,8 +51,8 @@
     <Project Path="src/csharp/tasks/KernelEngine.Async/KernelEngine.Async.csproj" />
     <Project Path="src/csharp/tasks/KernelEngine.Async.Enki/KernelEngine.Async.Enki.csproj" />
     <Project Path="src/csharp/tasks/KernelEngine.Async.Inline/KernelEngine.Async.Inline.csproj" />
-    <Project Path="src/csharp/file_system/KernelEngine.FileSystem/KernelEngine.FileSystem.csproj" />
-    <Project Path="src/csharp/file_system/KernelEngine.FileSystem.Std/KernelEngine.FileSystem.Std.csproj" />
+    <Project Path="src/csharp/io/KernelEngine.FileSystem/KernelEngine.FileSystem.csproj" />
+    <Project Path="src/csharp/io/KernelEngine.FileSystem.Std/KernelEngine.FileSystem.Std.csproj" />
     <Project Path="src/csharp/io/KernelEngine.Io/KernelEngine.Io.csproj" />
     <Project Path="src/csharp/io/KernelEngine.Io.Std/KernelEngine.Io.Std.csproj" />
     <Project Path="src/csharp/io/KernelEngine.Io.Inline/KernelEngine.Io.Inline.csproj" />

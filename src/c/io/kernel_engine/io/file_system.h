@@ -1,5 +1,5 @@
-#ifndef KERNEL_ENGINE_FILE_SYSTEM_FILE_SYSTEM_H_
-#define KERNEL_ENGINE_FILE_SYSTEM_FILE_SYSTEM_H_
+#ifndef KERNEL_ENGINE_IO_FILE_SYSTEM_H_
+#define KERNEL_ENGINE_IO_FILE_SYSTEM_H_
 
 #include <kernel_engine/result/result.h>
 #include <stddef.h>

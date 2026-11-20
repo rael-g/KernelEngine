@@ -2,7 +2,7 @@
 #define KERNEL_ENGINE_IO_IO_H_
 
 #include <kernel_engine/tasks/completion.h>
-#include <kernel_engine/file_system/file_system.h>
+#include <kernel_engine/io/file_system.h>
 #include <kernel_engine/result/result.h>
 #include <stdbool.h>
 #include <stddef.h>
