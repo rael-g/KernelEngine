@@ -38,6 +38,7 @@
     <Project Path="src/csharp/part/KernelEngine.Part/KernelEngine.Part.csproj" />
     <Project Path="src/csharp/assembly/KernelEngine.Assembly/KernelEngine.Assembly.csproj" />
     <Project Path="src/csharp/assembly/KernelEngine.Assembly.Default/KernelEngine.Assembly.Default.csproj" />
+    <Project Path="src/csharp/assembly/KernelEngine.Assembly.Toml/KernelEngine.Assembly.Toml.csproj" />
     <Project Path="src/csharp/runner/KernelEngine.Runner/KernelEngine.Runner.csproj" />
     <Project Path="src/csharp/runner/KernelEngine.Runner.Headless/KernelEngine.Runner.Headless.csproj" />
     <Project Path="src/csharp/runner/KernelEngine.Runner.Window/KernelEngine.Runner.Window.csproj" />

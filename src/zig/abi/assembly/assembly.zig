@@ -173,4 +173,34 @@ pub const Assembly = struct {
 
 };
 
+pub const CompositionSource = struct {
+    ptr: *c.ke_composition_source,
+    owner: ?c.ke_composition_source_handle = null,
+
+    pub fn deinit(self: CompositionSource) void {
+        if (self.owner) |owner| owner.destroy.?(owner.ref);
+    }
+
+    /// The vtable whose slots call the methods of T, which embeds it as the named field.
+    pub fn implement(comptime T: type, comptime field: []const u8) c.ke_composition_source {
+        return .{
+            .load = &struct {
+                fn call(self: ?*c.ke_composition_source, a0: ?*c.ke_assembly, a1: ?[*:0]const u8) callconv(.c) abi_result.c.ke_result {
+                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
+                    T.load(state, Assembly{ .ptr = a0 orelse return resultOf(error.Failed) }, std.mem.span(a1 orelse return resultOf(error.Failed))) catch |failure| return resultOf(failure);
+                    return abi_result.c.KE_OK;
+                }
+            }.call,
+        };
+    }
+
+    /// Writes the composition path holds into assembly. Calls made before a failure stay; resolve
+    /// reports any mistake in what was written.
+    pub fn load(self: CompositionSource, assembly: Assembly, path: [:0]const u8) Error!void {
+        try checkResult(self.ptr.load.?(self.ptr, assembly.ptr, path.ptr));
+    }
+
+};
+
 pub const AssemblyHandle = c.ke_assembly_handle;
+pub const CompositionSourceHandle = c.ke_composition_source_handle;

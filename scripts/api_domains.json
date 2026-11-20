@@ -1072,7 +1072,8 @@
     {
       "name": "assembly",
       "headers": [
-        "src/c/assembly/kernel_engine/assembly/assembly.h"
+        "src/c/assembly/kernel_engine/assembly/assembly.h",
+        "src/c/assembly/kernel_engine/assembly/composition_source.h"
       ],
       "auxHeaders": [
         "src/c/part/kernel_engine/part/part.h"
@@ -1225,6 +1226,7 @@
     { "name": "runner_headless_factory", "packageDir": "src/zig/runner/headless/abi", "headers": ["src/zig/runner/headless/include/kernel_engine/runner/headless/runner_headless_create.h", "src/zig/runner/headless/include/kernel_engine/runner/headless/runner_headless_log.h", "src/zig/runner/headless/include/kernel_engine/runner/headless/runner_headless_parts.h"], "includeDirs": ["src/zig/runner/headless/include", "src/c/runner", "src/c/part", "src/c/scheduler", "src/c/input", "src/c/settings", "src/c/schedule", "src/c/completion", "src/c/job", "src/c/ecs", "src/c/math", "src/c/logger", "src/c/result", "src/zig/common/include"] },
     { "name": "runner_window_factory", "packageDir": "src/zig/runner/window/abi", "headers": ["src/zig/runner/window/include/kernel_engine/runner/window/runner_window_create.h", "src/zig/runner/window/include/kernel_engine/runner/window/runner_window_log.h", "src/zig/runner/window/include/kernel_engine/runner/window/runner_window_parts.h"], "includeDirs": ["src/c/window", "src/c/settings", "src/c/async", "src/zig/runner/window/include", "src/c/runner", "src/c/part", "src/c/scheduler", "src/c/schedule", "src/c/completion", "src/c/job", "src/c/ecs", "src/c/math", "src/c/logger", "src/c/result", "src/zig/common/include"] },
     { "name": "assembly_default_factory", "packageDir": "src/zig/assembly/default/abi", "headers": ["src/zig/assembly/default/include/kernel_engine/assembly/default/assembly_default_create.h", "src/zig/assembly/default/include/kernel_engine/assembly/default/assembly_default_log.h"], "includeDirs": ["src/zig/assembly/default/include", "src/c/assembly", "src/c/part", "src/c/file_system", "src/c/io", "src/c/logger", "src/c/result", "src/c/async", "src/zig/common/include", "src/c/asset", "src/c/audio", "src/c/configuration", "src/c/settings", "src/c/ecs", "src/c/framework", "src/c/input", "src/c/math", "src/c/physics", "src/c/render", "src/c/resource_cache", "src/c/scheduler", "src/c/schedule", "src/c/module", "src/c/completion", "src/c/job", "src/c/spatial", "src/c/text", "src/c/view", "src/c/window", "src/c/render_graph", "src/c/extraction"] },
+    { "name": "assembly_toml_factory", "packageDir": "src/zig/assembly/toml/abi", "headers": ["src/zig/assembly/toml/include/kernel_engine/assembly/toml/assembly_toml_create.h", "src/zig/assembly/toml/include/kernel_engine/assembly/toml/assembly_toml_log.h"], "includeDirs": ["src/zig/assembly/toml/include", "src/c/assembly", "src/c/part", "src/c/file_system", "src/c/io", "src/c/logger", "src/c/result", "src/c/async", "src/zig/common/include", "src/c/asset", "src/c/audio", "src/c/configuration", "src/c/settings", "src/c/ecs", "src/c/framework", "src/c/input", "src/c/math", "src/c/physics", "src/c/render", "src/c/resource_cache", "src/c/scheduler", "src/c/schedule", "src/c/module", "src/c/completion", "src/c/job", "src/c/spatial", "src/c/text", "src/c/view", "src/c/window", "src/c/render_graph", "src/c/extraction"] },
     { "name": "render_graph_simple_factory", "packageDir": "src/zig/render_graph/simple/abi", "headers": ["src/zig/render_graph/simple/include/kernel_engine/render_graph/simple/render_graph_simple_create.h", "src/zig/render_graph/simple/include/kernel_engine/render_graph/simple/render_graph_simple_log.h", "src/zig/render_graph/simple/include/kernel_engine/render_graph/simple/render_graph_simple_parts.h"], "includeDirs": ["src/c/part", "src/c/settings", "src/c/render_graph", "src/c/render", "src/c/ecs", "src/c/logger", "src/c/math", "src/zig/render_graph/simple/include", "src/c/result", "src/c/completion", "src/zig/common/include", "src/c/extraction", "src/c/module", "src/c/schedule", "src/c/job"] },
     { "name": "extraction_default_factory", "packageDir": "src/zig/extraction/default/abi", "headers": ["src/zig/extraction/default/include/kernel_engine/extraction/default/extraction_create.h", "src/zig/extraction/default/include/kernel_engine/extraction/default/extraction_history_create.h", "src/zig/extraction/default/include/kernel_engine/extraction/default/extraction_default_log.h", "src/zig/extraction/default/include/kernel_engine/extraction/default/extraction_default_parts.h"], "includeDirs": ["src/c/part", "src/c/settings", "src/c/extraction", "src/c/ecs", "src/c/logger", "src/c/math", "src/zig/extraction/default/include", "src/c/result", "src/c/scheduler", "src/c/schedule", "src/c/module", "src/c/completion", "src/c/job", "src/c/async", "src/zig/common/include"] },
     { "name": "engine_nodes_factory", "packageDir": "src/zig/engine_nodes/abi", "headers": ["src/zig/engine_nodes/include/kernel_engine/engine_nodes/engine_nodes_create.h", "src/zig/engine_nodes/include/kernel_engine/engine_nodes/engine_nodes_log.h", "src/zig/engine_nodes/include/kernel_engine/engine_nodes/engine_nodes_parts.h"], "includeDirs": ["src/zig/engine_nodes/include", "src/c/engine_nodes", "src/c/part", "src/c/framework", "src/c/ecs", "src/c/input", "src/c/scheduler", "src/c/schedule", "src/c/module", "src/c/completion", "src/c/job", "src/c/settings", "src/c/math", "src/c/logger", "src/c/result", "src/zig/common/include", "src/c/async"] },
@@ -1295,7 +1297,7 @@
       "render/texture_target/gpu_render_target_texture_log.h": "log of a library with no managed caller"
   },
   "extensions": {
-    "factories": { "bindings": ["Assimp", "Input", "Ui", "RenderLabelResolve", "Shadow", "Cluster", "Gbuffer", "DeferredLighting", "Skybox", "Forward", "RenderFrame", "RenderSceneResolve", "Tonemap", "Camera", "ViewSpaceRh", "BinderGrouped", "RenderServiceFactory", "Box2D", "GpuDevice", "GpuWindowTarget", "Glfw", "EcsFlecs", "MiniAudio", "FileSystemStd", "IoStd", "IoInline", "AssemblyDefault", "RunnerHeadless", "RunnerWindow", "StbImage", "StbTrueType", "Store", "Toml", "Scheduler", "Schedule", "Framework", "FrameworkNodes", "AudioModule", "Body2DModule", "EngineNodes", "ExtractionDefault", "RenderGraphSimple", "JobEnki", "JobInline", "AsyncEnki", "AsyncInline"] }
+    "factories": { "bindings": ["Assimp", "Input", "Ui", "RenderLabelResolve", "Shadow", "Cluster", "Gbuffer", "DeferredLighting", "Skybox", "Forward", "RenderFrame", "RenderSceneResolve", "Tonemap", "Camera", "ViewSpaceRh", "BinderGrouped", "RenderServiceFactory", "Box2D", "GpuDevice", "GpuWindowTarget", "Glfw", "EcsFlecs", "MiniAudio", "FileSystemStd", "IoStd", "IoInline", "AssemblyDefault", "AssemblyToml", "RunnerHeadless", "RunnerWindow", "StbImage", "StbTrueType", "Store", "Toml", "Scheduler", "Schedule", "Framework", "FrameworkNodes", "AudioModule", "Body2DModule", "EngineNodes", "ExtractionDefault", "RenderGraphSimple", "JobEnki", "JobInline", "AsyncEnki", "AsyncInline"] }
   },
   "bindings": [
     {
@@ -1894,6 +1896,17 @@
       "output": "Generated/"
     },
     {
+      "name": "AssemblyToml",
+      "project": "src/csharp/assembly/KernelEngine.Assembly.Toml",
+      "namespace": "KernelEngine.Assembly.Toml.Native",
+      "headers": [
+        "src/zig/assembly/toml/include/kernel_engine/assembly/toml/assembly_toml_create.h",
+        "src/zig/assembly/toml/include/kernel_engine/assembly/toml/assembly_toml_log.h"
+      ],
+      "library": "ke_assembly_toml",
+      "output": "Generated/"
+    },
+    {
       "name": "RunnerWindow",
       "project": "src/csharp/runner/KernelEngine.Runner.Window",
       "namespace": "KernelEngine.Runner.Window.Native",
@@ -2032,7 +2045,8 @@
       "project": "src/csharp/assembly/KernelEngine.Assembly",
       "namespace": "KernelEngine.Assembly.Native",
       "headers": [
-        "src/c/assembly/kernel_engine/assembly/assembly.h"
+        "src/c/assembly/kernel_engine/assembly/assembly.h",
+        "src/c/assembly/kernel_engine/assembly/composition_source.h"
       ],
       "library": "ke_scheduler",
       "output": "Generated/Assembly/"

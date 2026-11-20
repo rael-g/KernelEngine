@@ -824,6 +824,73 @@
           "receiver": "ke_assembly *"
         }
       ]
+    },
+    {
+      "name": "ke_composition_source",
+      "doc": "Reads a composition from somewhere outside the process into an assembly, through its composition slots (add_instance, bind, order, set_default); it adds no part, since which parts exist is what the host linked. A source keeps nothing between loads.",
+      "tags": [],
+      "fields": [
+        {
+          "name": "handle",
+          "type": "void *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "load",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Writes the composition path holds into assembly. Calls made before a failure stay; resolve reports any mistake in what was written.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a null argument; KE_RESULT_NOT_FOUND when path holds nothing; KE_RESULT_GENERAL when the content does not parse or holds a key the source does not know; KE_RESULT_OUT_OF_MEMORY; or the code of the call to assembly that failed.",
+          "params": [
+            {
+              "name": "assembly",
+              "type": "ke_assembly *",
+              "tags": [
+                "borrowed"
+              ],
+              "doc": "The assembly written to."
+            },
+            {
+              "name": "path",
+              "type": "const char *",
+              "tags": [
+                "utf8"
+              ],
+              "doc": "Where the composition is read from."
+            }
+          ],
+          "receiver": "struct ke_composition_source *"
+        }
+      ]
+    },
+    {
+      "name": "ke_composition_source_handle",
+      "doc": null,
+      "tags": [
+        "owner"
+      ],
+      "fields": [
+        {
+          "name": "ref",
+          "type": "ke_composition_source *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "destroy",
+          "returns": "void",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [],
+          "receiver": "ke_composition_source *"
+        }
+      ]
     }
   ],
   "functions": [],

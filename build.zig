@@ -311,6 +311,12 @@ pub fn build(b: *std.Build) void {
         .@"tomlc99-dir" = tomlc99_dir,
     }, &.{}, .has_tests);
 
+    _ = ctx.member("ke_assembly_toml", .{
+        .target = target,
+        .optimize = optimize,
+        .@"tomlc99-dir" = tomlc99_dir,
+    }, &.{}, .has_tests);
+
     const wgpu_native_filename = b.fmt("{s}wgpu_native{s}", .{ target.result.libPrefix(), target.result.dynamicLibSuffix() });
     const wgpu_root: std.Build.LazyPath = if (wgpu_package) |package| package.path("") else .{ .cwd_relative = wgpu_given.? };
     const wgpu_include = wgpu_root.path(b, "include").getPath(b);

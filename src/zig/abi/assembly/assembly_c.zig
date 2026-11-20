@@ -86,3 +86,18 @@ pub const ke_assembly_handle = extern struct {
     ref: ?*ke_assembly = std.mem.zeroes(?*ke_assembly),
     destroy: ?*const fn (?*ke_assembly) callconv(.c) void = null,
 };
+
+/// Reads a composition from somewhere outside the process into an assembly, through its
+/// composition slots (add_instance, bind, order, set_default); it adds no part, since which
+/// parts exist is what the host linked. A source keeps nothing between loads.
+pub const ke_composition_source = extern struct {
+    handle: ?*anyopaque = std.mem.zeroes(?*anyopaque),
+    /// Writes the composition path holds into assembly. Calls made before a failure stay; resolve
+    /// reports any mistake in what was written.
+    load: ?*const fn (?*ke_composition_source, ?*ke_assembly, ?[*:0]const u8) callconv(.c) abi_result.c.ke_result = null,
+};
+
+pub const ke_composition_source_handle = extern struct {
+    ref: ?*ke_composition_source = std.mem.zeroes(?*ke_composition_source),
+    destroy: ?*const fn (?*ke_composition_source) callconv(.c) void = null,
+};

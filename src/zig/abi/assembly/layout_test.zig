@@ -25,6 +25,8 @@ test "every record is laid out as the header lays it out" {
     @setEvalBranchQuota(100_000_000);
     try expectSameLayout(abi.c.ke_assembly, translated("ke_assembly"));
     try expectSameLayout(abi.c.ke_assembly_handle, translated("ke_assembly_handle"));
+    try expectSameLayout(abi.c.ke_composition_source, translated("ke_composition_source"));
+    try expectSameLayout(abi.c.ke_composition_source_handle, translated("ke_composition_source_handle"));
     if (@hasDecl(c, "ke_assembly_report_fn")) try expectSameLayout(abi.c.ke_assembly_report_fn, c.ke_assembly_report_fn);
     if (@hasDecl(c, "ke_log_callback")) try expectSameLayout(abi.c.ke_log_callback, c.ke_log_callback);
     if (@hasDecl(c, "ke_settings_key_func")) try expectSameLayout(abi.c.ke_settings_key_func, c.ke_settings_key_func);
@@ -47,7 +49,7 @@ test "every constant is the header's value" {
     try std.testing.expectEqual(@as(i128, c.KE_RESULT_ASSEMBLY_UNRESOLVED), @as(i128, abi.c.KE_RESULT_ASSEMBLY_UNRESOLVED));
 }
 
-extern const layout_values: [16]c_ulonglong;
+extern const layout_values: [22]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
@@ -67,6 +69,12 @@ test "every size and offset is the one C computes" {
         @sizeOf(abi.c.ke_assembly_handle),
         @offsetOf(abi.c.ke_assembly_handle, "ref"),
         @offsetOf(abi.c.ke_assembly_handle, "destroy"),
+        @sizeOf(abi.c.ke_composition_source),
+        @offsetOf(abi.c.ke_composition_source, "handle"),
+        @offsetOf(abi.c.ke_composition_source, "load"),
+        @sizeOf(abi.c.ke_composition_source_handle),
+        @offsetOf(abi.c.ke_composition_source_handle, "ref"),
+        @offsetOf(abi.c.ke_composition_source_handle, "destroy"),
     };
     for (expected, 0..) |value, at| try std.testing.expectEqual(layout_values[at], value);
 }

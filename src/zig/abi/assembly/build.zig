@@ -11,6 +11,7 @@ pub fn build(b: *std.Build) void {
 
     const headers = b.addWriteFiles().add("layout.h",
         \\#include <kernel_engine/assembly/assembly.h>
+        \\#include <kernel_engine/assembly/composition_source.h>
     );
     const translated = b.addTranslateC(.{ .root_source_file = headers, .target = target, .optimize = optimize });
     translated.addIncludePath(b.path("../../../c/assembly"));
