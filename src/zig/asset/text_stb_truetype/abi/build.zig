@@ -23,7 +23,7 @@ pub fn build(b: *std.Build) void {
     translated.addIncludePath(b.path("../../../../c/assembly"));
     translated.addIncludePath(b.path("../../../../c/result"));
     translated.addIncludePath(b.path("../../../../c/configuration"));
-    translated.addIncludePath(b.path("../../../../c/text"));
+    translated.addIncludePath(b.path("../../../../c/asset"));
     translated.addIncludePath(b.path("../include"));
     translated.addIncludePath(b.path("../../../common/include"));
     const tests = b.addTest(.{ .root_module = b.createModule(.{
@@ -43,7 +43,7 @@ pub fn build(b: *std.Build) void {
     tests.root_module.addIncludePath(b.path("../../../../c/assembly"));
     tests.root_module.addIncludePath(b.path("../../../../c/result"));
     tests.root_module.addIncludePath(b.path("../../../../c/configuration"));
-    tests.root_module.addIncludePath(b.path("../../../../c/text"));
+    tests.root_module.addIncludePath(b.path("../../../../c/asset"));
     tests.root_module.addIncludePath(b.path("../include"));
     tests.root_module.addIncludePath(b.path("../../../common/include"));
     b.step("test", "Check the text_stb_truetype_factory ABI against its headers").dependOn(&b.addRunArtifact(tests).step);

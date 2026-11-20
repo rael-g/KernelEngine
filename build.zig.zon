@@ -31,7 +31,7 @@
         .ke_window_glfw = .{ .path = "src/zig/window/glfw" },
         .ke_asset_stb_image = .{ .path = "src/zig/asset/stb_image" },
         .ke_audio_miniaudio = .{ .path = "src/zig/audio/miniaudio" },
-        .ke_text_stb_truetype = .{ .path = "src/zig/text/stb_truetype" },
+        .ke_text_stb_truetype = .{ .path = "src/zig/asset/text_stb_truetype" },
         .ke_physics_2d_box2d = .{ .path = "src/zig/physics/box2d" },
         .ke_asset_assimp = .{ .path = "src/zig/asset/assimp" },
         .ke_configuration = .{ .path = "src/zig/configuration" },

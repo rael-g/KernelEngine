@@ -1,5 +1,5 @@
-﻿#ifndef KERNEL_ENGINE_TEXT_FONT_H_
-#define KERNEL_ENGINE_TEXT_FONT_H_
+﻿#ifndef KERNEL_ENGINE_ASSET_FONT_H_
+#define KERNEL_ENGINE_ASSET_FONT_H_
 
 #include <kernel_engine/result/result.h>
 #include <stdint.h>

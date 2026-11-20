@@ -4,7 +4,7 @@
 #include <kernel_engine/render/handles.h>
 #include <kernel_engine/render/ui/components.h>
 #include <kernel_engine/result/result.h>
-#include <kernel_engine/text/font.h>
+#include <kernel_engine/asset/font.h>
 
 #ifdef __cplusplus
 extern "C"

@@ -13,7 +13,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\common\KernelEngine.Common\KernelEngine.Common.csproj" />
     <ProjectReference Include="..\..\assembly\KernelEngine.Part\KernelEngine.Part.csproj" />
-    <ProjectReference Include="..\..\text\KernelEngine.Text\KernelEngine.Text.csproj" />
+    <ProjectReference Include="..\..\asset\KernelEngine.Text\KernelEngine.Text.csproj" />
     <ProjectReference Include="..\..\logger\KernelEngine.Logger\KernelEngine.Logger.csproj" />
     <ProjectReference Include="..\..\io\KernelEngine.Io\KernelEngine.Io.csproj" />
   </ItemGroup>

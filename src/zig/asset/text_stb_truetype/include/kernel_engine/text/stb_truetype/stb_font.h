@@ -2,7 +2,7 @@
 #define KERNEL_ENGINE_TEXT_STB_TRUETYPE_STB_FONT_H_
 
 #include <kernel_engine/io/io.h>
-#include <kernel_engine/text/font.h>
+#include <kernel_engine/asset/font.h>
 
 #if defined(_WIN32) || defined(__CYGWIN__)
     #ifdef KE_TEXT_STB_TRUETYPE_EXPORT

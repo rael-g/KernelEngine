@@ -20,7 +20,7 @@
     <ProjectReference Include="..\..\render\KernelEngine.RenderGraph.Simple\KernelEngine.RenderGraph.Simple.csproj" />
     <ProjectReference Include="..\..\physics\KernelEngine.Physics.Box2D\KernelEngine.Physics.Box2D.csproj" />
     <ProjectReference Include="..\..\audio\KernelEngine.Audio.MiniAudio\KernelEngine.Audio.MiniAudio.csproj" />
-    <ProjectReference Include="..\..\text\KernelEngine.Text.StbTrueType\KernelEngine.Text.StbTrueType.csproj" />
+    <ProjectReference Include="..\..\asset\KernelEngine.Text.StbTrueType\KernelEngine.Text.StbTrueType.csproj" />
     <ProjectReference Include="..\..\assembly\KernelEngine.Assembly.Default\KernelEngine.Assembly.Default.csproj" />
     <ProjectReference Include="..\..\assembly\KernelEngine.Assembly.Toml\KernelEngine.Assembly.Toml.csproj" />
     <ProjectReference Include="..\..\framework\KernelEngine.Framework\KernelEngine.Framework.csproj" />

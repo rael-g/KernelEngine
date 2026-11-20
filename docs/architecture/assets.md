@@ -2,8 +2,8 @@
 
 This is a map: the parts between a path and a resource on the GPU, what each receives and what it
 hands on. How a part works inside is on the generated page of its file. Contracts are under
-`src/c/asset/`, `src/c/text/` and `src/c/resource_cache/`, plugins under `src/zig/asset/`,
-`src/zig/text/`, `src/zig/resource_cache/` and `src/zig/framework/`.
+`src/c/asset/` and `src/c/resource_cache/`, plugins under `src/zig/asset/`,
+`src/zig/resource_cache/` and `src/zig/framework/`.
 
 ## The parts
 

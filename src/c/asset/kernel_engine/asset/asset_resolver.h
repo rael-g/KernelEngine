@@ -7,7 +7,7 @@
 #include <kernel_engine/asset/mesh_shape.h>
 #include <kernel_engine/asset/image_loader.h>
 #include <kernel_engine/asset/mesh_data.h>
-#include <kernel_engine/text/font.h>
+#include <kernel_engine/asset/font.h>
 #include <kernel_engine/result/result.h>
 
 #ifdef __cplusplus

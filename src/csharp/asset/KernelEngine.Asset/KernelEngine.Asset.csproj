@@ -10,7 +10,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\common\KernelEngine.Common\KernelEngine.Common.csproj" />
     <ProjectReference Include="..\..\render\KernelEngine.Render.Native\KernelEngine.Render.Native.csproj" />
-    <ProjectReference Include="..\..\text\KernelEngine.Text\KernelEngine.Text.csproj" />
+    <ProjectReference Include="..\..\asset\KernelEngine.Text\KernelEngine.Text.csproj" />
   </ItemGroup>
 
   <ItemGroup>
