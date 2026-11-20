@@ -71,7 +71,7 @@ public class ReadyingTheNodesASlotOpens
         using var types = new DefaultNodeTypes(scheduler, ecs, tree, actions);
         using var nodeSystems = new NodeTypesSystems(types, loop.Schedules.PreUpdate, loop.Sets.PreUpdate, loop.Schedules.Fixed, loop.Sets.FixedUpdate,
             loop.Schedules.Update, loop.Sets.Update, loop.Schedules.Update, loop.Sets.PostUpdate);
-        using var scenes = new DefaultSceneFiles(ecs, types, assets, io);
+        using var scenes = new DefaultSceneFiles(ecs, types, assets, io, loop.Schedules.Startup, loop.Sets.Startup, config.Section("scene_files"));
         var nodes = new NodeWorld(types);
         nodes.Register(new Probe());
         Probe.Readied.Clear();
@@ -103,7 +103,7 @@ public class ReadyingTheNodesASlotOpens
         using var types = new DefaultNodeTypes(scheduler, ecs, tree, actions);
         using var nodeSystems = new NodeTypesSystems(types, loop.Schedules.PreUpdate, loop.Sets.PreUpdate, loop.Schedules.Fixed, loop.Sets.FixedUpdate,
             loop.Schedules.Update, loop.Sets.Update, loop.Schedules.Update, loop.Sets.PostUpdate);
-        using var scenes = new DefaultSceneFiles(ecs, types, assets, io);
+        using var scenes = new DefaultSceneFiles(ecs, types, assets, io, loop.Schedules.Startup, loop.Sets.Startup, config.Section("scene_files"));
         types.RegisterType(name: "node");
         var nodes = new NodeWorld(types);
         nodes.Register(new Probe());

@@ -111,9 +111,12 @@ pub fn nodeTypesSystemsCreate(types: ?*abi_framework.c.ke_node_types, pre_update
 /// fields through `ecs`, resolve a `res://` path through `assets` and read every file through
 /// `io`; each must outlive the scene files. It registers through `node_types` the node type
 /// `scene_slot`, carrying a ke_scene_slot_component, whose update replaces a slot's children
-/// when its path changes; the scene files must outlive every tick that runs it.
-pub fn sceneFilesCreate(ecs: ?*abi_ecs.c.ke_ecs, node_types: ?*abi_framework.c.ke_node_types, assets: ?*abi_asset_resolver.c.ke_asset_resolver, io: ?*abi_io.c.ke_io) Error!abi_framework.c.ke_scene_files_handle {
+/// when its path changes; the scene files must outlive every tick that runs it. With the setting
+/// `first_scene`, a `res://` path, it also registers in first_scene_set of first_scene an
+/// exclusive system that, on its first run, does what `open` does with that path, and nothing on
+/// any later run; without it, no system. Destroying the scene files unregisters that system.
+pub fn sceneFilesCreate(ecs: ?*abi_ecs.c.ke_ecs, node_types: ?*abi_framework.c.ke_node_types, assets: ?*abi_asset_resolver.c.ke_asset_resolver, io: ?*abi_io.c.ke_io, first_scene: ?*abi_schedule.c.ke_schedule, first_scene_set: c.ke_schedule_set_id, settings: ?*abi_settings.c.ke_settings) Error!abi_framework.c.ke_scene_files_handle {
     var written: abi_framework.c.ke_scene_files_handle = undefined;
-    try checkResult(c.ke_scene_files_create(ecs, node_types, assets, io, &written));
+    try checkResult(c.ke_scene_files_create(ecs, node_types, assets, io, first_scene, first_scene_set, settings, &written));
     return written;
 }

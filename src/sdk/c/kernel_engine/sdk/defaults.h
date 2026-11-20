@@ -367,7 +367,8 @@ static inline ke_result ke_sdk_node_types(ke_sdk_engine *e)
 /** The scene files. */
 static inline ke_result ke_sdk_scene_files(ke_sdk_engine *e)
 {
-    return ke_scene_files_create(e->ecs.ref, e->node_types.ref, e->assets.ref, e->io.ref, &e->scene_files);
+    return ke_scene_files_create(e->ecs.ref, e->node_types.ref, e->assets.ref, e->io.ref, e->schedules.startup.ref, e->sets.startup,
+        ke_sdk_settings(e, "scene_files"), &e->scene_files);
 }
 
 /**

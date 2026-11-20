@@ -39,7 +39,8 @@ public sealed class Engine : IDisposable
         _modules = [.. services.GetServices<Module.Module>()];
         _pending = [.. services.GetServices<EngineReadiness>()];
         Types = services.GetRequiredService<NodeTypes>();
-        Scenes = services.GetRequiredService<SceneFiles>();
+        Scenes = services.GetRequiredService<Func<EngineSchedules, EngineSets, SceneFiles>>()(Schedules, Sets);
+        _hooked.Add(Scenes);
         Types.RegisterEngineNodeTypes();
         Nodes = new NodeWorld(Types, services.GetService<ILoggerFactory>());
     }

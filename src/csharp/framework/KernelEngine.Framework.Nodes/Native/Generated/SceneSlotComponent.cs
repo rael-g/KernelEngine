@@ -15,6 +15,7 @@ using KernelEngine.Part.Native;
 using KernelEngine.Result.Native;
 using KernelEngine.Schedule.Native;
 using KernelEngine.Scheduler.Native;
+using KernelEngine.Settings.Native;
 
 namespace KernelEngine.Framework.Nodes.Native;
 

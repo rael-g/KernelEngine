@@ -69,7 +69,7 @@ public static class DefaultCore
         services.TryAddSingleton<SceneTree>(sp => new DefaultSceneTree(Get<Ecs.EcsRegistry>(sp)));
         services.TryAddSingleton<InputActions>(sp => new DefaultInputActions(Get<Configuration.Configuration>(sp).Section("input")));
         services.TryAddSingleton<NodeTypes>(sp => new DefaultNodeTypes(Get<Scheduler.Scheduler>(sp), Get<Ecs.EcsRegistry>(sp), Get<SceneTree>(sp), Get<InputActions>(sp)));
-        services.TryAddSingleton<SceneFiles>(sp => new DefaultSceneFiles(Get<Ecs.EcsRegistry>(sp), Get<NodeTypes>(sp), Get<AssetResolver>(sp), Get<Io.Io>(sp)));
+        services.TryAddSingleton<Func<EngineSchedules, EngineSets, SceneFiles>>(sp => (schedules, sets) => new DefaultSceneFiles(Get<Ecs.EcsRegistry>(sp), Get<NodeTypes>(sp), Get<AssetResolver>(sp), Get<Io.Io>(sp), schedules.Startup, sets.Startup, Get<Configuration.Configuration>(sp).Section("scene_files")));
         services.TryAddSingleton<Physics.Physics2D>(sp => new Box2DPhysics2D(Get<Job.JobSystem>(sp), Get<Configuration.Configuration>(sp).Section("runtime.physics_2d")));
         services.TryAddSingleton<Audio.Audio>(sp => new MiniaudioAudio(Get<Io.Io>(sp)));
 

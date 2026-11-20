@@ -15,6 +15,7 @@ using KernelEngine.Part.Native;
 using KernelEngine.Result.Native;
 using KernelEngine.Schedule.Native;
 using KernelEngine.Scheduler.Native;
+using KernelEngine.Settings.Native;
 
 namespace KernelEngine.Framework.Nodes.Native;
 
@@ -30,5 +31,5 @@ public static unsafe partial class NativeMethods
 
     [DllImport("ke_framework", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_scene_files_create", ExactSpelling = true)]
     [return: NativeTypeName("ke_result")]
-    public static extern KernelEngine.Result.Native.Result scene_files_create([NativeTypeName("ke_ecs *")] KernelEngine.Ecs.Native.ke_ecs* ecs, ke_node_types* node_types, [NativeTypeName("ke_asset_resolver *")] KernelEngine.Asset.Native.ke_asset_resolver* assets, [NativeTypeName("ke_io *")] KernelEngine.Io.Native.ke_io* io, ke_scene_files_handle* out_files);
+    public static extern KernelEngine.Result.Native.Result scene_files_create([NativeTypeName("ke_ecs *")] KernelEngine.Ecs.Native.ke_ecs* ecs, ke_node_types* node_types, [NativeTypeName("ke_asset_resolver *")] KernelEngine.Asset.Native.ke_asset_resolver* assets, [NativeTypeName("ke_io *")] KernelEngine.Io.Native.ke_io* io, [NativeTypeName("ke_schedule *")] KernelEngine.Schedule.Native.ke_schedule* first_scene, [NativeTypeName("ke_schedule_set_id")] uint first_scene_set, [NativeTypeName("ke_settings *")] KernelEngine.Settings.Native.ke_settings* settings, ke_scene_files_handle* out_files);
 }
