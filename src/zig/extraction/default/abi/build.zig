@@ -10,6 +10,7 @@ pub fn build(b: *std.Build) void {
     abi.addImport("extraction", b.dependency("abi_extraction", .{}).module("abi"));
     abi.addImport("logger", b.dependency("abi_logger", .{}).module("abi"));
     abi.addImport("module", b.dependency("abi_module", .{}).module("abi"));
+    abi.addImport("part", b.dependency("abi_part", .{}).module("abi"));
     abi.addImport("result", b.dependency("abi_result", .{}).module("abi"));
     abi.addImport("schedule", b.dependency("abi_schedule", .{}).module("abi"));
     abi.addImport("scheduler", b.dependency("abi_scheduler", .{}).module("abi"));
@@ -18,6 +19,7 @@ pub fn build(b: *std.Build) void {
         \\#include <kernel_engine/extraction/default/extraction_create.h>
         \\#include <kernel_engine/extraction/default/extraction_history_create.h>
         \\#include <kernel_engine/extraction/default/extraction_default_log.h>
+        \\#include <kernel_engine/extraction/default/extraction_default_parts.h>
     );
     const translated = b.addTranslateC(.{ .root_source_file = headers, .target = target, .optimize = optimize });
     translated.addIncludePath(b.path("../../../../c/async"));
@@ -30,6 +32,7 @@ pub fn build(b: *std.Build) void {
     translated.addIncludePath(b.path("../../../../c/logger"));
     translated.addIncludePath(b.path("../../../../c/math"));
     translated.addIncludePath(b.path("../../../../c/module"));
+    translated.addIncludePath(b.path("../../../../c/part"));
     translated.addIncludePath(b.path("../../../../c/result"));
     translated.addIncludePath(b.path("../../../../c/schedule"));
     translated.addIncludePath(b.path("../../../schedule/include"));
@@ -57,6 +60,7 @@ pub fn build(b: *std.Build) void {
     tests.root_module.addIncludePath(b.path("../../../../c/logger"));
     tests.root_module.addIncludePath(b.path("../../../../c/math"));
     tests.root_module.addIncludePath(b.path("../../../../c/module"));
+    tests.root_module.addIncludePath(b.path("../../../../c/part"));
     tests.root_module.addIncludePath(b.path("../../../../c/result"));
     tests.root_module.addIncludePath(b.path("../../../../c/schedule"));
     tests.root_module.addIncludePath(b.path("../../../schedule/include"));

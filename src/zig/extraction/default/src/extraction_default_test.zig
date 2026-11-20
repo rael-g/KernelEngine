@@ -458,6 +458,19 @@ test "the history module registers one system per interpolation in fixed_pre_upd
     try testing.expectEqual(R.code(error.InvalidArgument), ke_extraction_history_create(&foreign, &module));
 }
 
+test "the extraction's part provides the extraction and, after it, the executable a scheduler runs, named by the extraction" {
+    var f: Fixture = .{};
+    try f.init();
+    defer f.deinit();
+    const p = &extraction.parts[0];
+    try testing.expectEqual(@as(usize, 2), p.provides_count);
+    try testing.expectEqual(@as(usize, 4), p.slot_count);
+    const ref: ?*anyopaque = f.handle.ref;
+    try testing.expectEqual(ref, p.provided.?(ref, 0));
+    const exec: *abi_scheduler.c.ke_scheduler_executable = @ptrCast(@alignCast(p.provided.?(ref, 1).?));
+    try testing.expectEqual(ref, exec.user);
+}
+
 test "creating and destroying extractions leaves no block allocated" {
     var f: Fixture = .{};
     try f.init();

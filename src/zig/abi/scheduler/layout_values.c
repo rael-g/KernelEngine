@@ -2,6 +2,9 @@
 #include <kernel_engine/scheduler/scheduler.h>
 #include <kernel_engine/scheduler/scheduler_create.h>
 const unsigned long long layout_values[] = {
+    sizeof(ke_scheduler_executable),
+    offsetof(ke_scheduler_executable, run),
+    offsetof(ke_scheduler_executable, user),
     sizeof(ke_scheduler),
     offsetof(ke_scheduler, handle),
     offsetof(ke_scheduler, add),

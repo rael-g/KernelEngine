@@ -9,6 +9,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\common\KernelEngine.Common\KernelEngine.Common.csproj" />
+    <ProjectReference Include="..\..\part\KernelEngine.Part\KernelEngine.Part.csproj" />
     <ProjectReference Include="..\..\result\KernelEngine.Result\KernelEngine.Result.csproj" />
     <ProjectReference Include="..\..\ecs\KernelEngine.Ecs\KernelEngine.Ecs.csproj" />
     <ProjectReference Include="..\..\completion\KernelEngine.Completion\KernelEngine.Completion.csproj" />

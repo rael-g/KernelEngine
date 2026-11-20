@@ -14,6 +14,8 @@ const abi_module = @import("abi_module");
 const abi_result = @import("abi_result");
 const abi_schedule = @import("abi_schedule");
 const abi_scheduler = @import("abi_scheduler");
+const abi_part = @import("abi_part");
+const part = @import("part");
 const heap = @import("heap");
 
 const R = @import("result").Result(.{});
@@ -56,6 +58,7 @@ const Custom = struct { extract: x.ke_extraction_custom_fn, user: ?*anyopaque };
 /// attached to, null while it is detached.
 const State = struct {
     api: x.ke_extraction,
+    executable: abi_scheduler.c.ke_scheduler_executable = .{ .run = &runAsExecutable },
     module: abi_module.c.ke_module = undefined,
     main: *Ecs,
     render: *Ecs,
@@ -500,6 +503,7 @@ fn create(main: *Ecs, render: *Ecs, scheduler: *abi_scheduler.c.ke_scheduler, re
         .render_schedule = render_schedule,
     };
     s.api.handle = s;
+    s.executable.user = &s.api;
     s.module = .{ .handle = s, .attach = historyAttach, .detach = historyDetach };
     s.synced = try tag(main, x.KE_COMPONENT_NAME_RENDER_SYNCED);
     s.interpolated = try tag(main, x.KE_COMPONENT_NAME_INTERPOLATED);
@@ -511,6 +515,27 @@ fn create(main: *Ecs, render: *Ecs, scheduler: *abi_scheduler.c.ke_scheduler, re
     s.frame_local_query = try tagQuery(render, s.frame_local);
     try R.check(main.removal_track.?(main, s.synced, &s.tracker));
     return .{ .ref = &s.api, .destroy = destroy };
+}
+
+/// The extraction as a scheduler runs it: `user` is the extraction itself, the name completed_since knows it by.
+fn runAsExecutable(user: ?*anyopaque, dt: f32, out_completion: ?*?*abi_completion.c.ke_completion) callconv(.c) Result {
+    return run(@ptrCast(@alignCast(user orelse return R.code(error.InvalidArgument))), dt, out_completion);
+}
+
+/// The vtable of each contract the extraction's part provides: the extraction, then the executable.
+fn provided(instance: ?*anyopaque, index: usize) callconv(.c) ?*anyopaque {
+    const s = stateOf(@ptrCast(@alignCast(instance))) orelse return null;
+    return if (index == 0) &s.api else &s.executable;
+}
+
+pub const parts = [_]abi_part.c.ke_part{
+    part.of(ke_extraction_create, .{ .name = "extraction", .slots = &.{ "main", "render", "scheduler", "render_schedule" }, .also = &.{"ke_scheduler_executable"}, .provided = provided, .set_log = @ptrCast(&@import("log").Destination("ke_extraction_default").setLogCallback) }),
+};
+
+/// The library's parts.
+export fn ke_extraction_default_parts(out_count: ?*usize) callconv(.c) ?*const abi_part.c.ke_part {
+    if (out_count) |n| n.* = parts.len;
+    return &parts[0];
 }
 
 test {

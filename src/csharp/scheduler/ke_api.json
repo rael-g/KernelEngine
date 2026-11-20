@@ -186,7 +186,31 @@
       ]
     }
   ],
-  "structs": [],
+  "structs": [
+    {
+      "name": "ke_scheduler_executable",
+      "doc": "An executable as add takes it: a schedule, the extraction into a render world, a test. A part providing it is bound to one of the scheduler\u0027s cadences.",
+      "tags": [
+        "bag"
+      ],
+      "fields": [
+        {
+          "name": "run",
+          "type": "ke_scheduler_run_fn",
+          "tags": [],
+          "doc": "Starts one run of the executable."
+        },
+        {
+          "name": "user",
+          "type": "void *",
+          "tags": [
+            "context"
+          ],
+          "doc": "Forwarded to run, and the name completed_since knows the executable by."
+        }
+      ]
+    }
+  ],
   "vtables": [
     {
       "name": "ke_scheduler",

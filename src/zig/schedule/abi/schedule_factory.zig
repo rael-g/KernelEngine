@@ -3,6 +3,7 @@
 const abi_ecs = @import("ecs");
 const abi_job = @import("job");
 const abi_logger = @import("logger");
+const abi_part = @import("part");
 const abi_result = @import("result");
 const abi_schedule = @import("schedule");
 const abi_settings = @import("settings");
@@ -25,4 +26,10 @@ pub fn scheduleCreate(ecs: ?*abi_ecs.c.ke_ecs, job_system: ?*abi_job.c.ke_job_sy
 /// stderr, where they go until this is called. Called once, before the library logs.
 pub fn scheduleSetLogCallback(callback: c.ke_log_callback, ctx: ?*anyopaque) void {
     return c.ke_schedule_set_log_callback(callback, ctx);
+}
+
+/// Gives the parts ke_schedule contains: `schedule`, providing ke_schedule and
+/// ke_scheduler_executable, with the slots `ecs` and `job`.
+pub fn scheduleParts(out_count: ?*usize) ?*const abi_part.c.ke_part {
+    return c.ke_schedule_parts(out_count);
 }

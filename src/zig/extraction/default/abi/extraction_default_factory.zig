@@ -5,6 +5,7 @@ const abi_ecs = @import("ecs");
 const abi_extraction = @import("extraction");
 const abi_logger = @import("logger");
 const abi_module = @import("module");
+const abi_part = @import("part");
 const abi_result = @import("result");
 const abi_schedule = @import("schedule");
 const abi_scheduler = @import("scheduler");
@@ -39,4 +40,10 @@ pub fn extractionHistoryCreate(extraction: ?*abi_extraction.c.ke_extraction) Err
     var written: abi_module.c.ke_module_handle = undefined;
     try checkResult(c.ke_extraction_history_create(extraction, &written));
     return written;
+}
+
+/// Gives the parts ke_extraction_default contains: `extraction`, providing ke_extraction and
+/// ke_scheduler_executable, with the slots `main`, `render`, `scheduler` and `render_schedule`.
+pub fn extractionDefaultParts(out_count: ?*usize) ?*const abi_part.c.ke_part {
+    return c.ke_extraction_default_parts(out_count);
 }

@@ -10,11 +10,14 @@ const abi_settings = @import("abi_settings");
 const c = abi_part.c;
 
 /// What a factory cannot say about itself: the implementation's name, one name per dependency parameter in the
-/// factory's order, which of them take none or one instance, and the part's optional functions.
+/// factory's order, which of them take none or one instance, the contracts the instance provides besides its
+/// handle's, with `provided` giving the vtable of each, and the part's optional functions.
 pub const Options = struct {
     name: [:0]const u8,
     slots: []const [:0]const u8,
     optional: []const [:0]const u8 = &.{},
+    also: []const [:0]const u8 = &.{},
+    provided: @FieldType(c.ke_part, "provided") = null,
     ready: @FieldType(c.ke_part, "ready") = null,
     pump: @FieldType(c.ke_part, "pump") = null,
     set_log: @FieldType(c.ke_part, "set_log") = null,
@@ -37,6 +40,7 @@ pub fn of(comptime factory: anytype, comptime options: Options) c.ke_part {
         .slots = if (Built.slots.len > 0) &Built.slots[0] else null,
         .slot_count = Built.slots.len,
         .create = Built.create,
+        .provided = options.provided,
         .ready = options.ready,
         .pump = options.pump,
         .set_log = options.set_log,
@@ -49,8 +53,15 @@ fn Of(comptime factory: anytype, comptime options: Options) type {
     const Pointee = @typeInfo(@typeInfo(@FieldType(@typeInfo(Handle).pointer.child, "ref")).optional.child).pointer.child;
     const Settings = ?*abi_settings.c.ke_settings;
 
+    if ((options.also.len > 0) != (options.provided != null)) @compileError(options.name ++ ": a part providing more than its handle's contract says which vtable is each with provided");
     return struct {
-        const provides = [_]?[*:0]const u8{contractName(Pointee).ptr};
+        const provides = blk: {
+            var all: [1 + options.also.len]?[*:0]const u8 = undefined;
+            all[0] = contractName(Pointee).ptr;
+            for (options.also, 1..) |name, i| all[i] = name.ptr;
+            const final = all;
+            break :blk final;
+        };
 
         const slots = blk: {
             var made: [options.slots.len]c.ke_part_slot = undefined;
@@ -186,6 +197,20 @@ fn gearCreate(out: ?*ke_gear_handle) callconv(.c) abi_result.c.ke_result {
 }
 
 const gear_part = of(gearCreate, .{ .name = "gear_default", .slots = &.{} });
+
+fn gearAsWheel(instance: ?*anyopaque, index: usize) callconv(.c) ?*anyopaque {
+    return if (index == 0) instance else &made_wheel;
+}
+
+const gear_and_wheel_part = of(gearCreate, .{ .name = "gear_and_wheel", .slots = &.{}, .also = &.{"ke_wheel"}, .provided = gearAsWheel });
+
+test "a part provides its handle's contract first, then those it names, each vtable given by provided" {
+    try testing.expectEqual(@as(usize, 2), gear_and_wheel_part.provides_count);
+    const names: [*]const ?[*:0]const u8 = @ptrCast(gear_and_wheel_part.provides.?);
+    try testing.expectEqualStrings("ke_gear", std.mem.span(names[0].?));
+    try testing.expectEqualStrings("ke_wheel", std.mem.span(names[1].?));
+    try testing.expectEqual(@as(?*anyopaque, &made_wheel), gear_and_wheel_part.provided.?(&made_gear, 1));
+}
 
 test "a factory with no dependency and no settings is a part with no slot" {
     try testing.expectEqualStrings("ke_gear", std.mem.span(gear_part.provides.?.*.?));

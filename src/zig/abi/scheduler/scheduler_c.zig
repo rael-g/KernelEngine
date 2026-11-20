@@ -44,6 +44,15 @@ pub const ke_job_fn = ?*const fn (?*anyopaque, ?*const abi_job.c.ke_job_ctx) cal
 /// One range of a parallel_for, run on a worker; ranges cover [0, item_count) without overlap.
 pub const ke_job_range_fn = ?*const fn (?*anyopaque, u32, u32, u32) callconv(.c) abi_result.c.ke_result;
 
+/// An executable as add takes it: a schedule, the extraction into a render world, a test. A part
+/// providing it is bound to one of the scheduler's cadences.
+pub const ke_scheduler_executable = extern struct {
+    /// Starts one run of the executable.
+    run: ke_scheduler_run_fn = std.mem.zeroes(ke_scheduler_run_fn),
+    /// Forwarded to run, and the name completed_since knows the executable by.
+    user: ?*anyopaque = std.mem.zeroes(?*anyopaque),
+};
+
 /// The frame loop: runs the executables it was given, each when its cadence says, tick by tick,
 /// waiting on each run before the next starts. It knows no schedule, render, event or component.
 pub const ke_scheduler = extern struct {

@@ -23,6 +23,7 @@ fn translated(comptime name: []const u8) type {
 
 test "every record is laid out as the header lays it out" {
     @setEvalBranchQuota(100_000_000);
+    try expectSameLayout(abi.c.ke_scheduler_executable, translated("ke_scheduler_executable"));
     try expectSameLayout(abi.c.ke_scheduler, translated("ke_scheduler"));
     try expectSameLayout(abi.c.ke_scheduler_handle, translated("ke_scheduler_handle"));
     if (@hasDecl(c, "ke_async_fn")) try expectSameLayout(abi.c.ke_async_fn, c.ke_async_fn);
@@ -46,11 +47,14 @@ test "every constant is the header's value" {
     try std.testing.expectEqualStrings(c.KE_SCHEDULER_SETTING_FIXED_DT_MAX_ACCUM, abi.c.KE_SCHEDULER_SETTING_FIXED_DT_MAX_ACCUM);
 }
 
-extern const layout_values: [14]c_ulonglong;
+extern const layout_values: [17]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
     const expected = [_]usize{
+        @sizeOf(abi.c.ke_scheduler_executable),
+        @offsetOf(abi.c.ke_scheduler_executable, "run"),
+        @offsetOf(abi.c.ke_scheduler_executable, "user"),
         @sizeOf(abi.c.ke_scheduler),
         @offsetOf(abi.c.ke_scheduler, "handle"),
         @offsetOf(abi.c.ke_scheduler, "add"),

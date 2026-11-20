@@ -6,6 +6,7 @@ using global::KernelEngine.Logger;
 
 using KernelEngine.Ecs.Native;
 using KernelEngine.Module.Native;
+using KernelEngine.Part.Native;
 using KernelEngine.Result.Native;
 using KernelEngine.Schedule.Native;
 using KernelEngine.Scheduler.Native;
@@ -24,4 +25,8 @@ public static unsafe partial class NativeMethods
     [DllImport("ke_extraction_default", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_extraction_history_create", ExactSpelling = true)]
     [return: NativeTypeName("ke_result")]
     public static extern KernelEngine.Result.Native.Result extraction_history_create(ke_extraction* extraction, [NativeTypeName("ke_module_handle *")] KernelEngine.Module.Native.ke_module_handle* out_module);
+
+    [DllImport("ke_extraction_default", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_extraction_default_parts", ExactSpelling = true)]
+    [return: NativeTypeName("const ke_part *")]
+    public static extern KernelEngine.Part.Native.ke_part* extraction_default_parts([NativeTypeName("size_t *")] nuint* out_count);
 }

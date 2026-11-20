@@ -15,6 +15,9 @@ const order = @import("schedule_order.zig");
 const body = @import("schedule_commands.zig");
 
 const abi_settings = @import("abi_settings");
+const abi_part = @import("abi_part");
+const abi_scheduler = @import("abi_scheduler");
+const part = @import("part");
 const settings_schema = @import("settings_schema");
 const R = @import("result").Result(.{});
 const log = std.log.scoped(.schedule);
@@ -109,6 +112,7 @@ threadlocal var inside_body: bool = false;
 /// start of a run until its driver job, which runs the waves with `dt`, ends.
 const State = struct {
     api: c.ke_schedule,
+    executable: abi_scheduler.c.ke_scheduler_executable = .{ .run = &runAsExecutable },
     ecs: *abi_ecs.c.ke_ecs,
     jobs: *abi_job.c.ke_job_system,
     refuse_ambiguity: bool,
@@ -131,6 +135,27 @@ const State = struct {
 
 fn stateOf(self: ?*c.ke_schedule) ?*State {
     return @alignCast(@fieldParentPtr("api", self orelse return null));
+}
+
+/// The schedule as a scheduler runs it: `user` is the schedule itself, the name completed_since knows it by.
+fn runAsExecutable(user: ?*anyopaque, dt: f32, out_completion: ?*?*abi_completion.c.ke_completion) callconv(.c) abi_result.c.ke_result {
+    return run(@ptrCast(@alignCast(user orelse return R.code(error.InvalidArgument))), dt, out_completion);
+}
+
+/// The vtable of each contract the schedule's part provides: the schedule, then the executable.
+fn provided(instance: ?*anyopaque, index: usize) callconv(.c) ?*anyopaque {
+    const s = stateOf(@ptrCast(@alignCast(instance))) orelse return null;
+    return if (index == 0) &s.api else &s.executable;
+}
+
+const parts = [_]abi_part.c.ke_part{
+    part.of(ke_schedule_create, .{ .name = "schedule", .slots = &.{ "ecs", "job" }, .also = &.{"ke_scheduler_executable"}, .provided = provided, .set_log = @ptrCast(&@import("log").Destination("ke_schedule").setLogCallback) }),
+};
+
+/// The library's parts.
+export fn ke_schedule_parts(out_count: ?*usize) callconv(.c) ?*const abi_part.c.ke_part {
+    if (out_count) |n| n.* = parts.len;
+    return &parts[0];
 }
 
 fn reject(err: R.Error, comptime why: []const u8) R.Error {
@@ -645,6 +670,7 @@ export fn ke_schedule_create(ecs: ?*abi_ecs.c.ke_ecs, job_system: ?*abi_job.c.ke
         .host = .{ .ecs = ecs.?, .queue = undefined },
     };
     s.api.handle = s;
+    s.executable.user = &s.api;
     s.host.queue = &s.host_queue;
     s.host.bind();
     out.* = .{ .ref = &s.api, .destroy = &destroy };
@@ -1348,6 +1374,25 @@ test "a slot given no schedule refuses" {
     var done: ?*abi_completion.c.ke_completion = null;
     try testing.expectEqual(R.code(error.InvalidArgument), rig.sched.run.?(null, 0, &done));
     try testing.expectEqual(null, rig.sched.commands.?(null));
+}
+
+test "the schedule's part provides the schedule and, after it, the executable a scheduler runs, named by the schedule" {
+    var count: usize = 0;
+    const p = ke_schedule_parts(&count).?;
+    try testing.expectEqual(@as(usize, 2), p.provides_count);
+    var ecs: zsub.For(abi_ecs.c.ke_ecs) = undefined;
+    try ecs.init();
+    defer ecs.deinit();
+    var jobs: zsub.For(abi_job.c.ke_job_system) = undefined;
+    try jobs.init();
+    defer jobs.deinit();
+    var h: c.ke_schedule_handle = undefined;
+    try R.check(ke_schedule_create(ecs.api(), jobs.api(), &no_settings.api, &h));
+    defer h.destroy.?(h.ref);
+    try testing.expectEqual(@as(?*anyopaque, h.ref), p.provided.?(h.ref, 0));
+    const exec: *abi_scheduler.c.ke_scheduler_executable = @ptrCast(@alignCast(p.provided.?(h.ref, 1).?));
+    try testing.expectEqual(@as(?*anyopaque, h.ref), exec.user);
+    try testing.expectEqual(@as(abi_scheduler.c.ke_scheduler_run_fn, &runAsExecutable), exec.run);
 }
 
 test "nothing the schedule allocated is left behind" {

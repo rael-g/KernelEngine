@@ -2,12 +2,21 @@
 
 const abi_async = @import("async");
 const abi_completion = @import("completion");
+const abi_ecs = @import("ecs");
 const abi_job = @import("job");
 const abi_logger = @import("logger");
+const abi_part = @import("part");
 const abi_result = @import("result");
+const abi_schedule = @import("schedule");
 const abi_scheduler = @import("scheduler");
 const abi_settings = @import("settings");
 
+pub const ke_component_id = u32;
+pub const ke_entity = u64;
+pub const ke_query_id = u64;
+pub const ke_removal_tracker = u64;
+pub const ke_schedule_set_id = u32;
+pub const ke_schedule_system_id = u64;
 
 /// Receives one key the settings hold.
 pub const ke_settings_key_func = ?*const fn (?[*:0]const u8, ?*anyopaque) callconv(.c) void;
@@ -33,6 +42,20 @@ pub const ke_scheduler_run_fn = ?*const fn (?*anyopaque, f32, ?*?*abi_completion
 /// thread logged.
 pub const ke_log_callback = ?*const fn (?*anyopaque, abi_logger.c.ke_log_level, ?[*:0]const u8, ?[*:0]const u8) callconv(.c) void;
 
+/// A structural operation applied when the queue holding it is drained. `user` points at the
+/// copy of the payload passed to defer; `ecs` is the live world. A failure is returned, and the
+/// queue stops there: the operations recorded after it are dropped.
+pub const ke_defer_fn = ?*const fn (?*abi_ecs.c.ke_ecs, ?*anyopaque) callconv(.c) abi_result.c.ke_result;
+
+/// One call of a system body, once per run of the schedule, or once per slice when the system is
+/// per_entity. A failure is carried to the caller of run, which fails with it; the rest of the
+/// wave still runs, and no later wave starts.
+pub const ke_schedule_execute_fn = ?*const fn (?*abi_schedule.c.ke_schedule_ctx, ?*anyopaque, f32) callconv(.c) abi_result.c.ke_result;
+
+/// Whether a system runs in this run of its schedule; asked once per run, before the first wave,
+/// on the thread that called run. A failure fails the run before any wave starts.
+pub const ke_schedule_condition_fn = ?*const fn (?*anyopaque, ?*bool) callconv(.c) abi_result.c.ke_result;
+
 /// Creates a scheduler with no executable, which drains job_system and async, both borrowed for
 /// its lifetime, at the start of every tick.
 pub extern fn ke_scheduler_create(job_system: ?*abi_job.c.ke_job_system, async: ?*abi_async.c.ke_async, settings: ?*abi_settings.c.ke_settings, out_scheduler: ?*abi_scheduler.c.ke_scheduler_handle) abi_result.c.ke_result;
@@ -40,3 +63,9 @@ pub extern fn ke_scheduler_create(job_system: ?*abi_job.c.ke_job_system, async: 
 /// Sends every line ke_scheduler logs to callback, with ctx; a NULL callback sends them back to
 /// stderr, where they go until this is called. Called once, before the library logs.
 pub extern fn ke_scheduler_set_log_callback(callback: ke_log_callback, ctx: ?*anyopaque) void;
+
+/// Gives the parts ke_scheduler contains: `scheduler`, providing ke_scheduler, with the slots
+/// `job` and `async` and the cadence slots `startup`, `every_tick`, `fixed` and `shutdown`, each
+/// taking any number of ke_scheduler_executable, added in the order of their positions with the
+/// slot's cadence.
+pub extern fn ke_scheduler_parts(out_count: ?*usize) ?*const abi_part.c.ke_part;

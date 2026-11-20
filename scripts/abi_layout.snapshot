@@ -451,6 +451,9 @@ ke_io_handle size=16 align=8
   destroy 8
 
 [scheduler]
+ke_scheduler_executable size=16 align=8
+  run 0
+  user 8
 ke_scheduler size=72 align=8
   handle 0
   add 8

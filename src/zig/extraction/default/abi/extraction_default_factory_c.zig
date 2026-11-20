@@ -5,6 +5,7 @@ const abi_ecs = @import("ecs");
 const abi_extraction = @import("extraction");
 const abi_logger = @import("logger");
 const abi_module = @import("module");
+const abi_part = @import("part");
 const abi_result = @import("result");
 const abi_schedule = @import("schedule");
 const abi_scheduler = @import("scheduler");
@@ -46,6 +47,9 @@ pub const ke_schedule_condition_fn = ?*const fn (?*anyopaque, ?*bool) callconv(.
 /// One run of an executable: a schedule, a render, a script, a test.
 pub const ke_scheduler_run_fn = ?*const fn (?*anyopaque, f32, ?*?*abi_completion.c.ke_completion) callconv(.c) abi_result.c.ke_result;
 
+/// Receives one key the settings hold.
+pub const ke_settings_key_func = ?*const fn (?[*:0]const u8, ?*anyopaque) callconv(.c) void;
+
 /// Sends every line ke_extraction_default logs to callback, with ctx; a NULL callback sends them
 /// back to stderr, where they go until this is called. Called once, before the library logs.
 pub extern fn ke_extraction_default_set_log_callback(callback: ke_log_callback, ctx: ?*anyopaque) void;
@@ -60,3 +64,7 @@ pub extern fn ke_extraction_create(main: ?*abi_ecs.c.ke_ecs, render: ?*abi_ecs.c
 /// interpolation registered before or after, which copies each entity's current value into its
 /// previous one before the step.
 pub extern fn ke_extraction_history_create(extraction: ?*abi_extraction.c.ke_extraction, out_module: ?*abi_module.c.ke_module_handle) abi_result.c.ke_result;
+
+/// Gives the parts ke_extraction_default contains: `extraction`, providing ke_extraction and
+/// ke_scheduler_executable, with the slots `main`, `render`, `scheduler` and `render_schedule`.
+pub extern fn ke_extraction_default_parts(out_count: ?*usize) ?*const abi_part.c.ke_part;
