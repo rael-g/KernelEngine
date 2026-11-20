@@ -263,12 +263,15 @@ fn opt(s: [*c]const u8) []const u8 {
 }
 
 fn record(comptime format: []const u8, args: anytype) abi_result.c.ke_result {
-    const line = std.fmt.allocPrint(gpa, format, args) catch unreachable;
+    const line = std.fmt.allocPrint(gpa, format, args) catch return R.code(error.OutOfMemory);
     if (refused_call) |refused| if (std.mem.eql(u8, refused, line)) {
         gpa.free(line);
         return R.code(error.NotFound);
     };
-    calls.append(gpa, line) catch unreachable;
+    calls.append(gpa, line) catch {
+        gpa.free(line);
+        return R.code(error.OutOfMemory);
+    };
     return R.ok;
 }
 
