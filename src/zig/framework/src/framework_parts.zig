@@ -21,8 +21,8 @@ export fn ke_framework_parts(out_count: ?*usize) callconv(.c) ?*const abi_part.c
 test "the library's parts are the framework's, each with the library's log" {
     var count: usize = 0;
     const all: [*]const abi_part.c.ke_part = @ptrCast(ke_framework_parts(&count).?);
-    try std.testing.expectEqual(@as(usize, 9), count);
-    const names = [_][]const u8{ "scene_tree", "asset_resolver", "input_actions", "input_actions_evaluation", "scene_hierarchy", "node_types", "node_types_systems", "engine_node_types", "scene_files" };
+    try std.testing.expectEqual(@as(usize, 8), count);
+    const names = [_][]const u8{ "scene_tree", "asset_resolver", "input_actions", "input_actions_evaluation", "scene_hierarchy", "node_types", "node_types_systems", "scene_files" };
     for (names, all[0..count]) |name, p| {
         try std.testing.expectEqualStrings(name, std.mem.span(p.name.?));
         try std.testing.expect(p.set_log != null);

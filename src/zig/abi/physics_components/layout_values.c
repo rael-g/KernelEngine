@@ -1,5 +1,6 @@
 #include <stddef.h>
 #include <kernel_engine/physics/components.h>
+#include <kernel_engine/physics/component_fields.h>
 const unsigned long long layout_values[] = {
     sizeof(ke_body2d_component),
     offsetof(ke_body2d_component, type),

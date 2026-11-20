@@ -31,8 +31,8 @@ pub fn physicsBody2dSetLogCallback(callback: c.ke_log_callback, ctx: ?*anyopaque
 }
 
 /// Gives the parts ke_physics_body2d contains: `physics_body2d`, providing nothing, with the
-/// slots `ecs`, `physics` and `scene_tree` and the hook `fixed_post_update`, in the set
-/// `fixed_post_update` by default.
+/// slots `ecs`, `physics`, `scene_tree` and `fixed_post_update`, the ke_schedule_set its systems
+/// join.
 pub fn physicsBody2dParts(out_count: ?*usize) ?*const abi_part.c.ke_part {
     return c.ke_physics_body2d_parts(out_count);
 }

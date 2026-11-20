@@ -1,5 +1,6 @@
 #include <stddef.h>
 #include <kernel_engine/render/ui/components.h>
+#include <kernel_engine/render/ui/component_fields.h>
 const unsigned long long layout_values[] = {
     sizeof(ke_ui_font_handle),
     offsetof(ke_ui_font_handle, bits),

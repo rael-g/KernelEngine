@@ -1,6 +1,68 @@
 {
   "enums": [
     {
+      "name": "ke_variant_type",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_VARIANT_NULL",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_VARIANT_BOOL",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_VARIANT_INT",
+          "value": 2,
+          "doc": null
+        },
+        {
+          "name": "KE_VARIANT_FLOAT",
+          "value": 3,
+          "doc": null
+        },
+        {
+          "name": "KE_VARIANT_STRING",
+          "value": 4,
+          "doc": null
+        },
+        {
+          "name": "KE_VARIANT_VEC2",
+          "value": 5,
+          "doc": null
+        },
+        {
+          "name": "KE_VARIANT_VEC3",
+          "value": 6,
+          "doc": null
+        },
+        {
+          "name": "KE_VARIANT_VEC4",
+          "value": 7,
+          "doc": null
+        },
+        {
+          "name": "KE_VARIANT_QUAT",
+          "value": 8,
+          "doc": null
+        },
+        {
+          "name": "KE_VARIANT_TABLE",
+          "value": 9,
+          "doc": null
+        },
+        {
+          "name": "KE_VARIANT_ENTITY",
+          "value": 10,
+          "doc": "An entity of the world the component lives in: the only place a component holds one."
+        }
+      ],
+      "external": true
+    },
+    {
       "name": "ke_result_domain",
       "doc": "The domains that own a range of result codes. A domain\u0027s own codes are written \u0060KE_RESULT_CODE(KE_RESULT_DOMAIN_ \u003CDOMAIN \u003E, n)\u0060 in its header, with \u0060n\u0060 from 1 up.",
       "values": [
@@ -172,68 +234,6 @@
           "name": "KE_SOUND_RELEASE_WHEN_DONE",
           "value": 1,
           "doc": "The entity is destroyed when the sound ends."
-        }
-      ],
-      "external": true
-    },
-    {
-      "name": "ke_variant_type",
-      "doc": null,
-      "values": [
-        {
-          "name": "KE_VARIANT_NULL",
-          "value": 0,
-          "doc": null
-        },
-        {
-          "name": "KE_VARIANT_BOOL",
-          "value": 1,
-          "doc": null
-        },
-        {
-          "name": "KE_VARIANT_INT",
-          "value": 2,
-          "doc": null
-        },
-        {
-          "name": "KE_VARIANT_FLOAT",
-          "value": 3,
-          "doc": null
-        },
-        {
-          "name": "KE_VARIANT_STRING",
-          "value": 4,
-          "doc": null
-        },
-        {
-          "name": "KE_VARIANT_VEC2",
-          "value": 5,
-          "doc": null
-        },
-        {
-          "name": "KE_VARIANT_VEC3",
-          "value": 6,
-          "doc": null
-        },
-        {
-          "name": "KE_VARIANT_VEC4",
-          "value": 7,
-          "doc": null
-        },
-        {
-          "name": "KE_VARIANT_QUAT",
-          "value": 8,
-          "doc": null
-        },
-        {
-          "name": "KE_VARIANT_TABLE",
-          "value": 9,
-          "doc": null
-        },
-        {
-          "name": "KE_VARIANT_ENTITY",
-          "value": 10,
-          "doc": "An entity of the world the component lives in: the only place a component holds one."
         }
       ],
       "external": true
@@ -481,163 +481,6 @@
       "external": true
     },
     {
-      "name": "ke_transform_component",
-      "doc": "An entity\u0027s authored 3D pose.",
-      "tags": [
-        "table",
-        "node:Node3D",
-        "value"
-      ],
-      "fields": [
-        {
-          "name": "position",
-          "type": "ke_vec3",
-          "tags": [],
-          "doc": null
-        },
-        {
-          "name": "rotation",
-          "type": "ke_quat",
-          "tags": [
-            "default:0 0 0 1"
-          ],
-          "doc": null
-        },
-        {
-          "name": "scale",
-          "type": "ke_vec3",
-          "tags": [
-            "default:1 1 1"
-          ],
-          "doc": null
-        }
-      ],
-      "external": true
-    },
-    {
-      "name": "ke_transform2d_component",
-      "doc": "An entity\u0027s authored 2D pose, read and written as one unit.",
-      "tags": [
-        "table",
-        "node:Node2D"
-      ],
-      "fields": [
-        {
-          "name": "position",
-          "type": "ke_vec2",
-          "tags": [],
-          "doc": null
-        },
-        {
-          "name": "rotation",
-          "type": "float",
-          "tags": [],
-          "doc": "Radians, CCW positive."
-        },
-        {
-          "name": "scale",
-          "type": "ke_vec2",
-          "tags": [
-            "default:1 1"
-          ],
-          "doc": null
-        },
-        {
-          "name": "depth",
-          "type": "float",
-          "tags": [],
-          "doc": "Where the plane sits along Z."
-        }
-      ],
-      "external": true
-    },
-    {
-      "name": "ke_world_transform_component",
-      "doc": "An entity\u0027s place in world space, composed down the hierarchy. Written by the hierarchy alone.",
-      "tags": [
-        "value"
-      ],
-      "fields": [
-        {
-          "name": "matrix",
-          "type": "ke_mat4",
-          "tags": [
-            "output"
-          ],
-          "doc": null
-        }
-      ],
-      "external": true
-    },
-    {
-      "name": "ke_sound_component",
-      "doc": "One playback of an audio clip. The sound plays while playing is set: setting it starts the clip from its beginning, clearing it stops the clip, and the clip reaching its end clears it. Two sounds of the same clip play at once, each on its own. The clip is loaded on the first update that sees the component and released on the first update in which the entity no longer holds it.",
-      "tags": [
-        "table",
-        "node:Sound",
-        "base:Node3D"
-      ],
-      "fields": [
-        {
-          "name": "path",
-          "type": "char[256]",
-          "tags": [],
-          "doc": "Path to the audio file, resolved against the project\u0027s base directory."
-        },
-        {
-          "name": "volume",
-          "type": "float",
-          "tags": [
-            "default:1"
-          ],
-          "doc": "Linear gain, 0..1."
-        },
-        {
-          "name": "pitch",
-          "type": "float",
-          "tags": [
-            "default:1"
-          ],
-          "doc": "Playback rate; 1 is the recorded pitch."
-        },
-        {
-          "name": "loop",
-          "type": "bool",
-          "tags": [],
-          "doc": "Plays the clip again from its beginning each time it ends, until playing is cleared."
-        },
-        {
-          "name": "playing",
-          "type": "bool",
-          "tags": [],
-          "doc": null
-        },
-        {
-          "name": "release",
-          "type": "ke_sound_release",
-          "tags": [],
-          "doc": "What happens to the entity when the clip ends."
-        },
-        {
-          "name": "clip",
-          "type": "ke_audio_sound",
-          "tags": [
-            "internal"
-          ],
-          "doc": "The loaded clip, assigned when the component is reconciled. Callers do not write it."
-        },
-        {
-          "name": "voice",
-          "type": "ke_audio_voice",
-          "tags": [
-            "internal"
-          ],
-          "doc": "The playback in progress, assigned while the clip plays. Callers do not write it."
-        }
-      ],
-      "external": true
-    },
-    {
       "name": "ke_variant",
       "doc": null,
       "tags": [],
@@ -835,7 +678,8 @@
       "name": "ke_component_desc",
       "doc": "What a component type is registered with.",
       "tags": [
-        "bag"
+        "bag",
+        "borrowed"
       ],
       "fields": [
         {
@@ -914,6 +758,163 @@
           "type": "uint32_t",
           "tags": [],
           "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_transform_component",
+      "doc": "An entity\u0027s authored 3D pose.",
+      "tags": [
+        "table",
+        "node:Node3D",
+        "value"
+      ],
+      "fields": [
+        {
+          "name": "position",
+          "type": "ke_vec3",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "rotation",
+          "type": "ke_quat",
+          "tags": [
+            "default:0 0 0 1"
+          ],
+          "doc": null
+        },
+        {
+          "name": "scale",
+          "type": "ke_vec3",
+          "tags": [
+            "default:1 1 1"
+          ],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_transform2d_component",
+      "doc": "An entity\u0027s authored 2D pose, read and written as one unit.",
+      "tags": [
+        "table",
+        "node:Node2D"
+      ],
+      "fields": [
+        {
+          "name": "position",
+          "type": "ke_vec2",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "rotation",
+          "type": "float",
+          "tags": [],
+          "doc": "Radians, CCW positive."
+        },
+        {
+          "name": "scale",
+          "type": "ke_vec2",
+          "tags": [
+            "default:1 1"
+          ],
+          "doc": null
+        },
+        {
+          "name": "depth",
+          "type": "float",
+          "tags": [],
+          "doc": "Where the plane sits along Z."
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_world_transform_component",
+      "doc": "An entity\u0027s place in world space, composed down the hierarchy. Written by the hierarchy alone.",
+      "tags": [
+        "value"
+      ],
+      "fields": [
+        {
+          "name": "matrix",
+          "type": "ke_mat4",
+          "tags": [
+            "output"
+          ],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_sound_component",
+      "doc": "One playback of an audio clip. The sound plays while playing is set: setting it starts the clip from its beginning, clearing it stops the clip, and the clip reaching its end clears it. Two sounds of the same clip play at once, each on its own. The clip is loaded on the first update that sees the component and released on the first update in which the entity no longer holds it.",
+      "tags": [
+        "table",
+        "node:Sound",
+        "base:Node3D"
+      ],
+      "fields": [
+        {
+          "name": "path",
+          "type": "char[256]",
+          "tags": [],
+          "doc": "Path to the audio file, resolved against the project\u0027s base directory."
+        },
+        {
+          "name": "volume",
+          "type": "float",
+          "tags": [
+            "default:1"
+          ],
+          "doc": "Linear gain, 0..1."
+        },
+        {
+          "name": "pitch",
+          "type": "float",
+          "tags": [
+            "default:1"
+          ],
+          "doc": "Playback rate; 1 is the recorded pitch."
+        },
+        {
+          "name": "loop",
+          "type": "bool",
+          "tags": [],
+          "doc": "Plays the clip again from its beginning each time it ends, until playing is cleared."
+        },
+        {
+          "name": "playing",
+          "type": "bool",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "release",
+          "type": "ke_sound_release",
+          "tags": [],
+          "doc": "What happens to the entity when the clip ends."
+        },
+        {
+          "name": "clip",
+          "type": "ke_audio_sound",
+          "tags": [
+            "internal"
+          ],
+          "doc": "The loaded clip, assigned when the component is reconciled. Callers do not write it."
+        },
+        {
+          "name": "voice",
+          "type": "ke_audio_voice",
+          "tags": [
+            "internal"
+          ],
+          "doc": "The playback in progress, assigned while the clip plays. Callers do not write it."
         }
       ],
       "external": true
@@ -1090,12 +1091,12 @@
       ],
       "fields": [
         {
-          "name": "name",
-          "type": "const char *",
+          "name": "component",
+          "type": "const ke_component_desc *",
           "tags": [
-            "utf8"
+            "borrowed"
           ],
-          "doc": "The registered component\u0027s name."
+          "doc": "How the component is registered: its name, size, alignment and field table."
         },
         {
           "name": "initial",
@@ -1109,7 +1110,7 @@
           "name": "initial_size",
           "type": "size_t",
           "tags": [],
-          "doc": "The component\u0027s registered size, or 0 to start it zeroed."
+          "doc": "The component\u0027s size, or 0 to start it zeroed."
         }
       ],
       "external": true
@@ -1210,7 +1211,7 @@
             "array_of:with_count",
             "default:empty"
           ],
-          "doc": "Registered components every node of the type carries beside its fields, each with the value it is born with."
+          "doc": "Components every node of the type carries beside its fields, each with the value it is born with; registering the type registers each."
         },
         {
           "name": "with_count",
@@ -3748,8 +3749,8 @@
           "name": "register_type",
           "returns": "ke_result",
           "tags": [],
-          "doc": "Registers a node type and the systems of its behaviours.",
-          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a null or nameless desc, a table or initial bytes without \u0060fields_size\u0060, \u0060initial\u0060 without fields, an initial whose size is not its component\u0027s, or events without \u0060on\u0060; KE_RESULT_NOT_FOUND for a \u0060with\u0060 name or an event never registered; the ecs\u0027s or the runtime\u0027s code when it refuses.",
+          "doc": "Registers a node type and the systems of its behaviours, and each component of \u0060with\u0060 as the ecs\u0027s component_register does: one already registered with the same name and layout keeps its id.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a null or nameless desc, a table or initial bytes without \u0060fields_size\u0060, \u0060initial\u0060 without fields, a \u0060with\u0060 without its component, an initial whose size is not its component\u0027s, or events without \u0060on\u0060; KE_RESULT_NOT_FOUND for an event never registered; the ecs\u0027s or the runtime\u0027s code when it refuses.",
           "params": [
             {
               "name": "desc",
@@ -4410,10 +4411,10 @@
     "ke_removal_tracker"
   ],
   "type_aliases": {
-    "ke_audio_sound": "uint32_t",
-    "ke_audio_voice": "uint32_t",
     "ke_entity": "uint64_t",
     "ke_component_id": "uint32_t",
+    "ke_audio_sound": "uint32_t",
+    "ke_audio_voice": "uint32_t",
     "ke_query_id": "uint64_t",
     "ke_removal_tracker": "uint64_t",
     "ke_defer_fn": "ke_result (*)(ke_ecs *, void *)",
@@ -5142,8 +5143,8 @@
             "text": "",
             "items": [
               {
-                "kind": "String",
-                "text": "\u0022ambient_light\u0022"
+                "kind": "Name",
+                "text": "ke_ambient_light_component_desc"
               },
               {
                 "kind": "Name",
@@ -5160,8 +5161,8 @@
             "text": "",
             "items": [
               {
-                "kind": "String",
-                "text": "\u0022transform\u0022"
+                "kind": "Name",
+                "text": "ke_transform_component_desc"
               },
               {
                 "kind": "Name",
@@ -5189,8 +5190,8 @@
             "text": "",
             "items": [
               {
-                "kind": "String",
-                "text": "\u0022body2d\u0022"
+                "kind": "Name",
+                "text": "ke_body2d_component_desc"
               },
               {
                 "kind": "Name",
@@ -5207,8 +5208,8 @@
             "text": "",
             "items": [
               {
-                "kind": "String",
-                "text": "\u0022transform2d\u0022"
+                "kind": "Name",
+                "text": "ke_transform2d_component_desc"
               },
               {
                 "kind": "Name",
@@ -5236,8 +5237,8 @@
             "text": "",
             "items": [
               {
-                "kind": "String",
-                "text": "\u0022camera\u0022"
+                "kind": "Name",
+                "text": "ke_camera_component_desc"
               },
               {
                 "kind": "Name",
@@ -5254,8 +5255,8 @@
             "text": "",
             "items": [
               {
-                "kind": "String",
-                "text": "\u0022transform\u0022"
+                "kind": "Name",
+                "text": "ke_transform_component_desc"
               },
               {
                 "kind": "Name",
@@ -5283,8 +5284,8 @@
             "text": "",
             "items": [
               {
-                "kind": "String",
-                "text": "\u0022collider2d\u0022"
+                "kind": "Name",
+                "text": "ke_collider2d_component_desc"
               },
               {
                 "kind": "Name",
@@ -5301,8 +5302,8 @@
             "text": "",
             "items": [
               {
-                "kind": "String",
-                "text": "\u0022transform2d\u0022"
+                "kind": "Name",
+                "text": "ke_transform2d_component_desc"
               },
               {
                 "kind": "Name",
@@ -5330,8 +5331,8 @@
             "text": "",
             "items": [
               {
-                "kind": "String",
-                "text": "\u0022directional_light\u0022"
+                "kind": "Name",
+                "text": "ke_directional_light_component_desc"
               },
               {
                 "kind": "Name",
@@ -5348,8 +5349,8 @@
             "text": "",
             "items": [
               {
-                "kind": "String",
-                "text": "\u0022transform\u0022"
+                "kind": "Name",
+                "text": "ke_transform_component_desc"
               },
               {
                 "kind": "Name",
@@ -5377,8 +5378,8 @@
             "text": "",
             "items": [
               {
-                "kind": "String",
-                "text": "\u0022label\u0022"
+                "kind": "Name",
+                "text": "ke_label_component_desc"
               },
               {
                 "kind": "Name",
@@ -5395,8 +5396,8 @@
             "text": "",
             "items": [
               {
-                "kind": "String",
-                "text": "\u0022transform\u0022"
+                "kind": "Name",
+                "text": "ke_transform_component_desc"
               },
               {
                 "kind": "Name",
@@ -5424,8 +5425,8 @@
             "text": "",
             "items": [
               {
-                "kind": "String",
-                "text": "\u0022mesh\u0022"
+                "kind": "Name",
+                "text": "ke_mesh_component_desc"
               },
               {
                 "kind": "Name",
@@ -5442,8 +5443,8 @@
             "text": "",
             "items": [
               {
-                "kind": "String",
-                "text": "\u0022transform\u0022"
+                "kind": "Name",
+                "text": "ke_transform_component_desc"
               },
               {
                 "kind": "Name",
@@ -5471,8 +5472,8 @@
             "text": "",
             "items": [
               {
-                "kind": "String",
-                "text": "\u0022point_light\u0022"
+                "kind": "Name",
+                "text": "ke_point_light_component_desc"
               },
               {
                 "kind": "Name",
@@ -5489,8 +5490,8 @@
             "text": "",
             "items": [
               {
-                "kind": "String",
-                "text": "\u0022transform\u0022"
+                "kind": "Name",
+                "text": "ke_transform_component_desc"
               },
               {
                 "kind": "Name",
@@ -5518,8 +5519,8 @@
             "text": "",
             "items": [
               {
-                "kind": "String",
-                "text": "\u0022skybox\u0022"
+                "kind": "Name",
+                "text": "ke_skybox_component_desc"
               },
               {
                 "kind": "Number",
@@ -5536,8 +5537,8 @@
             "text": "",
             "items": [
               {
-                "kind": "String",
-                "text": "\u0022transform\u0022"
+                "kind": "Name",
+                "text": "ke_transform_component_desc"
               },
               {
                 "kind": "Name",
@@ -5565,8 +5566,8 @@
             "text": "",
             "items": [
               {
-                "kind": "String",
-                "text": "\u0022sound\u0022"
+                "kind": "Name",
+                "text": "ke_sound_component_desc"
               },
               {
                 "kind": "Name",
@@ -5583,8 +5584,8 @@
             "text": "",
             "items": [
               {
-                "kind": "String",
-                "text": "\u0022transform\u0022"
+                "kind": "Name",
+                "text": "ke_transform_component_desc"
               },
               {
                 "kind": "Name",
@@ -5612,8 +5613,8 @@
             "text": "",
             "items": [
               {
-                "kind": "String",
-                "text": "\u0022spot_light\u0022"
+                "kind": "Name",
+                "text": "ke_spot_light_component_desc"
               },
               {
                 "kind": "Name",
@@ -5630,8 +5631,8 @@
             "text": "",
             "items": [
               {
-                "kind": "String",
-                "text": "\u0022transform\u0022"
+                "kind": "Name",
+                "text": "ke_transform_component_desc"
               },
               {
                 "kind": "Name",
@@ -5659,8 +5660,8 @@
             "text": "",
             "items": [
               {
-                "kind": "String",
-                "text": "\u0022sprite2d\u0022"
+                "kind": "Name",
+                "text": "ke_sprite2d_component_desc"
               },
               {
                 "kind": "Name",
@@ -5677,8 +5678,8 @@
             "text": "",
             "items": [
               {
-                "kind": "String",
-                "text": "\u0022transform2d\u0022"
+                "kind": "Name",
+                "text": "ke_transform2d_component_desc"
               },
               {
                 "kind": "Name",
@@ -5706,8 +5707,8 @@
             "text": "",
             "items": [
               {
-                "kind": "String",
-                "text": "\u0022transform2d\u0022"
+                "kind": "Name",
+                "text": "ke_transform2d_component_desc"
               },
               {
                 "kind": "Name",
@@ -5735,8 +5736,8 @@
             "text": "",
             "items": [
               {
-                "kind": "String",
-                "text": "\u0022transform\u0022"
+                "kind": "Name",
+                "text": "ke_transform_component_desc"
               },
               {
                 "kind": "Name",

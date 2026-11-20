@@ -607,9 +607,9 @@ export fn ke_render_ui_create(context_in: ?*const abi_render_context.c.ke_render
 
 fn registerUi(e: *abi_ecs.c.ke_ecs, quad: *abi_asset_resolver.c.ke_component_id, label: *abi_asset_resolver.c.ke_component_id) R.Error!void {
     quad.* = abi_ecs.c.KE_COMPONENT_INVALID;
-    try R.check(e.component_register.?(e, &abi_ecs.c.ke_component_desc{ .name = abi_ui_components.c.KE_COMPONENT_NAME_UI_QUAD, .size = @sizeOf(UiQuadComponent), .alignment = @alignOf(UiQuadComponent), .fields = &abi_render_contract.c.ke_ui_quad_component_fields, .field_count = abi_render_contract.c.ke_ui_quad_component_fields.len }, quad));
+    try R.check(e.component_register.?(e, &abi_render_contract.c.ke_ui_quad_component_desc, quad));
     label.* = abi_ecs.c.KE_COMPONENT_INVALID;
-    try R.check(e.component_register.?(e, &abi_ecs.c.ke_component_desc{ .name = abi_ui_components.c.KE_COMPONENT_NAME_LABEL, .size = @sizeOf(abi_ui_components.c.ke_label_component), .alignment = @alignOf(abi_ui_components.c.ke_label_component), .fields = &abi_render_contract.c.ke_label_component_fields, .field_count = abi_render_contract.c.ke_label_component_fields.len }, label));
+    try R.check(e.component_register.?(e, &abi_render_contract.c.ke_label_component_desc, label));
 }
 
 fn register(ui: *UiState, p: *const abi_render_context.c.ke_render_context) R.Error!void {

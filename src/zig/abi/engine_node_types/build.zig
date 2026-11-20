@@ -10,18 +10,20 @@ pub fn build(b: *std.Build) void {
     abi.addImport("framework", b.dependency("abi_framework", .{}).module("abi"));
     abi.addImport("physics_components", b.dependency("abi_physics_components", .{}).module("abi"));
     abi.addImport("render_components", b.dependency("abi_render_components", .{}).module("abi"));
+    abi.addImport("render_contract", b.dependency("abi_render_contract", .{}).module("abi"));
     abi.addImport("render_handles", b.dependency("abi_render_handles", .{}).module("abi"));
     abi.addImport("result", b.dependency("abi_result", .{}).module("abi"));
     abi.addImport("spatial", b.dependency("abi_spatial", .{}).module("abi"));
     abi.addImport("ui_components", b.dependency("abi_ui_components", .{}).module("abi"));
 
     const headers = b.addWriteFiles().add("layout.h",
-        \\#include <kernel_engine/framework/engine_node_types.h>
+        \\#include <kernel_engine/engine_nodes/engine_node_types.h>
     );
     const translated = b.addTranslateC(.{ .root_source_file = headers, .target = target, .optimize = optimize });
     translated.addIncludePath(b.path("../../../c/audio"));
     translated.addIncludePath(b.path("../../common/include"));
     translated.addIncludePath(b.path("../../../c/ecs"));
+    translated.addIncludePath(b.path("../../../c/engine_nodes"));
     translated.addIncludePath(b.path("../../../c/framework"));
     translated.addIncludePath(b.path("../../../c/math"));
     translated.addIncludePath(b.path("../../../c/physics"));
@@ -42,6 +44,7 @@ pub fn build(b: *std.Build) void {
     tests.root_module.addIncludePath(b.path("../../../c/audio"));
     tests.root_module.addIncludePath(b.path("../../common/include"));
     tests.root_module.addIncludePath(b.path("../../../c/ecs"));
+    tests.root_module.addIncludePath(b.path("../../../c/engine_nodes"));
     tests.root_module.addIncludePath(b.path("../../../c/framework"));
     tests.root_module.addIncludePath(b.path("../../../c/math"));
     tests.root_module.addIncludePath(b.path("../../../c/physics"));

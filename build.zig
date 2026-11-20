@@ -376,6 +376,11 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     }, &.{}, .has_tests);
 
+    _ = ctx.member("ke_engine_nodes", .{
+        .target = target,
+        .optimize = optimize,
+    }, &.{}, .has_tests);
+
     _ = ctx.member("ke_extraction_default", .{
         .target = target,
         .optimize = optimize,
@@ -596,6 +601,7 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ src_zig, "schedule/include" }),
             b.pathJoin(&.{ src_c, "asset" }),
             b.pathJoin(&.{ src_c, "framework" }),
+            b.pathJoin(&.{ src_c, "engine_nodes" }),
             b.pathJoin(&.{ src_zig, "framework/include" }),
             vcpkg_include,
             b.pathJoin(&.{ src_c, "file_system" }),
@@ -643,6 +649,7 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ src_c, "ecs" }),
             b.pathJoin(&.{ src_c, "file_system" }),
             b.pathJoin(&.{ src_c, "framework" }),
+            b.pathJoin(&.{ src_c, "engine_nodes" }),
             b.pathJoin(&.{ src_c, "input" }),
             b.pathJoin(&.{ src_c, "io" }),
             b.pathJoin(&.{ src_c, "logger" }),

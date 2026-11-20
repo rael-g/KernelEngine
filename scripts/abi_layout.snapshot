@@ -976,7 +976,7 @@ ke_node_component size=24 align=8
   data 8
   size 16
 ke_node_with size=24 align=8
-  name 0
+  component 0
   initial 8
   initial_size 16
 ke_action_ref size=40 align=4

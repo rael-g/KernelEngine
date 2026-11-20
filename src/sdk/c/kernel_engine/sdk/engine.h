@@ -9,7 +9,7 @@
 #include <kernel_engine/extraction/extraction.h>
 #include <kernel_engine/file_system/file_system.h>
 #include <kernel_engine/asset/asset_resolver.h>
-#include <kernel_engine/framework/engine_node_types.h>
+#include <kernel_engine/engine_nodes/engine_node_types.h>
 #include <kernel_engine/framework/input_actions.h>
 #include <kernel_engine/framework/node_types.h>
 #include <kernel_engine/framework/scene_files.h>

@@ -41,6 +41,7 @@
         .ke_gpu_render_target_renderdoc = .{ .path = "src/zig/render/renderdoc_target" },
         .ke_render_tonemap = .{ .path = "src/zig/render/tonemap" },
         .ke_physics_body2d = .{ .path = "src/zig/physics/body2d" },
+        .ke_engine_nodes = .{ .path = "src/zig/engine_nodes" },
         .ke_extraction_default = .{ .path = "src/zig/extraction/default" },
         .ke_render_graph_simple = .{ .path = "src/zig/render_graph/simple" },
         .ke_audio_module = .{ .path = "src/zig/audio/module" },

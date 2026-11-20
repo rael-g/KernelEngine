@@ -319,7 +319,9 @@ pub const NodeTypes = struct {
         };
     }
 
-    /// Registers a node type and the systems of its behaviours.
+    /// Registers a node type and the systems of its behaviours, and each component of `with` as the
+    /// ecs's component_register does: one already registered with the same name and layout keeps its
+    /// id.
     pub fn registerType(self: NodeTypes, desc: ?*const c.ke_node_type_desc) Error!c.ke_component_id {
         var written: c.ke_component_id = undefined;
         try checkResult(self.ptr.register_type.?(self.ptr, desc, &written));

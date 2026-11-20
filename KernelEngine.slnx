@@ -15,6 +15,7 @@
     <Project Path="src/csharp/configuration/KernelEngine.Configuration/KernelEngine.Configuration.csproj" />
     <Project Path="src/csharp/framework/KernelEngine.Framework/KernelEngine.Framework.csproj" />
     <Project Path="src/csharp/framework/KernelEngine.Framework.Nodes/KernelEngine.Framework.Nodes.csproj" />
+    <Project Path="src/csharp/engine_nodes/KernelEngine.EngineNodes/KernelEngine.EngineNodes.csproj" />
     <Project Path="src/csharp/generators/KernelEngine.Framework.Nodes.Generator/KernelEngine.Framework.Nodes.Generator.csproj" />
     <Project Path="src/csharp/sdk/KernelEngine.Sdk/KernelEngine.Sdk.csproj" />
     <Project Path="src/csharp/sdk/KernelEngine.Sdk.Defaults/KernelEngine.Sdk.Defaults.csproj" />

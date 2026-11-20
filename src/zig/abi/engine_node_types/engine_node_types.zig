@@ -5,6 +5,7 @@ const abi_ecs = @import("ecs");
 const abi_framework = @import("framework");
 const abi_physics_components = @import("physics_components");
 const abi_render_components = @import("render_components");
+const abi_render_contract = @import("render_contract");
 const abi_render_handles = @import("render_handles");
 const abi_result = @import("result");
 const abi_spatial = @import("spatial");

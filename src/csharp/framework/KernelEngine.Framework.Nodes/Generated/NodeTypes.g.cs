@@ -138,13 +138,13 @@ public unsafe partial class NodeTypes : IDisposable, INativeNodeTypes, INodeType
         _owner = null;
     }
 
-    /// <summary>Registers a node type and the systems of its behaviours.</summary>
+    /// <summary>Registers a node type and the systems of its behaviours, and each component of `with` as the ecs's component_register does: one already registered with the same name and layout keeps its id.</summary>
     /// <param name="name">The type's name; its nodes carry a tag registered as `node. &lt;name &gt;`.</param>
     /// <param name="fieldsSize">The bytes of the type's own fields, registered as a component under the type's name; 0 for a type made only of the components it names in `with`.</param>
     /// <param name="fieldsAlignment">The alignment of the fields, a power of two when `fields_size` is not 0.</param>
     /// <param name="fields">The fields' table, copied by the ecs.</param>
     /// <param name="initial">The bytes copied into the fields of each node spawned; none starts them zeroed.</param>
-    /// <param name="with">Registered components every node of the type carries beside its fields, each with the value it is born with.</param>
+    /// <param name="with">Components every node of the type carries beside its fields, each with the value it is born with; registering the type registers each.</param>
     /// <param name="ready">Runs once per node, in the PreUpdate after the node is created, before its first update.</param>
     /// <param name="update">Runs every tick, in Update.</param>
     /// <param name="fixedUpdate">Runs every fixed step, in FixedUpdate.</param>
@@ -188,17 +188,46 @@ public unsafe partial class NodeTypes : IDisposable, INativeNodeTypes, INodeType
                 {
                     fixed (byte* initialPtr = initial)
                     {
-                        var withPins = new System.Buffers.MemoryHandle[with.Length];
+                        var withPins = new List<System.Buffers.MemoryHandle>();
                         var withTexts = new List<nint>();
                         var withNative = new ke_node_with[with.Length];
                         try
                         {
                             for (var withAt = 0; withAt < with.Length; withAt++)
                             {
-                                withTexts.Add(Marshal.StringToCoTaskMemUTF8(with[withAt].Name));
-                                withNative[withAt].name = (sbyte*)withTexts[^1];
-                                withPins[withAt] = with[withAt].Initial.Pin();
-                                withNative[withAt].initial = (void*)withPins[withAt].Pointer;
+                                var withComponentAt = Marshal.AllocCoTaskMem(sizeof(ke_component_desc));
+                                withTexts.Add(withComponentAt);
+                                *(ke_component_desc*)withComponentAt = default;
+                                withTexts.Add(Marshal.StringToCoTaskMemUTF8(with[withAt].Component.Name));
+                                (*(ke_component_desc*)withComponentAt).name = (sbyte*)withTexts[^1];
+                                (*(ke_component_desc*)withComponentAt).size = with[withAt].Component.Size;
+                                (*(ke_component_desc*)withComponentAt).alignment = with[withAt].Component.Alignment;
+                                var withFields2 = with[withAt].Component.Fields.Length == 0 ? 0 : Marshal.AllocCoTaskMem(with[withAt].Component.Fields.Length * sizeof(ke_component_field));
+                                if (withFields2 != 0) withTexts.Add(withFields2);
+                                for (var withFields2Each = 0; withFields2Each < with[withAt].Component.Fields.Length; withFields2Each++)
+                                {
+                                    ((ke_component_field*)withFields2)[withFields2Each] = default;
+                                    withTexts.Add(Marshal.StringToCoTaskMemUTF8(with[withAt].Component.Fields.Span[withFields2Each].Name));
+                                    ((ke_component_field*)withFields2)[withFields2Each].name = (sbyte*)withTexts[^1];
+                                    ((ke_component_field*)withFields2)[withFields2Each].type = with[withAt].Component.Fields.Span[withFields2Each].Type;
+                                    ((ke_component_field*)withFields2)[withFields2Each].offset = with[withAt].Component.Fields.Span[withFields2Each].Offset;
+                                    ((ke_component_field*)withFields2)[withFields2Each].size = with[withAt].Component.Fields.Span[withFields2Each].Size;
+                                    ((ke_component_field*)withFields2)[withFields2Each].default_value = with[withAt].Component.Fields.Span[withFields2Each].DefaultValue;
+                                    var withEnumNames3 = with[withAt].Component.Fields.Span[withFields2Each].EnumNames.Length == 0 ? 0 : Marshal.AllocCoTaskMem(with[withAt].Component.Fields.Span[withFields2Each].EnumNames.Length * nint.Size);
+                                    if (withEnumNames3 != 0) withTexts.Add(withEnumNames3);
+                                    for (var withEnumNames3Each = 0; withEnumNames3Each < with[withAt].Component.Fields.Span[withFields2Each].EnumNames.Length; withEnumNames3Each++)
+                                    {
+                                        withTexts.Add(Marshal.StringToCoTaskMemUTF8(with[withAt].Component.Fields.Span[withFields2Each].EnumNames.Span[withEnumNames3Each]));
+                                        Marshal.WriteIntPtr(withEnumNames3, withEnumNames3Each * nint.Size, withTexts[^1]);
+                                    }
+                                    ((ke_component_field*)withFields2)[withFields2Each].enum_names = (sbyte**)withEnumNames3;
+                                    ((ke_component_field*)withFields2)[withFields2Each].enum_count = (uint)with[withAt].Component.Fields.Span[withFields2Each].EnumNames.Length;
+                                }
+                                (*(ke_component_desc*)withComponentAt).fields = (ke_component_field*)withFields2;
+                                (*(ke_component_desc*)withComponentAt).field_count = (uint)with[withAt].Component.Fields.Length;
+                                withNative[withAt].component = (ke_component_desc*)withComponentAt;
+                                withPins.Add(with[withAt].Initial.Pin());
+                                withNative[withAt].initial = (void*)withPins[^1].Pointer;
                                 withNative[withAt].initial_size = (nuint)with[withAt].Initial.Length;
                             }
                             fixed (ke_node_with* withPtr = withNative)
@@ -256,7 +285,7 @@ public unsafe partial class NodeTypes : IDisposable, INativeNodeTypes, INodeType
                         }
                         finally
                         {
-                            for (var withAt = 0; withAt < withPins.Length; withAt++) withPins[withAt].Dispose();
+                            foreach (var withPin in withPins) withPin.Dispose();
                             foreach (var withText in withTexts) Marshal.FreeCoTaskMem(withText);
                         }
                     }

@@ -79,32 +79,24 @@ fn destroyScene(self: ?*abi_render.c.ke_render_scene_resolve) callconv(.c) void 
     gpa.destroy(st);
 }
 
-/// Registers the component type with the ecs under its name, its size and its field table, and
-/// returns the id the ecs gives it.
-fn registerComponent(e: *abi_ecs.c.ke_ecs, name: [*c]const u8, comptime T: type, comptime table: anytype) R.Error!abi_asset_resolver.c.ke_component_id {
-    const fields = @typeInfo(@TypeOf(table.*)).array;
+/// Registers a component of the contract by its description and returns the id the ecs gives it.
+fn registerComponent(e: *abi_ecs.c.ke_ecs, desc: *const abi_ecs.c.ke_component_desc) R.Error!abi_asset_resolver.c.ke_component_id {
     var cid: abi_asset_resolver.c.ke_component_id = abi_ecs.c.KE_COMPONENT_INVALID;
-    try R.check(e.component_register.?(e, &abi_ecs.c.ke_component_desc{ .name = name, .size = @sizeOf(T), .alignment = @alignOf(T), .fields = table, .field_count = @intCast(fields.len) }, &cid));
-    return cid;
-}
-
-fn registerBare(e: *abi_ecs.c.ke_ecs, name: [*c]const u8, comptime T: type) R.Error!abi_asset_resolver.c.ke_component_id {
-    var cid: abi_asset_resolver.c.ke_component_id = abi_ecs.c.KE_COMPONENT_INVALID;
-    try R.check(e.component_register.?(e, &abi_ecs.c.ke_component_desc{ .name = name, .size = @sizeOf(T), .alignment = @alignOf(T), .fields = null, .field_count = 0 }, &cid));
+    try R.check(e.component_register.?(e, desc, &cid));
     return cid;
 }
 
 fn registerIds(e: *abi_ecs.c.ke_ecs, ids: *abi_render.c.ke_render_scene_component_ids) R.Error!void {
-    ids.mesh = try registerComponent(e, abi_render_contract.c.KE_COMPONENT_NAME_MESH, abi_render_components.c.ke_mesh_component, &abi_render_contract.c.ke_mesh_component_fields);
-    ids.world_transform = try registerBare(e, abi_spatial_contract.c.KE_COMPONENT_NAME_WORLD_TRANSFORM, abi_spatial.c.ke_world_transform_component);
-    ids.camera = try registerComponent(e, abi_render_contract.c.KE_COMPONENT_NAME_CAMERA, abi_render_components.c.ke_camera_component, &abi_render_contract.c.ke_camera_component_fields);
-    ids.directional_light = try registerComponent(e, abi_render_contract.c.KE_COMPONENT_NAME_DIRECTIONAL_LIGHT, abi_render_components.c.ke_directional_light_component, &abi_render_contract.c.ke_directional_light_component_fields);
-    ids.point_light = try registerComponent(e, abi_render_contract.c.KE_COMPONENT_NAME_POINT_LIGHT, abi_render_components.c.ke_point_light_component, &abi_render_contract.c.ke_point_light_component_fields);
-    ids.spot_light = try registerComponent(e, abi_render_contract.c.KE_COMPONENT_NAME_SPOT_LIGHT, abi_render_components.c.ke_spot_light_component, &abi_render_contract.c.ke_spot_light_component_fields);
-    ids.ambient_light = try registerComponent(e, abi_render_contract.c.KE_COMPONENT_NAME_AMBIENT_LIGHT, abi_render_components.c.ke_ambient_light_component, &abi_render_contract.c.ke_ambient_light_component_fields);
-    ids.skybox = try registerBare(e, abi_render_contract.c.KE_COMPONENT_NAME_SKYBOX, abi_render_components.c.ke_skybox_component);
-    ids.sprite2d = try registerComponent(e, abi_render_contract.c.KE_COMPONENT_NAME_SPRITE2D, abi_render_components.c.ke_sprite2d_component, &abi_render_contract.c.ke_sprite2d_component_fields);
-    ids.label = try registerComponent(e, abi_ui_components.c.KE_COMPONENT_NAME_LABEL, abi_ui_components.c.ke_label_component, &abi_render_contract.c.ke_label_component_fields);
+    ids.mesh = try registerComponent(e, &abi_render_contract.c.ke_mesh_component_desc);
+    ids.world_transform = try registerComponent(e, &abi_spatial_contract.c.ke_world_transform_component_desc);
+    ids.camera = try registerComponent(e, &abi_render_contract.c.ke_camera_component_desc);
+    ids.directional_light = try registerComponent(e, &abi_render_contract.c.ke_directional_light_component_desc);
+    ids.point_light = try registerComponent(e, &abi_render_contract.c.ke_point_light_component_desc);
+    ids.spot_light = try registerComponent(e, &abi_render_contract.c.ke_spot_light_component_desc);
+    ids.ambient_light = try registerComponent(e, &abi_render_contract.c.ke_ambient_light_component_desc);
+    ids.skybox = try registerComponent(e, &abi_render_contract.c.ke_skybox_component_desc);
+    ids.sprite2d = try registerComponent(e, &abi_render_contract.c.ke_sprite2d_component_desc);
+    ids.label = try registerComponent(e, &abi_render_contract.c.ke_label_component_desc);
 }
 
 /// The components every pair of the render world carries when its entity has them, and those whose

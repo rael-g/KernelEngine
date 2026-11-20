@@ -26,6 +26,8 @@ test "every record is laid out as the header lays it out" {
     try expectSameLayout(abi.c.ke_sound_component, translated("ke_sound_component"));
     if (@hasDecl(c, "ke_audio_sound")) try expectSameLayout(abi.c.ke_audio_sound, c.ke_audio_sound);
     if (@hasDecl(c, "ke_audio_voice")) try expectSameLayout(abi.c.ke_audio_voice, c.ke_audio_voice);
+    if (@hasDecl(c, "ke_component_id")) try expectSameLayout(abi.c.ke_component_id, c.ke_component_id);
+    if (@hasDecl(c, "ke_entity")) try expectSameLayout(abi.c.ke_entity, c.ke_entity);
 }
 
 test "every enum value is the header's value" {

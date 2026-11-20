@@ -11,7 +11,6 @@ const abi_input_actions = @import("abi_input_actions");
 const abi_part = @import("abi_part");
 const abi_ecs_variant = @import("abi_ecs_variant");
 const abi_result = @import("abi_result");
-const abi_engine_node_types = @import("abi_engine_node_types");
 const part = @import("part");
 const abi_schedule = @import("abi_schedule");
 const abi_scheduler = @import("abi_scheduler");
@@ -716,15 +715,16 @@ fn registerType(s: *State, desc: *const abi_framework.c.ke_node_type_desc) R.Err
     for (t.prototypes) |*p| p.* = &.{};
 
     for (0..desc.with_count) |i| {
-        const with_name = desc.with.?[i].name orelse return error.InvalidArgument;
-        var meta = std.mem.zeroes(abi_ecs.c.ke_component_meta);
-        if (!s.ecs.component_lookup.?(s.ecs, with_name, &meta)) {
-            log.warn("node types: type {s} carries {s}, which is not registered", .{ name, with_name });
-            return error.NotFound;
-        }
-        t.columns[own + i] = meta.cid;
-        t.sizes[own + i] = meta.size;
-        t.prototypes[own + i] = try prototypeOf(meta.size, desc.with.?[i].initial, desc.with.?[i].initial_size, name);
+        const carried = desc.with.?[i].component orelse {
+            log.warn("node types: type {s} carries a component it does not describe", .{name});
+            return error.InvalidArgument;
+        };
+        R.check(s.ecs.component_register.?(s.ecs, carried, &t.columns[own + i])) catch |err| {
+            log.warn("node types: type {s} carries {s}, which the ecs refused", .{ name, std.mem.span(carried.*.name.?) });
+            return err;
+        };
+        t.sizes[own + i] = carried.*.size;
+        t.prototypes[own + i] = try prototypeOf(carried.*.size, desc.with.?[i].initial, desc.with.?[i].initial_size, name);
     }
     const tag_name = std.fmt.allocPrintSentinel(heap.gpa, "node.{s}", .{name}, 0) catch return error.OutOfMemory;
     defer heap.gpa.free(tag_name);
@@ -970,11 +970,8 @@ export fn ke_node_types_systems_create(
 }
 
 fn create(loop: *abi_scheduler.c.ke_scheduler, ecs: *abi_ecs.c.ke_ecs, tree: *abi_scene_tree.c.ke_scene_tree, actions: ?*abi_input_actions.c.ke_input_actions) R.Error!abi_framework.c.ke_node_types_handle {
-    var name_meta = std.mem.zeroes(abi_ecs.c.ke_component_meta);
-    if (!ecs.component_lookup.?(ecs, abi_framework_components.c.KE_COMPONENT_NAME_NAME, &name_meta)) {
-        log.warn("node types: the scene tree components are not registered on this ecs", .{});
-        return error.NotFound;
-    }
+    var name_component: Cid = 0;
+    try R.check(ecs.component_register.?(ecs, &abi_framework_components.c.ke_name_component_desc, &name_component));
     var status_cid: Cid = 0;
     var status_meta = std.mem.zeroes(abi_ecs.c.ke_component_meta);
     if (ecs.component_lookup.?(ecs, status_name, &status_meta)) {
@@ -1001,7 +998,7 @@ fn create(loop: *abi_scheduler.c.ke_scheduler, ecs: *abi_ecs.c.ke_ecs, tree: *ab
         .actions = actions,
         .status_cid = status_cid,
         .stamp_cid = stamp_cid,
-        .name_cid = name_meta.cid,
+        .name_cid = name_component,
     };
     s.api.handle = s;
     errdefer vtDestroy(&s.api);
@@ -1013,9 +1010,8 @@ fn create(loop: *abi_scheduler.c.ke_scheduler, ecs: *abi_ecs.c.ke_ecs, tree: *ab
     return .{ .ref = &s.api, .destroy = vtDestroy };
 }
 
-/// Factory. A null scheduler, ecs, scene tree or out handle fails as an invalid argument; an ecs
-/// without the scene tree components fails as not found; a refused registration fails with the
-/// ecs's code. Each leaves the handle zeroed.
+/// Factory. A null scheduler, ecs, scene tree or out handle fails as an invalid argument; a refused
+/// registration fails with the ecs's code. Each leaves the handle zeroed.
 export fn ke_node_types_create(
     loop_in: ?*abi_scheduler.c.ke_scheduler,
     ecs_in: ?*abi_ecs.c.ke_ecs,
@@ -1032,31 +1028,6 @@ export fn ke_node_types_create(
     return R.ok;
 }
 
-var engine_node_types_owner: u8 = 0;
-
-/// The owner's destroy of the engine node types part: releases nothing, the types stay with the
-/// node types they were registered in.
-fn engineNodeTypesDestroy(_: ?*anyopaque) callconv(.c) void {}
-
-/// Factory of the engine node types part: registers every type of `ke_engine_node_types` through
-/// `types`. A null argument fails as an invalid argument, and a refused type with the node types'
-/// code, the types registered before it staying.
-fn createEngineNodeTypes(types_in: ?*abi_framework.c.ke_node_types, out_owner: ?*abi_part.c.ke_owner) callconv(.c) abi_result.c.ke_result {
-    const out = out_owner orelse return R.code(error.InvalidArgument);
-    out.* = std.mem.zeroes(abi_part.c.ke_owner);
-    const types = types_in orelse return R.code(error.InvalidArgument);
-    for (&abi_engine_node_types.c.ke_engine_node_types) |*desc| {
-        var cid: Cid = 0;
-        const made = types.register_type.?(types, @ptrCast(desc), &cid);
-        if (made != R.ok) {
-            log.warn("engine node types: registering {s} failed", .{std.mem.span(desc.name.?)});
-            return made;
-        }
-    }
-    out.* = .{ .ref = &engine_node_types_owner, .destroy = engineNodeTypesDestroy };
-    return R.ok;
-}
-
 pub const parts = [_]abi_part.c.ke_part{
     part.of(ke_node_types_create, .{ .name = "node_types", .slots = &.{ "scheduler", "ecs", "scene_tree", "input_actions" }, .optional = &.{"input_actions"} }),
     part.of(ke_node_types_systems_create, .{ .name = "node_types_systems", .slots = &.{"types"}, .hooks = &.{
@@ -1065,7 +1036,6 @@ pub const parts = [_]abi_part.c.ke_part{
         "update",
         "post_update",
     } }),
-    part.of(createEngineNodeTypes, .{ .name = "engine_node_types", .slots = &.{"node_types"} }),
 };
 
 const testing = std.testing;
@@ -1103,8 +1073,12 @@ var tag_cids: [16]Cid = undefined;
 var tag_count: usize = 0;
 
 fn registerComponent(args: zsub.For(abi_ecs.c.ke_ecs).Args(.component_register)) abi_result.c.ke_result {
-    args[2].?.* = next_cid;
     const name = std.mem.span(args[1].?.name.?);
+    if (std.mem.eql(u8, name, "transform2d")) {
+        args[2].?.* = transform2d_cid;
+        return R.ok;
+    }
+    args[2].?.* = next_cid;
     if (tag_count < tag_names.len and name.len < tag_names[0].len) {
         @memset(&tag_names[tag_count], 0);
         @memcpy(tag_names[tag_count][0..name.len], name);
@@ -1167,7 +1141,8 @@ const Fixture = struct {
     }
 };
 
-const with_transform = [_]abi_framework.c.ke_node_with{.{ .name = "transform2d", .initial = null }};
+const transform2d_desc: abi_ecs.c.ke_component_desc = .{ .name = "transform2d", .size = 8, .alignment = 4 };
+const with_transform = [_]abi_framework.c.ke_node_with{.{ .component = &transform2d_desc, .initial = null }};
 
 fn paddleDesc() abi_framework.c.ke_node_type_desc {
     var d = std.mem.zeroes(abi_framework.c.ke_node_type_desc);
@@ -1788,17 +1763,27 @@ test "a nameless node type, or a field table without fields, is refused" {
     try testing.expectEqual(@as(usize, 0), registered_count);
 }
 
-test "a node type carrying an unregistered component is refused and registers nothing" {
+test "a node type carrying a component it does not describe is refused and registers nothing" {
     var f: Fixture = .{};
     try f.init();
     defer f.deinit();
-    const missing = [_]abi_framework.c.ke_node_with{.{ .name = "missing", .initial = null }};
+    const undescribed = [_]abi_framework.c.ke_node_with{.{ .component = null, .initial = null }};
     var d = paddleDesc();
-    d.with = &missing;
+    d.with = &undescribed;
     d.update = countVisits;
     var cid: Cid = 0;
-    try testing.expectEqual(abi_result.c.KE_RESULT_NOT_FOUND, f.types.ref.?.register_type.?(f.types.ref, &d, &cid));
+    try testing.expectEqual(abi_result.c.KE_RESULT_INVALID_ARGUMENT, f.types.ref.?.register_type.?(f.types.ref, &d, &cid));
     try testing.expectEqual(@as(usize, 0), registered_count);
+}
+
+test "a node type registers the components it carries, so none has to be registered before it" {
+    var f: Fixture = .{};
+    try f.init();
+    defer f.deinit();
+    var d = paddleDesc();
+    var cid: Cid = 0;
+    try R.check(f.types.ref.?.register_type.?(f.types.ref, &d, &cid));
+    try f.ecs.received(.component_register).where(zsub.argIs(1, @as(?*const abi_ecs.c.ke_component_desc, &transform2d_desc))).times(1);
 }
 
 test "destroying the node types unregisters every system they registered" {
@@ -1985,21 +1970,6 @@ test "initial bytes without fields are refused" {
     d.initial_size = @sizeOf(Paddle);
     var cid: Cid = 0;
     try testing.expectEqual(R.code(error.InvalidArgument), f.types.ref.?.register_type.?(f.types.ref, &d, &cid));
-}
-
-test "the engine node types part registers every engine node type through the node types it is bound to" {
-    var types: zsub.For(abi_framework.c.ke_node_types) = undefined;
-    try types.init();
-    defer types.deinit();
-    _ = types.when(.register_type).writesFresh(2);
-    const p = &parts[2];
-    const bound_types = [_]?*anyopaque{types.api()};
-    const bound = [_]abi_part.c.ke_part_bound{.{ .instances = @ptrCast(&bound_types), .count = 1 }};
-    var owner: abi_part.c.ke_owner = undefined;
-    try R.check(p.create.?(p, &bound[0], null, &owner));
-    try types.received(.register_type).times(abi_engine_node_types.c.KE_ENGINE_NODE_TYPE_COUNT);
-    try testing.expectEqual(@as(usize, 0), p.provides_count);
-    owner.destroy.?(owner.ref);
 }
 
 test "the node types leak nothing" {

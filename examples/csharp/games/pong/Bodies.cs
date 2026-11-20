@@ -1,4 +1,5 @@
 using KernelEngine.Common;
+using KernelEngine.EngineNodes;
 using KernelEngine.Framework.Nodes;
 using KernelEngine.Physics;
 
@@ -11,7 +12,7 @@ abstract class Node2D : Node
     protected ref Transform2DComponent Transform2D => ref Component<Transform2DComponent>(SpatialConstants.ComponentNameTransform2D);
 
     /// <inheritdoc/>
-    protected override IEnumerable<NodeWith> With => [.. base.With, NodeWith.Of(SpatialConstants.ComponentNameTransform2D, EngineNodeTypes.Transform2DNodeInitial)];
+    protected override IEnumerable<NodeWith> With => [.. base.With, NodeWith.Of(Spatial.Transform2DComponentDesc, EngineNodeTypes.Transform2DNodeInitial)];
 }
 
 /// <summary>A node carrying <c>transform2d</c> and <c>body2d</c>.</summary>
@@ -21,5 +22,5 @@ abstract class Body2D : Node2D
     protected ref Body2DComponent Body => ref Component<Body2DComponent>(PhysicsComponentsConstants.ComponentNameBody2D);
 
     /// <inheritdoc/>
-    protected override IEnumerable<NodeWith> With => [.. base.With, NodeWith.Of(PhysicsComponentsConstants.ComponentNameBody2D, EngineNodeTypes.Body2DNodeInitial)];
+    protected override IEnumerable<NodeWith> With => [.. base.With, NodeWith.Of(PhysicsComponents.Body2DComponentDesc, EngineNodeTypes.Body2DNodeInitial)];
 }

@@ -36,8 +36,7 @@ extern "C"
     /// @param input_actions [borrowed,optional] Without it, axis answers 0 and pressed false.
     /// @param out_types [out] Receives the node types; left zeroed on failure.
     /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null @p scheduler, @p ecs, @p scene_tree or
-    ///         @p out_types; KE_RESULT_NOT_FOUND when the scene tree components are not registered;
-    ///         KE_RESULT_OUT_OF_MEMORY, or the code of the ecs that refused.
+    ///         @p out_types; KE_RESULT_OUT_OF_MEMORY, or the code of the ecs that refused.
     KE_FRAMEWORK_API ke_result ke_node_types_create(
         ke_scheduler               *scheduler,
         ke_ecs                     *ecs,

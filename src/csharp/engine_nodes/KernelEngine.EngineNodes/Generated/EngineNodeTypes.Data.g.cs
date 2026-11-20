@@ -8,11 +8,15 @@ using KernelEngine.Audio.Native;
 using KernelEngine.Common;
 using KernelEngine.Ecs;
 using KernelEngine.Ecs.Native;
+using KernelEngine.EngineNodes.Native;
+using KernelEngine.Framework.Nodes;
 using KernelEngine.Framework.Nodes.Native;
+using KernelEngine.Part;
+using KernelEngine.Part.Native;
 using KernelEngine.Physics;
 using KernelEngine.Render;
 
-namespace KernelEngine.Framework.Nodes;
+namespace KernelEngine.EngineNodes;
 
 /// <summary>The constants the EngineNodeTypes header defines.</summary>
 public static class EngineNodeTypes
@@ -198,84 +202,84 @@ public static class EngineNodeTypes
 
     /// <summary>The entries of <c>ke_ambient_light_node_with</c>.</summary>
     public static NodeWith[] AmbientLightNodeWith => [
-        new() { Name = "ambient_light", Initial = Bytes(AmbientLightNodeInitial) },
-        new() { Name = "transform", Initial = Bytes(TransformNodeInitial) },
+        new() { Component = global::KernelEngine.Render.RenderComponents.AmbientLightComponentDesc, Initial = Bytes(AmbientLightNodeInitial) },
+        new() { Component = global::KernelEngine.Common.Spatial.TransformComponentDesc, Initial = Bytes(TransformNodeInitial) },
     ];
 
     /// <summary>The entries of <c>ke_body2d_node_with</c>.</summary>
     public static NodeWith[] Body2DNodeWith => [
-        new() { Name = "body2d", Initial = Bytes(Body2DNodeInitial) },
-        new() { Name = "transform2d", Initial = Bytes(Transform2DNodeInitial) },
+        new() { Component = global::KernelEngine.Physics.PhysicsComponents.Body2DComponentDesc, Initial = Bytes(Body2DNodeInitial) },
+        new() { Component = global::KernelEngine.Common.Spatial.Transform2DComponentDesc, Initial = Bytes(Transform2DNodeInitial) },
     ];
 
     /// <summary>The entries of <c>ke_camera_node_with</c>.</summary>
     public static NodeWith[] CameraNodeWith => [
-        new() { Name = "camera", Initial = Bytes(CameraNodeInitial) },
-        new() { Name = "transform", Initial = Bytes(TransformNodeInitial) },
+        new() { Component = global::KernelEngine.Render.RenderComponents.CameraComponentDesc, Initial = Bytes(CameraNodeInitial) },
+        new() { Component = global::KernelEngine.Common.Spatial.TransformComponentDesc, Initial = Bytes(TransformNodeInitial) },
     ];
 
     /// <summary>The entries of <c>ke_collider2d_node_with</c>.</summary>
     public static NodeWith[] Collider2DNodeWith => [
-        new() { Name = "collider2d", Initial = Bytes(Collider2DNodeInitial) },
-        new() { Name = "transform2d", Initial = Bytes(Transform2DNodeInitial) },
+        new() { Component = global::KernelEngine.Physics.PhysicsComponents.Collider2DComponentDesc, Initial = Bytes(Collider2DNodeInitial) },
+        new() { Component = global::KernelEngine.Common.Spatial.Transform2DComponentDesc, Initial = Bytes(Transform2DNodeInitial) },
     ];
 
     /// <summary>The entries of <c>ke_directional_light_node_with</c>.</summary>
     public static NodeWith[] DirectionalLightNodeWith => [
-        new() { Name = "directional_light", Initial = Bytes(DirectionalLightNodeInitial) },
-        new() { Name = "transform", Initial = Bytes(TransformNodeInitial) },
+        new() { Component = global::KernelEngine.Render.RenderComponents.DirectionalLightComponentDesc, Initial = Bytes(DirectionalLightNodeInitial) },
+        new() { Component = global::KernelEngine.Common.Spatial.TransformComponentDesc, Initial = Bytes(TransformNodeInitial) },
     ];
 
     /// <summary>The entries of <c>ke_label_node_with</c>.</summary>
     public static NodeWith[] LabelNodeWith => [
-        new() { Name = "label", Initial = Bytes(LabelNodeInitial) },
-        new() { Name = "transform", Initial = Bytes(TransformNodeInitial) },
+        new() { Component = global::KernelEngine.Render.UiComponents.LabelComponentDesc, Initial = Bytes(LabelNodeInitial) },
+        new() { Component = global::KernelEngine.Common.Spatial.TransformComponentDesc, Initial = Bytes(TransformNodeInitial) },
     ];
 
     /// <summary>The entries of <c>ke_mesh_node_with</c>.</summary>
     public static NodeWith[] MeshNodeWith => [
-        new() { Name = "mesh", Initial = Bytes(MeshNodeInitial) },
-        new() { Name = "transform", Initial = Bytes(TransformNodeInitial) },
+        new() { Component = global::KernelEngine.Render.RenderComponents.MeshComponentDesc, Initial = Bytes(MeshNodeInitial) },
+        new() { Component = global::KernelEngine.Common.Spatial.TransformComponentDesc, Initial = Bytes(TransformNodeInitial) },
     ];
 
     /// <summary>The entries of <c>ke_point_light_node_with</c>.</summary>
     public static NodeWith[] PointLightNodeWith => [
-        new() { Name = "point_light", Initial = Bytes(PointLightNodeInitial) },
-        new() { Name = "transform", Initial = Bytes(TransformNodeInitial) },
+        new() { Component = global::KernelEngine.Render.RenderComponents.PointLightComponentDesc, Initial = Bytes(PointLightNodeInitial) },
+        new() { Component = global::KernelEngine.Common.Spatial.TransformComponentDesc, Initial = Bytes(TransformNodeInitial) },
     ];
 
     /// <summary>The entries of <c>ke_skybox_node_with</c>.</summary>
     public static NodeWith[] SkyboxNodeWith => [
-        new() { Name = "skybox" },
-        new() { Name = "transform", Initial = Bytes(TransformNodeInitial) },
+        new() { Component = global::KernelEngine.Render.RenderComponents.SkyboxComponentDesc },
+        new() { Component = global::KernelEngine.Common.Spatial.TransformComponentDesc, Initial = Bytes(TransformNodeInitial) },
     ];
 
     /// <summary>The entries of <c>ke_sound_node_with</c>.</summary>
     public static NodeWith[] SoundNodeWith => [
-        new() { Name = "sound", Initial = Bytes(SoundNodeInitial) },
-        new() { Name = "transform", Initial = Bytes(TransformNodeInitial) },
+        new() { Component = global::KernelEngine.Audio.AudioComponents.SoundComponentDesc, Initial = Bytes(SoundNodeInitial) },
+        new() { Component = global::KernelEngine.Common.Spatial.TransformComponentDesc, Initial = Bytes(TransformNodeInitial) },
     ];
 
     /// <summary>The entries of <c>ke_spot_light_node_with</c>.</summary>
     public static NodeWith[] SpotLightNodeWith => [
-        new() { Name = "spot_light", Initial = Bytes(SpotLightNodeInitial) },
-        new() { Name = "transform", Initial = Bytes(TransformNodeInitial) },
+        new() { Component = global::KernelEngine.Render.RenderComponents.SpotLightComponentDesc, Initial = Bytes(SpotLightNodeInitial) },
+        new() { Component = global::KernelEngine.Common.Spatial.TransformComponentDesc, Initial = Bytes(TransformNodeInitial) },
     ];
 
     /// <summary>The entries of <c>ke_sprite2d_node_with</c>.</summary>
     public static NodeWith[] Sprite2DNodeWith => [
-        new() { Name = "sprite2d", Initial = Bytes(Sprite2DNodeInitial) },
-        new() { Name = "transform2d", Initial = Bytes(Transform2DNodeInitial) },
+        new() { Component = global::KernelEngine.Render.RenderComponents.Sprite2DComponentDesc, Initial = Bytes(Sprite2DNodeInitial) },
+        new() { Component = global::KernelEngine.Common.Spatial.Transform2DComponentDesc, Initial = Bytes(Transform2DNodeInitial) },
     ];
 
     /// <summary>The entries of <c>ke_transform2d_node_with</c>.</summary>
     public static NodeWith[] Transform2DNodeWith => [
-        new() { Name = "transform2d", Initial = Bytes(Transform2DNodeInitial) },
+        new() { Component = global::KernelEngine.Common.Spatial.Transform2DComponentDesc, Initial = Bytes(Transform2DNodeInitial) },
     ];
 
     /// <summary>The entries of <c>ke_transform_node_with</c>.</summary>
     public static NodeWith[] TransformNodeWith => [
-        new() { Name = "transform", Initial = Bytes(TransformNodeInitial) },
+        new() { Component = global::KernelEngine.Common.Spatial.TransformComponentDesc, Initial = Bytes(TransformNodeInitial) },
     ];
 
     /// <summary>Makes the call of <c>register_type</c> once for each entry of <c>ke_engine_node_types</c>.</summary>
@@ -300,4 +304,27 @@ public static class EngineNodeTypes
 
     static byte[] Bytes<T>(T value) where T : unmanaged =>
         global::System.Runtime.InteropServices.MemoryMarshal.AsBytes(new[] { value }.AsSpan()).ToArray();
+
+    delegate ref F Member<T, F>(ref T at);
+
+    static nint OffsetOf<T, F>(Member<T, F> member) where T : unmanaged where F : unmanaged
+    {
+        T at = default;
+        return global::System.Runtime.CompilerServices.Unsafe.ByteOffset(ref global::System.Runtime.CompilerServices.Unsafe.As<T, byte>(ref at),
+            ref global::System.Runtime.CompilerServices.Unsafe.As<F, byte>(ref member(ref at)));
+    }
+
+    static int SizeOf<T, F>(Member<T, F> member) where T : unmanaged where F : unmanaged =>
+        global::System.Runtime.CompilerServices.Unsafe.SizeOf<F>();
+
+    static int AlignOf<T>() where T : unmanaged =>
+        global::System.Runtime.CompilerServices.Unsafe.SizeOf<Aligned<T>>() - global::System.Runtime.CompilerServices.Unsafe.SizeOf<T>();
+
+    readonly struct Aligned<T> where T : unmanaged
+    {
+        readonly byte pad;
+        readonly T value;
+
+        public Aligned(T value) => (pad, this.value) = (0, value);
+    }
 }

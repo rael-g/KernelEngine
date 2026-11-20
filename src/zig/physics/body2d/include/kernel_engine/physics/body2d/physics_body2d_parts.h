@@ -12,7 +12,7 @@ extern "C"
 #endif
 
 /**
- * Gives the parts ke_physics_body2d contains: `physics_body2d`, providing nothing, with the slots `ecs`, `physics` and `scene_tree` and the hook `fixed_post_update`, in the set `fixed_post_update` by default.
+ * Gives the parts ke_physics_body2d contains: `physics_body2d`, providing nothing, with the slots `ecs`, `physics`, `scene_tree` and `fixed_post_update`, the ke_schedule_set its systems join.
  * @param out_count [out] Receives how many parts the returned array holds.
  * @return [borrowed] The parts, valid while the library is loaded.
  */

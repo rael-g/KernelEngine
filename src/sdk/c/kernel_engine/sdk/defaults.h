@@ -11,7 +11,7 @@
 #include <kernel_engine/extraction/default/extraction_history_create.h>
 #include <kernel_engine/file_system/std/file_system_std_create.h>
 #include <kernel_engine/framework/asset_resolver_create.h>
-#include <kernel_engine/framework/engine_node_types.h>
+#include <kernel_engine/engine_nodes/engine_node_types.h>
 #include <kernel_engine/framework/input_actions_create.h>
 #include <kernel_engine/framework/input_actions_evaluation_create.h>
 #include <kernel_engine/framework/node_types_create.h>

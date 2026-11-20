@@ -33,11 +33,11 @@ pub const ke_node_component = extern struct {
 
 /// A component every node of a type carries beside its fields, and how it is born.
 pub const ke_node_with = extern struct {
-    /// The registered component's name.
-    name: ?[*:0]const u8 = std.mem.zeroes(?[*:0]const u8),
+    /// How the component is registered: its name, size, alignment and field table.
+    component: ?*const abi_ecs.c.ke_component_desc = std.mem.zeroes(?*const abi_ecs.c.ke_component_desc),
     /// The bytes each node starts with; none starts it zeroed.
     initial: ?*const anyopaque = std.mem.zeroes(?*const anyopaque),
-    /// The component's registered size, or 0 to start it zeroed.
+    /// The component's size, or 0 to start it zeroed.
     initial_size: usize = std.mem.zeroes(usize),
 };
 
@@ -69,8 +69,8 @@ pub const ke_node_type_desc = extern struct {
     initial: ?*const anyopaque = std.mem.zeroes(?*const anyopaque),
     /// `fields_size`, or 0 to start them zeroed.
     initial_size: usize = std.mem.zeroes(usize),
-    /// Registered components every node of the type carries beside its fields, each with the value
-    /// it is born with.
+    /// Components every node of the type carries beside its fields, each with the value it is born
+    /// with; registering the type registers each.
     with: ?[*]const ke_node_with = std.mem.zeroes(?[*]const ke_node_with),
     with_count: u32 = std.mem.zeroes(u32),
     /// Runs once per node, in the PreUpdate after the node is created, before its first update.
@@ -162,7 +162,9 @@ pub const ke_node_ctx = extern struct {
 /// with no fields and no components, is registered from the start.
 pub const ke_node_types = extern struct {
     handle: ?*anyopaque = std.mem.zeroes(?*anyopaque),
-    /// Registers a node type and the systems of its behaviours.
+    /// Registers a node type and the systems of its behaviours, and each component of `with` as the
+    /// ecs's component_register does: one already registered with the same name and layout keeps its
+    /// id.
     register_type: ?*const fn (?*ke_node_types, ?*const ke_node_type_desc, ?*ke_component_id) callconv(.c) abi_result.c.ke_result = null,
     /// Registers an event type.
     register_event: ?*const fn (?*ke_node_types, ?*const abi_ecs.c.ke_component_desc, ?*ke_component_id) callconv(.c) abi_result.c.ke_result = null,

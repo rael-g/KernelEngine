@@ -20,7 +20,7 @@ extern "C"
     typedef uint32_t ke_component_id;
 #define KE_COMPONENT_INVALID 0
 
-    /// [bag] What a component type is registered with.
+    /// [bag, borrowed] What a component type is registered with.
     typedef struct ke_component_desc
     {
         const char               *name;        ///< [borrowed,utf8] Unique component name.

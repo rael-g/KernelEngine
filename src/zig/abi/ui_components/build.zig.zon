@@ -4,6 +4,8 @@
     .fingerprint = 0x323ac5949e49de6a,
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
+        .abi_ecs = .{ .path = "../ecs" },
+        .abi_ecs_variant = .{ .path = "../ecs_variant" },
         .abi_render_handles = .{ .path = "../render_handles" },
         .abi_result = .{ .path = "../result" },
         .abi_spatial = .{ .path = "../spatial" },

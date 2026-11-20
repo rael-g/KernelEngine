@@ -26,6 +26,8 @@ test "every record is laid out as the header lays it out" {
     try expectSameLayout(abi.c.ke_transform_component, translated("ke_transform_component"));
     try expectSameLayout(abi.c.ke_transform2d_component, translated("ke_transform2d_component"));
     try expectSameLayout(abi.c.ke_world_transform_component, translated("ke_world_transform_component"));
+    if (@hasDecl(c, "ke_component_id")) try expectSameLayout(abi.c.ke_component_id, c.ke_component_id);
+    if (@hasDecl(c, "ke_entity")) try expectSameLayout(abi.c.ke_entity, c.ke_entity);
 }
 
 test "every constant is the header's value" {

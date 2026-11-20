@@ -161,10 +161,10 @@ export fn ke_scene_hierarchy_create(
 }
 
 fn create(ecs: *abi_ecs.c.ke_ecs, post_update: *abi_schedule.c.ke_schedule, post_update_set: abi_schedule.c.ke_schedule_set_id) R.Error!abi_part.c.ke_owner {
-    const transform_cid = try scene_tree.registerComponent(ecs, abi_spatial_contract.c.KE_COMPONENT_NAME_TRANSFORM, abi_spatial.c.ke_transform_component, &abi_spatial_contract.c.ke_transform_component_fields);
-    const transform2d_cid = try scene_tree.registerComponent(ecs, abi_spatial_contract.c.KE_COMPONENT_NAME_TRANSFORM2D, abi_spatial.c.ke_transform2d_component, &abi_spatial_contract.c.ke_transform2d_component_fields);
-    const world_transform_cid = try scene_tree.registerComponent(ecs, abi_spatial_contract.c.KE_COMPONENT_NAME_WORLD_TRANSFORM, abi_spatial.c.ke_world_transform_component, &.{});
-    const hierarchy_cid = try scene_tree.registerComponent(ecs, abi_framework_components.c.KE_COMPONENT_NAME_HIERARCHY, abi_framework_components.c.ke_hierarchy_component, &.{});
+    const transform_cid = try scene_tree.registerComponent(ecs, &abi_spatial_contract.c.ke_transform_component_desc);
+    const transform2d_cid = try scene_tree.registerComponent(ecs, &abi_spatial_contract.c.ke_transform2d_component_desc);
+    const world_transform_cid = try scene_tree.registerComponent(ecs, &abi_spatial_contract.c.ke_world_transform_component_desc);
+    const hierarchy_cid = try scene_tree.registerComponent(ecs, &abi_framework_components.c.ke_hierarchy_component_desc);
 
     const s = try heap.gpa.create(State);
     errdefer heap.gpa.destroy(s);

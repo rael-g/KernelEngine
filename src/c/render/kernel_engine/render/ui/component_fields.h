@@ -2,8 +2,11 @@
 #define KERNEL_ENGINE_RENDER_UI_COMPONENT_FIELDS_H_
 
 #include <kernel_engine/ecs/component_field.h>
+#include <kernel_engine/ecs/ecs.h>
 #include <kernel_engine/render/ui/components.h>
+#include <stdalign.h>
 #include <stddef.h>
+#include <stdint.h>
 
 /// The fields of `ke_ui_quad_component` a scene or the game writes by name: each name, kind, place, size, default
 /// and, for an enumeration, its value names.
@@ -30,5 +33,11 @@ static const ke_component_field ke_label_component_fields[] = {
     { "color", KE_VARIANT_VEC4, offsetof(ke_label_component, color), sizeof(((ke_label_component *)0)->color), { KE_VARIANT_VEC4, { .v4 = { 1.0f, 1.0f, 1.0f, 1.0f } } }, NULL, 0 },
     { "text", KE_VARIANT_STRING, offsetof(ke_label_component, text), sizeof(((ke_label_component *)0)->text), { KE_VARIANT_NULL, { 0 } }, NULL, 0 },
 };
+
+/// How `ke_ui_quad_component` is registered: its name, size, alignment and field table.
+static const ke_component_desc ke_ui_quad_component_desc = { KE_COMPONENT_NAME_UI_QUAD, sizeof(ke_ui_quad_component), alignof(ke_ui_quad_component), ke_ui_quad_component_fields, (uint32_t)(sizeof ke_ui_quad_component_fields / sizeof ke_ui_quad_component_fields[0]) };
+
+/// How `ke_label_component` is registered: its name, size, alignment and field table.
+static const ke_component_desc ke_label_component_desc = { KE_COMPONENT_NAME_LABEL, sizeof(ke_label_component), alignof(ke_label_component), ke_label_component_fields, (uint32_t)(sizeof ke_label_component_fields / sizeof ke_label_component_fields[0]) };
 
 #endif

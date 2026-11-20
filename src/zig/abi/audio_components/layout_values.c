@@ -1,5 +1,6 @@
 #include <stddef.h>
 #include <kernel_engine/audio/components.h>
+#include <kernel_engine/audio/component_fields.h>
 const unsigned long long layout_values[] = {
     sizeof(ke_sound_component),
     offsetof(ke_sound_component, path),

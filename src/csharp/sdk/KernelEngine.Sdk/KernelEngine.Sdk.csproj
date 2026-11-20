@@ -16,6 +16,7 @@
     <ProjectReference Include="..\..\extraction\KernelEngine.Extraction\KernelEngine.Extraction.csproj" />
     <ProjectReference Include="..\..\window\KernelEngine.Window\KernelEngine.Window.csproj" />
     <ProjectReference Include="..\..\framework\KernelEngine.Framework.Nodes\KernelEngine.Framework.Nodes.csproj" />
+    <ProjectReference Include="..\..\engine_nodes\KernelEngine.EngineNodes\KernelEngine.EngineNodes.csproj" />
   </ItemGroup>
 
   <ItemGroup>

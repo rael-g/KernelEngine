@@ -7,6 +7,8 @@ const abi_result = @import("result");
 
 pub const ke_audio_sound = u32;
 pub const ke_audio_voice = u32;
+pub const ke_component_id = u32;
+pub const ke_entity = u64;
 
 pub const KE_SOUND_MAX_PATH = 256;
 /// The name the `sound` component is registered under.
@@ -42,3 +44,5 @@ pub const ke_sound_component = extern struct {
 };
 
 pub const ke_sound_component_fields: [6]abi_ecs.c.ke_component_field = .{ .{ .name = "path", .@"type" = abi_ecs_variant.c.KE_VARIANT_STRING, .offset = @offsetOf(ke_sound_component, "path"), .size = @sizeOf(@FieldType(ke_sound_component, "path")), .default_value = .{ .@"type" = abi_ecs_variant.c.KE_VARIANT_NULL, .unnamed_0 = .{ .b = false } }, .enum_count = 0 }, .{ .name = "volume", .@"type" = abi_ecs_variant.c.KE_VARIANT_FLOAT, .offset = @offsetOf(ke_sound_component, "volume"), .size = @sizeOf(@FieldType(ke_sound_component, "volume")), .default_value = .{ .@"type" = abi_ecs_variant.c.KE_VARIANT_FLOAT, .unnamed_0 = .{ .f = 1.0 } }, .enum_count = 0 }, .{ .name = "pitch", .@"type" = abi_ecs_variant.c.KE_VARIANT_FLOAT, .offset = @offsetOf(ke_sound_component, "pitch"), .size = @sizeOf(@FieldType(ke_sound_component, "pitch")), .default_value = .{ .@"type" = abi_ecs_variant.c.KE_VARIANT_FLOAT, .unnamed_0 = .{ .f = 1.0 } }, .enum_count = 0 }, .{ .name = "loop", .@"type" = abi_ecs_variant.c.KE_VARIANT_BOOL, .offset = @offsetOf(ke_sound_component, "loop"), .size = @sizeOf(@FieldType(ke_sound_component, "loop")), .default_value = .{ .@"type" = abi_ecs_variant.c.KE_VARIANT_NULL, .unnamed_0 = .{ .b = false } }, .enum_count = 0 }, .{ .name = "playing", .@"type" = abi_ecs_variant.c.KE_VARIANT_BOOL, .offset = @offsetOf(ke_sound_component, "playing"), .size = @sizeOf(@FieldType(ke_sound_component, "playing")), .default_value = .{ .@"type" = abi_ecs_variant.c.KE_VARIANT_NULL, .unnamed_0 = .{ .b = false } }, .enum_count = 0 }, .{ .name = "release", .@"type" = abi_ecs_variant.c.KE_VARIANT_INT, .offset = @offsetOf(ke_sound_component, "release"), .size = @sizeOf(@FieldType(ke_sound_component, "release")), .default_value = .{ .@"type" = abi_ecs_variant.c.KE_VARIANT_NULL, .unnamed_0 = .{ .b = false } }, .enum_names = @ptrCast(&[_]?[*:0]const u8{ "keep", "when_done" }), .enum_count = 2 } };
+
+pub const ke_sound_component_desc: abi_ecs.c.ke_component_desc = .{ .name = "sound", .size = @sizeOf(ke_sound_component), .alignment = @alignOf(ke_sound_component), .fields = @ptrCast(&ke_sound_component_fields), .field_count = ke_sound_component_fields.len };
