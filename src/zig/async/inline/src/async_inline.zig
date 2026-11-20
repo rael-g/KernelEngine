@@ -6,6 +6,8 @@ const std = @import("std");
 
 pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @import("log").Destination("ke_async_inline").logFn };
 
+const abi_part = @import("abi_part");
+const part = @import("part");
 const abi_async = @import("abi_async");
 const abi_completion = @import("abi_completion");
 const abi_result = @import("abi_result");
@@ -185,6 +187,16 @@ export fn ke_async_inline_create(settings: ?*abi_settings.c.ke_settings, out_asy
     return R.ok;
 }
 
+pub const parts = [_]abi_part.c.ke_part{
+    part.of(ke_async_inline_create, .{ .name = "async_inline", .slots = &.{}, .set_log = @ptrCast(&@import("log").Destination("ke_async_inline").setLogCallback) }),
+};
+
+/// The library's parts.
+export fn ke_async_inline_parts(out_count: ?*usize) callconv(.c) ?*const abi_part.c.ke_part {
+    if (out_count) |n| n.* = parts.len;
+    return &parts[0];
+}
+
 fn create(settings: ?*abi_settings.c.ke_settings) R.Error!a.ke_async_handle {
     const config = try settings_schema.read(Settings, settings orelse return error.InvalidArgument);
     const self = heap.gpa.create(State) catch return error.OutOfMemory;
@@ -219,6 +231,15 @@ test "a worker count other than zero or a submit_capacity of zero is refused" {
     try testing.expectError(error.InvalidArgument, R.check(ke_async_inline_create(&worker.api, &h)));
     var empty = settings_schema.Fixed.init(&.{.{ .key = "submit_capacity", .value = .{ .int = 0 } }});
     try testing.expectError(error.InvalidArgument, R.check(ke_async_inline_create(&empty.api, &h)));
+}
+
+test "the library's part is async_inline, built from its factory" {
+    var count: usize = 0;
+    const p = ke_async_inline_parts(&count).?;
+    try std.testing.expectEqual(@as(usize, 1), count);
+    try std.testing.expectEqualStrings("async_inline", std.mem.span(p.name.?));
+    try std.testing.expectEqual(@as(usize, 1), p.provides_count);
+    try std.testing.expectEqual(@as(usize, 0), p.slot_count);
 }
 
 test "creating and destroying async systems leaves no block allocated" {

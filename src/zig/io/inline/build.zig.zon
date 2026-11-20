@@ -4,6 +4,8 @@
     .fingerprint = 0x9eb609344284fdb9,
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
+        .abi_part = .{ .path = "../../abi/part" },
+        .ke_part = .{ .path = "../../abi/../part" },
         .abi_file_system = .{ .path = "../../abi/file_system" },
         .abi_io = .{ .path = "../../abi/io" },
         .abi_io_inline_factory = .{ .path = "abi" },

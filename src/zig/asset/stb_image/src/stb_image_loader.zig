@@ -1,6 +1,8 @@
 //! Implements the `ke_image_loader` contract on stb_image: it decodes an image file to RGBA
 //! pixels and frees the result.
 
+const abi_part = @import("abi_part");
+const part = @import("part");
 const abi_image_loader = @import("abi_image_loader");
 const abi_mesh_data = @import("abi_mesh_data");
 const std = @import("std");
@@ -130,6 +132,16 @@ export fn ke_image_loader_stb_create(io_in: ?*abi_io.c.ke_io, out_loader: ?*abi_
     state.* = .{ .api = .{ .handle = state, .load_image = &loadImage, .free_image = &freeImage }, .io = io, .reads = .{ .gpa = gpa } };
     out.* = .{ .ref = &state.api, .destroy = &destroy };
     return R.ok;
+}
+
+pub const parts = [_]abi_part.c.ke_part{
+    part.of(ke_image_loader_stb_create, .{ .name = "image_loader_stb", .slots = &.{"io"}, .set_log = @ptrCast(&@import("log").Destination("ke_asset_stb_image").setLogCallback) }),
+};
+
+/// The library's parts.
+export fn ke_asset_stb_image_parts(out_count: ?*usize) callconv(.c) ?*const abi_part.c.ke_part {
+    if (out_count) |n| n.* = parts.len;
+    return &parts[0];
 }
 
 const testing = std.testing;
@@ -291,6 +303,15 @@ test "loading a file that does not exist fails with not found" {
 
 test "destroying a null loader is a no-op" {
     destroy(null);
+}
+
+test "the library's part is image_loader_stb, built from its factory" {
+    var count: usize = 0;
+    const p = ke_asset_stb_image_parts(&count).?;
+    try std.testing.expectEqual(@as(usize, 1), count);
+    try std.testing.expectEqualStrings("image_loader_stb", std.mem.span(p.name.?));
+    try std.testing.expectEqual(@as(usize, 1), p.provides_count);
+    try std.testing.expectEqual(@as(usize, 1), p.slot_count);
 }
 
 test "creating and destroying the image loader leaves no block allocated" {

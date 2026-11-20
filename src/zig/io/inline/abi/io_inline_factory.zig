@@ -3,6 +3,7 @@
 const abi_file_system = @import("file_system");
 const abi_io = @import("io");
 const abi_logger = @import("logger");
+const abi_part = @import("part");
 const abi_result = @import("result");
 const abi_settings = @import("settings");
 
@@ -19,6 +20,12 @@ pub fn ioInlineCreate(file_system: ?*abi_file_system.c.ke_file_system, settings:
     var written: abi_io.c.ke_io_handle = undefined;
     try checkResult(c.ke_io_inline_create(file_system, settings, &written));
     return written;
+}
+
+/// Gives the parts ke_io_inline contains: `io_inline`, providing ke_io, with the slot
+/// `file_system`.
+pub fn ioInlineParts(out_count: ?*usize) ?*const abi_part.c.ke_part {
+    return c.ke_io_inline_parts(out_count);
 }
 
 /// Sends every line ke_io_inline logs to callback, with ctx; a NULL callback sends them back to

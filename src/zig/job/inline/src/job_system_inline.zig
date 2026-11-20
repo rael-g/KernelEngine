@@ -5,6 +5,8 @@ const std = @import("std");
 
 pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @import("log").Destination("ke_job_system_inline").logFn };
 
+const abi_part = @import("abi_part");
+const part = @import("part");
 const abi_completion = @import("abi_completion");
 const abi_job = @import("abi_job");
 const abi_result = @import("abi_result");
@@ -169,6 +171,16 @@ export fn ke_job_system_inline_create(settings: ?*abi_settings.c.ke_settings, ou
     return R.ok;
 }
 
+pub const parts = [_]abi_part.c.ke_part{
+    part.of(ke_job_system_inline_create, .{ .name = "job_system_inline", .slots = &.{}, .set_log = @ptrCast(&@import("log").Destination("ke_job_system_inline").setLogCallback) }),
+};
+
+/// The library's parts.
+export fn ke_job_system_inline_parts(out_count: ?*usize) callconv(.c) ?*const abi_part.c.ke_part {
+    if (out_count) |n| n.* = parts.len;
+    return &parts[0];
+}
+
 fn create(settings: ?*abi_settings.c.ke_settings) R.Error!j.ke_job_system_handle {
     _ = try settings_schema.read(Settings, settings orelse return error.InvalidArgument);
     const self = heap.gpa.create(State) catch return error.OutOfMemory;
@@ -215,6 +227,15 @@ test "a worker count other than zero is refused" {
     var h: j.ke_job_system_handle = undefined;
     var one = settings_schema.Fixed.init(&.{.{ .key = "worker_count", .value = .{ .int = 1 } }});
     try testing.expectError(error.InvalidArgument, R.check(ke_job_system_inline_create(&one.api, &h)));
+}
+
+test "the library's part is job_system_inline, built from its factory" {
+    var count: usize = 0;
+    const p = ke_job_system_inline_parts(&count).?;
+    try std.testing.expectEqual(@as(usize, 1), count);
+    try std.testing.expectEqualStrings("job_system_inline", std.mem.span(p.name.?));
+    try std.testing.expectEqual(@as(usize, 1), p.provides_count);
+    try std.testing.expectEqual(@as(usize, 0), p.slot_count);
 }
 
 test "creating and destroying job systems leaves no block allocated" {

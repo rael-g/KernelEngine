@@ -1,6 +1,8 @@
 //! The Assimp implementation of the `ke_asset_loader` contract: it imports a model file into a
 //! `ke_model_data` of records that own their memory, synchronously or on the task pool.
 
+const abi_part = @import("abi_part");
+const part = @import("part");
 const abi_asset_loader = @import("abi_asset_loader");
 const abi_mesh_data = @import("abi_mesh_data");
 const std = @import("std");
@@ -346,6 +348,16 @@ export fn ke_asset_loader_assimp_create(io_in: ?*abi_io.c.ke_io, out_loader: ?*a
     return R.ok;
 }
 
+pub const parts = [_]abi_part.c.ke_part{
+    part.of(ke_asset_loader_assimp_create, .{ .name = "asset_loader_assimp", .slots = &.{"io"}, .set_log = @ptrCast(&@import("log").Destination("ke_asset_assimp").setLogCallback) }),
+};
+
+/// The library's parts.
+export fn ke_asset_assimp_parts(out_count: ?*usize) callconv(.c) ?*const abi_part.c.ke_part {
+    if (out_count) |n| n.* = parts.len;
+    return &parts[0];
+}
+
 const testing = std.testing;
 
 const zsub = @import("zsub");
@@ -457,6 +469,15 @@ test "a model is read through the io and converted with its mesh" {
 
     try testing.expectEqual(@as(u32, 1), model.?.mesh_count);
     try served_io.sub.received(.read_file).atLeast(1);
+}
+
+test "the library's part is asset_loader_assimp, built from its factory" {
+    var count: usize = 0;
+    const p = ke_asset_assimp_parts(&count).?;
+    try std.testing.expectEqual(@as(usize, 1), count);
+    try std.testing.expectEqualStrings("asset_loader_assimp", std.mem.span(p.name.?));
+    try std.testing.expectEqual(@as(usize, 1), p.provides_count);
+    try std.testing.expectEqual(@as(usize, 1), p.slot_count);
 }
 
 test "a malformed model file yields a model carrying no meshes" {

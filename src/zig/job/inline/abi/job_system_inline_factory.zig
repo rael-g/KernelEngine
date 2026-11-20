@@ -2,6 +2,7 @@
 
 const abi_job = @import("job");
 const abi_logger = @import("logger");
+const abi_part = @import("part");
 const abi_result = @import("result");
 const abi_settings = @import("settings");
 
@@ -18,6 +19,11 @@ pub fn jobSystemInlineCreate(settings: ?*abi_settings.c.ke_settings) Error!abi_j
     var written: abi_job.c.ke_job_system_handle = undefined;
     try checkResult(c.ke_job_system_inline_create(settings, &written));
     return written;
+}
+
+/// Gives the parts ke_job_system_inline contains: `job_system_inline`, providing ke_job_system.
+pub fn jobSystemInlineParts(out_count: ?*usize) ?*const abi_part.c.ke_part {
+    return c.ke_job_system_inline_parts(out_count);
 }
 
 /// Sends every line ke_job_system_inline logs to callback, with ctx; a NULL callback sends them

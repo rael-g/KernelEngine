@@ -7,11 +7,13 @@ pub fn build(b: *std.Build) void {
     const abi = b.addModule("abi", .{ .root_source_file = b.path("job_system_inline_factory.zig") });
     abi.addImport("job", b.dependency("abi_job", .{}).module("abi"));
     abi.addImport("logger", b.dependency("abi_logger", .{}).module("abi"));
+    abi.addImport("part", b.dependency("abi_part", .{}).module("abi"));
     abi.addImport("result", b.dependency("abi_result", .{}).module("abi"));
     abi.addImport("settings", b.dependency("abi_settings", .{}).module("abi"));
 
     const headers = b.addWriteFiles().add("layout.h",
         \\#include <kernel_engine/job/inline/job_system_inline_create.h>
+        \\#include <kernel_engine/job/inline/job_system_inline_parts.h>
         \\#include <kernel_engine/job/inline/job_system_inline_log.h>
     );
     const translated = b.addTranslateC(.{ .root_source_file = headers, .target = target, .optimize = optimize });
@@ -20,6 +22,7 @@ pub fn build(b: *std.Build) void {
     translated.addIncludePath(b.path("../include"));
     translated.addIncludePath(b.path("../../../common/include"));
     translated.addIncludePath(b.path("../../../../c/logger"));
+    translated.addIncludePath(b.path("../../../../c/part"));
     translated.addIncludePath(b.path("../../../../c/result"));
     translated.addIncludePath(b.path("../../../../c/settings"));
     const tests = b.addTest(.{ .root_module = b.createModule(.{
@@ -38,6 +41,7 @@ pub fn build(b: *std.Build) void {
     tests.root_module.addIncludePath(b.path("../include"));
     tests.root_module.addIncludePath(b.path("../../../common/include"));
     tests.root_module.addIncludePath(b.path("../../../../c/logger"));
+    tests.root_module.addIncludePath(b.path("../../../../c/part"));
     tests.root_module.addIncludePath(b.path("../../../../c/result"));
     tests.root_module.addIncludePath(b.path("../../../../c/settings"));
     b.step("test", "Check the job_system_inline_factory ABI against its headers").dependOn(&b.addRunArtifact(tests).step);
