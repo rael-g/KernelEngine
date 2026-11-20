@@ -5,8 +5,8 @@
 
 namespace KernelEngine.Render.Webgpu;
 
-/// <summary>Makes the tonemap pass. Attached, it declares in the render queue set, at KE_RENDER_STAGE_TONEMAP, the pass that writes the frame's color, tonemapped, into the frame's output, which becomes the frame's color.</summary>
-public sealed unsafe partial class RenderTonemapModule : KernelEngine.Module.Module
+/// <summary>Makes the gbuffer pass, which publishes the albedo, normal and emissive targets, each the size of the frame's output, in render_prepare_set of render_prepare, and declares the pass that draws the opaque meshes and sprites into them and the frame's depth in render_queue_set of render_queue. Every argument but out_pass must outlive the pass.</summary>
+public sealed unsafe partial class RenderGbuffer : IDisposable
 {
 
     /// <summary>Turns a result code into the exception that carries it, and back.</summary>
@@ -50,52 +50,59 @@ public sealed unsafe partial class RenderTonemapModule : KernelEngine.Module.Mod
         }
     }
 
-    /// <summary>Makes the tonemap pass. Attached, it declares in the render queue set, at KE_RENDER_STAGE_TONEMAP, the pass that writes the frame's color, tonemapped, into the frame's output, which becomes the frame's color.</summary>
-    /// <param name="ecs">The render world: holds what the passes read and own.</param>
-    /// <param name="main">The main world, whose components are extracted into ecs.</param>
-    /// <param name="extraction">Copies the main world's components into ecs.</param>
-    /// <param name="service">Holds the assets the passes draw.</param>
-    /// <param name="device">Creates the passes' GPU objects.</param>
-    /// <param name="viewSpace">Builds views and projections.</param>
-    /// <param name="camera">Answers the camera's matrices.</param>
-    /// <param name="scene">Names the components the passes read.</param>
-    /// <param name="frame">The frame the passes declare into.</param>
-    public RenderTonemapModule(KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Ecs.INativeEcs main, KernelEngine.Extraction.INativeExtraction extraction, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.Frame.INativeRenderFrame frame) : base(Create(ecs, main, extraction, service, device, viewSpace, camera, scene, frame))
+    /// <summary>Makes the gbuffer pass, which publishes the albedo, normal and emissive targets, each the size of the frame's output, in render_prepare_set of render_prepare, and declares the pass that draws the opaque meshes and sprites into them and the frame's depth in render_queue_set of render_queue. Every argument but out_pass must outlive the pass.</summary>
+    /// <param name="service"></param>
+    /// <param name="device"></param>
+    /// <param name="frame"></param>
+    /// <param name="scene"></param>
+    /// <param name="renderPrepare"></param>
+    /// <param name="renderPrepareSet"></param>
+    /// <param name="renderQueue"></param>
+    /// <param name="renderQueueSet"></param>
+    public RenderGbuffer(KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.Render.Frame.INativeRenderFrame frame, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Schedule.INativeSchedule renderPrepare, uint renderPrepareSet, KernelEngine.Schedule.INativeSchedule renderQueue, uint renderQueueSet) : this(Create(service, device, frame, scene, renderPrepare, renderPrepareSet, renderQueue, renderQueueSet))
     {
-        Hold(ecs.Owner);
-        Hold(main.Owner);
-        Hold(extraction.Owner);
         Hold(service.Owner);
         Hold(device.Owner);
-        Hold(viewSpace.Owner);
-        Hold(camera.Owner);
-        Hold(scene.Owner);
         Hold(frame.Owner);
+        Hold(scene.Owner);
+        Hold(renderPrepare.Owner);
+        Hold(renderQueue.Owner);
     }
 
-    private static KernelEngine.Module.Native.ke_module_handle Create(KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Ecs.INativeEcs main, KernelEngine.Extraction.INativeExtraction extraction, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.Frame.INativeRenderFrame frame)
+    private KernelEngine.Part.Native.ke_owner _handle;
+
+    private readonly List<global::System.Runtime.InteropServices.SafeHandle> _held = new();
+
+    private RenderGbuffer(KernelEngine.Part.Native.ke_owner handle) => _handle = handle;
+
+    private void Hold(global::System.Runtime.InteropServices.SafeHandle? owner)
     {
-        ArgumentNullException.ThrowIfNull(ecs);
-        ArgumentNullException.ThrowIfNull(main);
-        ArgumentNullException.ThrowIfNull(extraction);
+        if (owner is null) return;
+        var added = false;
+        owner.DangerousAddRef(ref added);
+        _held.Add(owner);
+    }
+
+    /// <summary>Releases the native object, then what it held.</summary>
+    public void Dispose()
+    {
+        if (_handle.@ref == null) return;
+        _handle.destroy(_handle.@ref);
+        _handle = default;
+        foreach (var held in _held) held.DangerousRelease();
+        _held.Clear();
+    }
+
+    private static KernelEngine.Part.Native.ke_owner Create(KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.Render.Frame.INativeRenderFrame frame, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Schedule.INativeSchedule renderPrepare, uint renderPrepareSet, KernelEngine.Schedule.INativeSchedule renderQueue, uint renderQueueSet)
+    {
         ArgumentNullException.ThrowIfNull(service);
         ArgumentNullException.ThrowIfNull(device);
-        ArgumentNullException.ThrowIfNull(viewSpace);
-        ArgumentNullException.ThrowIfNull(camera);
-        ArgumentNullException.ThrowIfNull(scene);
         ArgumentNullException.ThrowIfNull(frame);
-        KernelEngine.Render.Webgpu.Native.RenderContext context = default;
-        context.Ecs = ecs.Native;
-        context.Main = main.Native;
-        context.Extraction = extraction.Native;
-        context.Service = service.Native;
-        context.Device = device.Native;
-        context.ViewSpace = viewSpace.Native;
-        context.Camera = camera.Native;
-        context.Scene = scene.Native;
-        context.Frame = frame.Native;
-        KernelEngine.Module.Native.ke_module_handle handle;
-        NativeResult.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_tonemap_create(&context, &handle), "ke_render_tonemap_create");
+        ArgumentNullException.ThrowIfNull(scene);
+        ArgumentNullException.ThrowIfNull(renderPrepare);
+        ArgumentNullException.ThrowIfNull(renderQueue);
+        KernelEngine.Part.Native.ke_owner handle;
+        NativeResult.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_gbuffer_create(service.Native, device.Native, frame.Native, scene.Native, renderPrepare.Native, renderPrepareSet, renderQueue.Native, renderQueueSet, &handle), "ke_render_gbuffer_create");
         return handle;
     }
 }

@@ -12,9 +12,8 @@ pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @imp
 const zm = @import("zmath");
 const abi_ecs = @import("abi_ecs");
 const abi_math = @import("abi_math");
-const abi_module = @import("abi_module");
+const abi_part = @import("abi_part");
 const abi_render = @import("abi_render");
-const abi_render_context = @import("abi_render_context");
 const abi_render_frame = @import("abi_render_frame");
 const abi_render_graph = @import("abi_render_graph");
 const abi_render_shadow_factory = @import("abi_render_shadow_factory");
@@ -70,12 +69,12 @@ const shader_layout = abi_render_gpu.c.ke_render_shader_layout_desc{
 const Prepared = struct { vbo: abi_asset_resolver.c.ke_gpu_buffer, ibo: abi_asset_resolver.c.ke_gpu_buffer, index_count: u32, slot: u32 };
 
 /// The state of one shadow pass, allocated by `ke_render_shadow_create` and freed by
-/// `destroyHandle` after it detaches `systems`. Fields that `setup` has not reached keep their
+/// `destroyOwner` after it unregisters `systems`. Fields that `setup` has not reached keep their
 /// initial values, so `destroyModule` releases only what exists. `map`, `depth` and `light` are the
 /// frame's, made by `prepareSystem` when a light is in the render world; `prepared` is rebuilt by
 /// `queueSystem` and read by `record`.
 const ShadowModule = struct {
-    systems: pass_systems.Systems(2) = undefined,
+    systems: pass_systems.Systems(2) = .{},
     core: *abi_render.c.ke_render_service = undefined,
     device: *abi_render_gpu.c.ke_gpu_device = undefined,
     frame: *abi_render_frame.c.ke_render_frame = undefined,
@@ -256,15 +255,15 @@ fn queueSystem(ctx: ?*abi_schedule.c.ke_schedule_ctx, user: ?*anyopaque, _: f32)
 /// list and the queries over the render world. A step that fails fails with the code of the render
 /// service or the device, and leaves the handles created before it stored in the module, for
 /// `destroyModule` to release; a pipeline that cannot be created fails as not initialized.
-fn setup(sh: *ShadowModule, p: *const abi_render_context.c.ke_render_context, settings: *abi_settings.c.ke_settings) R.Error!void {
-    const core: *abi_render.c.ke_render_service = p.service.?;
-    const dev: *abi_render_gpu.c.ke_gpu_device = p.device.?;
-    const ids = p.scene.?.render_component_ids.?(p.scene).?;
+fn setup(sh: *ShadowModule, service: *abi_render.c.ke_render_service, device: *abi_render_gpu.c.ke_gpu_device, frame: *abi_render_frame.c.ke_render_frame, scene: *abi_render.c.ke_render_scene_resolve, view_space: *abi_view.c.ke_view_space, settings: *abi_settings.c.ke_settings) R.Error!void {
+    const core: *abi_render.c.ke_render_service = service;
+    const dev: *abi_render_gpu.c.ke_gpu_device = device;
+    const ids = scene.render_component_ids.?(scene).?;
     sh.core = core;
     sh.device = dev;
-    sh.frame = p.frame.?;
+    sh.frame = frame;
     sh.ndc = dev.get_ndc_convention.?(dev);
-    sh.view_space = p.view_space.?;
+    sh.view_space = view_space;
     sh.params = try shapeOf(settings);
 
     try R.check(dev.create_buffer.?(dev, &abi_render_gpu.c.ke_gpu_buffer_desc{ .label = "shadow.lvp_uniform", .initial_data = null, .size = 64, .usage = abi_render_gpu.c.KE_GPU_BUFFER_USAGE_UNIFORM | abi_render_gpu.c.KE_GPU_BUFFER_USAGE_COPY_DST, .mapped_at_creation = false }, &sh.lvp_uniform));
@@ -317,7 +316,7 @@ fn setup(sh: *ShadowModule, p: *const abi_render_context.c.ke_render_context, se
     sh.queries = .{ .{ .terms = sh.queries_terms[0..].ptr, .term_count = 1 }, .{ .terms = sh.queries_terms[1..].ptr, .term_count = 2 } };
 }
 
-/// Called after a failed `setup` and by `destroyHandle`. It releases only the GPU objects that were
+/// Called after a failed `setup` and by `destroyOwner`. It releases only the GPU objects that were
 /// created, and leaves freeing the module to its caller.
 fn destroyModule(sh: *ShadowModule) void {
     const dev = sh.device;
@@ -329,12 +328,11 @@ fn destroyModule(sh: *ShadowModule) void {
     sh.binder.destroy_shader_layout.?(sh.binder, sh.layout);
 }
 
-/// The `destroy` slot of the handle `ke_render_shadow_create` returns: detaches the module and frees
-/// it with its GPU objects.
-fn destroyHandle(self: ?*abi_module.c.ke_module) callconv(.c) void {
-    const systems: *pass_systems.Systems(2) = @ptrCast(@alignCast((self orelse return).handle));
-    const sh: *ShadowModule = @fieldParentPtr("systems", systems);
-    pass_systems.Systems(2).detach(self);
+/// The `destroy` of the owner `ke_render_shadow_create` hands out: unregisters the systems, releases the GPU
+/// objects and frees the pass; a null argument is ignored.
+fn destroyOwner(ref: ?*anyopaque) callconv(.c) void {
+    const sh: *ShadowModule = @ptrCast(@alignCast(ref orelse return));
+    sh.systems.unregister();
     destroyModule(sh);
     gpa.destroy(sh);
 }
@@ -343,27 +341,49 @@ fn destroyHandle(self: ?*abi_module.c.ke_module) callconv(.c) void {
 /// settings fails as an invalid argument and a module that cannot be allocated as out of memory; a
 /// failing `setup` fails with its code and leaves the handle zeroed, and every such path frees the
 /// module.
-export fn ke_render_shadow_create(context_in: ?*const abi_render_context.c.ke_render_context, settings: ?*abi_settings.c.ke_settings, out_module: ?*abi_module.c.ke_module_handle) callconv(.c) abi_result.c.ke_result {
-    const out = out_module orelse return R.code(error.InvalidArgument);
-    out.* = std.mem.zeroes(abi_module.c.ke_module_handle);
-    const p = context_in orelse return R.code(error.InvalidArgument);
-    if (p.scene == null or p.frame == null or p.service == null or p.device == null or p.view_space == null) return R.code(error.InvalidArgument);
+export fn ke_render_shadow_create(
+    service_in: ?*abi_render.c.ke_render_service,
+    device_in: ?*abi_render_gpu.c.ke_gpu_device,
+    frame_in: ?*abi_render_frame.c.ke_render_frame,
+    scene_in: ?*abi_render.c.ke_render_scene_resolve,
+    view_space_in: ?*abi_view.c.ke_view_space,
+    render_prepare: ?*abi_schedule.c.ke_schedule,
+    render_prepare_set: abi_schedule.c.ke_schedule_set_id,
+    render_queue: ?*abi_schedule.c.ke_schedule,
+    render_queue_set: abi_schedule.c.ke_schedule_set_id,
+    settings: ?*abi_settings.c.ke_settings,
+    out_pass: ?*abi_part.c.ke_owner,
+) callconv(.c) abi_result.c.ke_result {
+    const out = out_pass orelse return R.code(error.InvalidArgument);
+    out.* = .{ .ref = null, .destroy = null };
+    const service = service_in orelse return R.code(error.InvalidArgument);
+    const device = device_in orelse return R.code(error.InvalidArgument);
+    const frame = frame_in orelse return R.code(error.InvalidArgument);
+    const scene = scene_in orelse return R.code(error.InvalidArgument);
+    const view_space = view_space_in orelse return R.code(error.InvalidArgument);
+    if (render_prepare == null) return R.code(error.InvalidArgument);
+    if (render_queue == null) return R.code(error.InvalidArgument);
     const given = settings orelse {
         log.warn("shadow pass: no settings", .{});
         return R.code(error.InvalidArgument);
     };
     const sh = gpa.create(ShadowModule) catch |err| return R.code(err);
     sh.* = .{};
-    setup(sh, p, given) catch |err| {
+    setup(sh, service, device, frame, scene, view_space, given) catch |err| {
         destroyModule(sh);
         gpa.destroy(sh);
         return R.code(err);
     };
-    sh.systems.init(.{
-        .{ .name = "render.shadow.map", .execute = prepareSystem, .user = sh, .set = .prepare, .queries = sh.queries[0..1], .access = &sh.access },
-        .{ .name = "render.shadow", .execute = queueSystem, .user = sh, .set = .queue, .queries = &sh.queries, .access = &sh.access },
-    });
-    out.* = .{ .ref = &sh.systems.module, .destroy = destroyHandle };
+    const registered = sh.systems.register(.{
+        .{ .name = "render.shadow.map", .execute = prepareSystem, .user = sh, .hook = 0, .queries = sh.queries[0..1], .access = &sh.access },
+        .{ .name = "render.shadow", .execute = queueSystem, .user = sh, .hook = 1, .queries = &sh.queries, .access = &sh.access },
+    }, &.{ .{ .schedule = render_prepare, .set = render_prepare_set }, .{ .schedule = render_queue, .set = render_queue_set } });
+    if (registered != R.ok) {
+        destroyModule(sh);
+        gpa.destroy(sh);
+        return registered;
+    }
+    out.* = .{ .ref = sh, .destroy = destroyOwner };
     return R.ok;
 }
 
@@ -437,14 +457,8 @@ const Rig = struct {
         self.dev.deinit();
     }
 
-    fn context(self: *Rig) abi_render_context.c.ke_render_context {
-        return std.mem.zeroInit(abi_render_context.c.ke_render_context, .{ .scene = &test_scene, .frame = self.frame.api(), .service = self.core.api(), .device = self.dev.api(), .view_space = self.view_space.api() });
-    }
-
-    fn targets(self: *Rig) abi_module.c.ke_module_targets {
-        var t = std.mem.zeroes(abi_module.c.ke_module_targets);
-        t.render = @ptrCast(self.schedule.api());
-        return t;
+    fn create(self: *Rig, settings: ?*abi_settings.c.ke_settings, out: *abi_part.c.ke_owner) abi_result.c.ke_result {
+        return ke_render_shadow_create(self.core.api(), self.dev.api(), self.frame.api(), &test_scene, self.view_space.api(), self.schedule.api(), 4, self.schedule.api(), 5, settings, out);
     }
 
     fn expectReleased(self: *Rig) !void {
@@ -456,20 +470,16 @@ const Rig = struct {
 
 var no_settings = settings_schema.Fixed.init(&.{});
 
-fn passOf(h: abi_module.c.ke_module_handle) *ShadowModule {
-    const systems: *pass_systems.Systems(2) = @ptrCast(@alignCast(h.ref.?.handle));
-    return @fieldParentPtr("systems", systems);
+fn passOf(h: abi_part.c.ke_owner) *ShadowModule {
+    return @ptrCast(@alignCast(h.ref.?));
 }
 
-test "the shadow module attaches its two systems to the render schedule, and destroying it detaches them and releases the GPU objects" {
+test "the shadow pass registers its two systems in its hooks, and destroying it unregisters them and releases the GPU objects" {
     var rig: Rig = undefined;
     try rig.init();
     defer rig.deinit();
-    const p = rig.context();
-    var h: abi_module.c.ke_module_handle = undefined;
-    try R.check(ke_render_shadow_create(&p, &no_settings.api, &h));
-    const t = rig.targets();
-    try R.check(h.ref.?.attach.?(h.ref, &t));
+    var h: abi_part.c.ke_owner = undefined;
+    try R.check(rig.create(&no_settings.api, &h));
     try rig.schedule.received(.register_system).times(2);
     h.destroy.?(h.ref);
     try rig.schedule.received(.unregister_system).times(2);
@@ -480,9 +490,8 @@ test "a directional light gets a published map and light, and a shadow pass at t
     var rig: Rig = undefined;
     try rig.init();
     defer rig.deinit();
-    const p = rig.context();
-    var h: abi_module.c.ke_module_handle = undefined;
-    try R.check(ke_render_shadow_create(&p, &no_settings.api, &h));
+    var h: abi_part.c.ke_owner = undefined;
+    try R.check(rig.create(&no_settings.api, &h));
     defer h.destroy.?(h.ref);
     try testing.expectEqual(R.ok, prepareSystem(&light_ctx, passOf(h), 0));
     try rig.frame.received(.publish).times(2);
@@ -494,9 +503,8 @@ test "a frame without a directional light publishes no shadow and declares no pa
     var rig: Rig = undefined;
     try rig.init();
     defer rig.deinit();
-    const p = rig.context();
-    var h: abi_module.c.ke_module_handle = undefined;
-    try R.check(ke_render_shadow_create(&p, &no_settings.api, &h));
+    var h: abi_part.c.ke_owner = undefined;
+    try R.check(rig.create(&no_settings.api, &h));
     defer h.destroy.?(h.ref);
     try testing.expectEqual(R.ok, prepareSystem(&empty_ctx, passOf(h), 0));
     try testing.expectEqual(R.ok, queueSystem(&empty_ctx, passOf(h), 0));
@@ -508,10 +516,9 @@ test "a shadow map with no texels is refused as an invalid argument" {
     var rig: Rig = undefined;
     try rig.init();
     defer rig.deinit();
-    const p = rig.context();
-    var bad = settings_schema.Fixed.init(&.{.{ .key = "resolution", .value = .{ .int = 0 } }});
-    var h: abi_module.c.ke_module_handle = undefined;
-    try testing.expectError(error.InvalidArgument, R.check(ke_render_shadow_create(&p, &bad.api, &h)));
+        var bad = settings_schema.Fixed.init(&.{.{ .key = "resolution", .value = .{ .int = 0 } }});
+    var h: abi_part.c.ke_owner = undefined;
+    try testing.expectError(error.InvalidArgument, R.check(rig.create(&bad.api, &h)));
     try testing.expect(h.ref == null);
     try rig.expectReleased();
 }
@@ -521,9 +528,8 @@ test "a shadow pass whose shader fails to load releases what it had created" {
     try rig.init();
     defer rig.deinit();
     _ = rig.core.when(.load_shader).returns(abi_result.c.KE_RESULT_GENERAL);
-    const p = rig.context();
-    var h: abi_module.c.ke_module_handle = undefined;
-    try testing.expect(ke_render_shadow_create(&p, &no_settings.api, &h) != R.ok);
+    var h: abi_part.c.ke_owner = undefined;
+    try testing.expect(rig.create(&no_settings.api, &h) != R.ok);
     try testing.expect(h.ref == null);
     try rig.expectReleased();
 }

@@ -5,8 +5,8 @@ const abi_ecs = @import("ecs");
 const abi_extraction = @import("extraction");
 const abi_logger = @import("logger");
 const abi_module = @import("module");
+const abi_part = @import("part");
 const abi_render = @import("render");
-const abi_render_context = @import("render_context");
 const abi_render_graph = @import("render_graph");
 const abi_render_ui = @import("render_ui");
 const abi_result = @import("result");
@@ -20,11 +20,12 @@ pub const Error = abi_result.Error;
 const checkResult = abi_result.checkResult;
 const resultOf = abi_result.resultOf;
 
-/// Makes the label resolve. Attached, its system "render.label.resolve" gives each label of the
-/// main world, in the update set, the font it names.
-pub fn renderLabelResolveCreate(context: ?*const abi_render_context.c.ke_render_context, ui: ?*abi_render_ui.c.ke_render_ui, resolver: ?*abi_asset_resolver.c.ke_asset_resolver, settings: ?*abi_settings.c.ke_settings) Error!abi_module.c.ke_module_handle {
-    var written: abi_module.c.ke_module_handle = undefined;
-    try checkResult(c.ke_render_label_resolve_create(context, ui, resolver, settings, &written));
+/// Makes the label resolve, whose system "render.label.resolve", in update_set of update, gives
+/// each label of the main world the font it names. Every argument but out_resolve must outlive
+/// it.
+pub fn renderLabelResolveCreate(service: ?*abi_render.c.ke_render_service, scene: ?*abi_render.c.ke_render_scene_resolve, ui: ?*abi_render_ui.c.ke_render_ui, resolver: ?*abi_asset_resolver.c.ke_asset_resolver, update: ?*abi_schedule.c.ke_schedule, update_set: c.ke_schedule_set_id, settings: ?*abi_settings.c.ke_settings) Error!abi_part.c.ke_owner {
+    var written: abi_part.c.ke_owner = undefined;
+    try checkResult(c.ke_render_label_resolve_create(service, scene, ui, resolver, update, update_set, settings, &written));
     return written;
 }
 

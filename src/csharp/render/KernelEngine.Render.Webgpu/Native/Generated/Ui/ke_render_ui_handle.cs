@@ -6,7 +6,11 @@ using global::KernelEngine.Render;
 using global::KernelEngine.RenderGraph;
 using global::KernelEngine.Text;
 
+using KernelEngine.Ecs.Native;
+using KernelEngine.Extraction.Native;
 using KernelEngine.Module.Native;
+using KernelEngine.Render.Frame.Native;
+using KernelEngine.Render.Native;
 using KernelEngine.Result.Native;
 
 namespace KernelEngine.Render.Webgpu.Native;

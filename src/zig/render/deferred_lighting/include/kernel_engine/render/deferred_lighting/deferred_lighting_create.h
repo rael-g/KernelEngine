@@ -3,7 +3,6 @@
 
 #include <kernel_engine/settings/settings.h>
 #include <kernel_engine/result/result.h>
-#include <kernel_engine/render/context.h>
 #include <stdbool.h>
 #include <kernel_engine/ecs/ecs.h>
 #include <kernel_engine/render/frame.h>
@@ -11,7 +10,8 @@
 #include <kernel_engine/render/scene_resolve.h>
 #include <kernel_engine/render/service/render_service.h>
 #include <kernel_engine/render/gpu/gpu_device.h>
-#include <kernel_engine/module/module.h>
+#include <kernel_engine/part/part.h>
+#include <kernel_engine/schedule/schedule.h>
 
 #if defined(_WIN32) || defined(__CYGWIN__)
     #ifdef KE_RENDER_DEFERRED_LIGHTING_EXPORT
@@ -30,17 +30,18 @@ extern "C"
 {
 #endif
 
-    /// Makes the deferred lighting pass. Attached, it declares in the render queue set the pass that lights
-    /// the published gbuffer over the frame's color, sampling the frame's depth, the published shadow (the
-    /// neutral one when none is) and the published clusters (none added when none are).
-    /// @param context [borrowed] The parts the pass is built on; read during the call.
-    /// @param settings [borrowed] Read once. `ibl_enabled`, a boolean, default true: whether the pass
-    ///        samples the sky for image-based light.
-    /// @param out_module [out] Receives the pass; left zeroed on failure.
-    /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT when the context, a part the pass uses or @p settings is
-    ///         NULL, or a setting is refused; the code of the GPU object that could not be made.
+    /// Makes the deferred lighting pass, whose system, in @p render_queue_set of @p render_queue, declares the
+    /// pass that lights the published gbuffer over the frame's color, sampling the frame's depth, the published
+    /// shadow (the neutral one when none is) and the published clusters (none added when none are). Every
+    /// argument but @p out_pass must outlive the pass.
+    /// @param settings [borrowed] Read once. `ibl_enabled`, a boolean, default true: whether the pass samples the
+    ///        sky for image-based light.
+    /// @param out_pass [out] Receives the pass, whose destroy unregisters its systems; left zeroed on failure.
+    /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a NULL pointer or a refused setting; the code of the GPU
+    ///         object that could not be made, or of the schedule that refused a system.
     KE_RENDER_DEFERRED_LIGHTING_API ke_result ke_render_deferred_lighting_create(
-        const ke_render_context *context, ke_settings *settings, ke_module_handle *out_module);
+        ke_render_service *service, ke_gpu_device *device, ke_render_frame *frame, ke_render_scene_resolve *scene,
+        ke_schedule *render_queue, ke_schedule_set_id render_queue_set, ke_settings *settings, ke_owner *out_pass);
 
 #ifdef __cplusplus
 }

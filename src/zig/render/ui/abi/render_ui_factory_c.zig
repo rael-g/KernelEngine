@@ -4,7 +4,9 @@ const abi_ecs = @import("ecs");
 const abi_extraction = @import("extraction");
 const abi_logger = @import("logger");
 const abi_module = @import("module");
-const abi_render_context = @import("render_context");
+const abi_render = @import("render");
+const abi_render_frame = @import("render_frame");
+const abi_render_gpu = @import("render_gpu");
 const abi_render_graph = @import("render_graph");
 const abi_render_ui = @import("render_ui");
 const abi_result = @import("result");
@@ -82,10 +84,10 @@ pub const ke_schedule_condition_fn = ?*const fn (?*anyopaque, ?*bool) callconv(.
 /// stderr, where they go until this is called. Called once, before the library logs.
 pub extern fn ke_render_ui_set_log_callback(callback: ke_log_callback, ctx: ?*anyopaque) void;
 
-/// Makes the ui pass and registers its quad and label components in the main and the render
-/// world, with a copy of each in the extraction. Its systems come from
-/// ke_render_ui_systems_create.
-pub extern fn ke_render_ui_create(context: ?*const abi_render_context.c.ke_render_context, out_ui: ?*abi_render_ui.c.ke_render_ui_handle) abi_result.c.ke_result;
+/// Makes the ui pass and registers its quad and label components in main and render, with a copy
+/// of each in extraction. Its systems come from ke_render_ui_systems_create. Every argument but
+/// out_ui must outlive the pass.
+pub extern fn ke_render_ui_create(main: ?*abi_ecs.c.ke_ecs, render: ?*abi_ecs.c.ke_ecs, extraction: ?*abi_extraction.c.ke_extraction, service: ?*abi_render.c.ke_render_service, device: ?*abi_render_gpu.c.ke_gpu_device, frame: ?*abi_render_frame.c.ke_render_frame, out_ui: ?*abi_render_ui.c.ke_render_ui_handle) abi_result.c.ke_result;
 
 /// Creates the module of ui: attaching it registers, in the render schedule, "render.ui.labels"
 /// in the render prepare set, which lays out each label's text, and "render.ui" in the render

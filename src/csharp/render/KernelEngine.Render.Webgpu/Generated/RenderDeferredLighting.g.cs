@@ -5,8 +5,8 @@
 
 namespace KernelEngine.Render.Webgpu;
 
-/// <summary>Makes the skybox pass. Attached, it declares in the render queue set, at KE_RENDER_STAGE_SKY, the pass that draws the sky over the frame's color where the frame's depth is at the far plane.</summary>
-public sealed unsafe partial class RenderSkyboxModule : KernelEngine.Module.Module
+/// <summary>Makes the deferred lighting pass, whose system, in render_queue_set of render_queue, declares the pass that lights the published gbuffer over the frame's color, sampling the frame's depth, the published shadow (the neutral one when none is) and the published clusters (none added when none are). Every argument but out_pass must outlive the pass.</summary>
+public sealed unsafe partial class RenderDeferredLighting : IDisposable
 {
 
     /// <summary>Turns a result code into the exception that carries it, and back.</summary>
@@ -50,52 +50,56 @@ public sealed unsafe partial class RenderSkyboxModule : KernelEngine.Module.Modu
         }
     }
 
-    /// <summary>Makes the skybox pass. Attached, it declares in the render queue set, at KE_RENDER_STAGE_SKY, the pass that draws the sky over the frame's color where the frame's depth is at the far plane.</summary>
-    /// <param name="ecs">The render world: holds what the passes read and own.</param>
-    /// <param name="main">The main world, whose components are extracted into ecs.</param>
-    /// <param name="extraction">Copies the main world's components into ecs.</param>
-    /// <param name="service">Holds the assets the passes draw.</param>
-    /// <param name="device">Creates the passes' GPU objects.</param>
-    /// <param name="viewSpace">Builds views and projections.</param>
-    /// <param name="camera">Answers the camera's matrices.</param>
-    /// <param name="scene">Names the components the passes read.</param>
-    /// <param name="frame">The frame the passes declare into.</param>
-    public RenderSkyboxModule(KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Ecs.INativeEcs main, KernelEngine.Extraction.INativeExtraction extraction, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.Frame.INativeRenderFrame frame) : base(Create(ecs, main, extraction, service, device, viewSpace, camera, scene, frame))
+    /// <summary>Makes the deferred lighting pass, whose system, in render_queue_set of render_queue, declares the pass that lights the published gbuffer over the frame's color, sampling the frame's depth, the published shadow (the neutral one when none is) and the published clusters (none added when none are). Every argument but out_pass must outlive the pass.</summary>
+    /// <param name="service"></param>
+    /// <param name="device"></param>
+    /// <param name="frame"></param>
+    /// <param name="scene"></param>
+    /// <param name="renderQueue"></param>
+    /// <param name="renderQueueSet"></param>
+    /// <param name="settings">Read once. `ibl_enabled`, a boolean, default true: whether the pass samples the sky for image-based light.</param>
+    public RenderDeferredLighting(KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.Render.Frame.INativeRenderFrame frame, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Schedule.INativeSchedule renderQueue, uint renderQueueSet, KernelEngine.Settings.IPartSettings settings) : this(Create(service, device, frame, scene, renderQueue, renderQueueSet, settings))
     {
-        Hold(ecs.Owner);
-        Hold(main.Owner);
-        Hold(extraction.Owner);
         Hold(service.Owner);
         Hold(device.Owner);
-        Hold(viewSpace.Owner);
-        Hold(camera.Owner);
-        Hold(scene.Owner);
         Hold(frame.Owner);
+        Hold(scene.Owner);
+        Hold(renderQueue.Owner);
     }
 
-    private static KernelEngine.Module.Native.ke_module_handle Create(KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Ecs.INativeEcs main, KernelEngine.Extraction.INativeExtraction extraction, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.Frame.INativeRenderFrame frame)
+    private KernelEngine.Part.Native.ke_owner _handle;
+
+    private readonly List<global::System.Runtime.InteropServices.SafeHandle> _held = new();
+
+    private RenderDeferredLighting(KernelEngine.Part.Native.ke_owner handle) => _handle = handle;
+
+    private void Hold(global::System.Runtime.InteropServices.SafeHandle? owner)
     {
-        ArgumentNullException.ThrowIfNull(ecs);
-        ArgumentNullException.ThrowIfNull(main);
-        ArgumentNullException.ThrowIfNull(extraction);
+        if (owner is null) return;
+        var added = false;
+        owner.DangerousAddRef(ref added);
+        _held.Add(owner);
+    }
+
+    /// <summary>Releases the native object, then what it held.</summary>
+    public void Dispose()
+    {
+        if (_handle.@ref == null) return;
+        _handle.destroy(_handle.@ref);
+        _handle = default;
+        foreach (var held in _held) held.DangerousRelease();
+        _held.Clear();
+    }
+
+    private static KernelEngine.Part.Native.ke_owner Create(KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.Render.Frame.INativeRenderFrame frame, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Schedule.INativeSchedule renderQueue, uint renderQueueSet, KernelEngine.Settings.IPartSettings settings)
+    {
         ArgumentNullException.ThrowIfNull(service);
         ArgumentNullException.ThrowIfNull(device);
-        ArgumentNullException.ThrowIfNull(viewSpace);
-        ArgumentNullException.ThrowIfNull(camera);
-        ArgumentNullException.ThrowIfNull(scene);
         ArgumentNullException.ThrowIfNull(frame);
-        KernelEngine.Render.Webgpu.Native.RenderContext context = default;
-        context.Ecs = ecs.Native;
-        context.Main = main.Native;
-        context.Extraction = extraction.Native;
-        context.Service = service.Native;
-        context.Device = device.Native;
-        context.ViewSpace = viewSpace.Native;
-        context.Camera = camera.Native;
-        context.Scene = scene.Native;
-        context.Frame = frame.Native;
-        KernelEngine.Module.Native.ke_module_handle handle;
-        NativeResult.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_skybox_create(&context, &handle), "ke_render_skybox_create");
+        ArgumentNullException.ThrowIfNull(scene);
+        ArgumentNullException.ThrowIfNull(renderQueue);
+        KernelEngine.Part.Native.ke_owner handle;
+        NativeResult.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_deferred_lighting_create(service.Native, device.Native, frame.Native, scene.Native, renderQueue.Native, renderQueueSet, ((KernelEngine.Settings.INativeSettings)settings).Native, &handle), "ke_render_deferred_lighting_create");
         return handle;
     }
 }

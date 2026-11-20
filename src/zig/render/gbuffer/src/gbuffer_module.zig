@@ -13,9 +13,8 @@ pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @imp
 
 const zm = @import("zmath");
 const abi_ecs = @import("abi_ecs");
-const abi_module = @import("abi_module");
+const abi_part = @import("abi_part");
 const abi_render = @import("abi_render");
-const abi_render_context = @import("abi_render_context");
 const abi_render_frame = @import("abi_render_frame");
 const abi_render_graph = @import("abi_render_graph");
 const abi_result = @import("abi_result");
@@ -90,12 +89,12 @@ const Prepared = struct {
 };
 
 /// The state of one gbuffer pass, allocated by `ke_render_gbuffer_create` and freed by
-/// `destroyHandle` after it detaches `systems`. Handles start as KE_GPU_INVALID_HANDLE and are filled
+/// `destroyOwner` after it unregisters `systems`. Handles start as KE_GPU_INVALID_HANDLE and are filled
 /// by `setup`, which is what lets `destroyModule` release a module whose setup stopped partway.
 /// `targets` are the frame's, made by `prepareSystem`; `prepared` is rebuilt by `queueSystem` and
 /// read by `record`.
 const GBufferModule = struct {
-    systems: pass_systems.Systems(2) = undefined,
+    systems: pass_systems.Systems(2) = .{},
     core: *abi_render.c.ke_render_service = undefined,
     device: *abi_render_gpu.c.ke_gpu_device = undefined,
     frame: *abi_render_frame.c.ke_render_frame = undefined,
@@ -265,13 +264,13 @@ fn queueSystem(ctx: ?*abi_schedule.c.ke_schedule_ctx, user: ?*anyopaque, _: f32)
 /// `pipeline_template`, `access` and `queries` over the render world, and it requests the pipeline
 /// now, so a failure there fails creation instead of the first frame. On failure the module keeps
 /// the handles it made for `destroyModule`.
-fn setup(gb: *GBufferModule, p: *const abi_render_context.c.ke_render_context) R.Error!void {
-    const core: *abi_render.c.ke_render_service = p.service.?;
-    const dev: *abi_render_gpu.c.ke_gpu_device = p.device.?;
-    const ids = p.scene.?.render_component_ids.?(p.scene).?;
+fn setup(gb: *GBufferModule, service: *abi_render.c.ke_render_service, device: *abi_render_gpu.c.ke_gpu_device, frame: *abi_render_frame.c.ke_render_frame, scene: *abi_render.c.ke_render_scene_resolve) R.Error!void {
+    const core: *abi_render.c.ke_render_service = service;
+    const dev: *abi_render_gpu.c.ke_gpu_device = device;
+    const ids = scene.render_component_ids.?(scene).?;
     gb.core = core;
     gb.device = dev;
-    gb.frame = p.frame.?;
+    gb.frame = frame;
 
     const binder: *abi_render_gpu.c.ke_render_resource_binder = core.*.resource_binder.?(core).?;
     try R.check(gb.groups.init(binder, DEFAULT_MATERIAL_SHADER ++ "." ++ PASS_NAME));
@@ -327,7 +326,7 @@ fn setup(gb: *GBufferModule, p: *const abi_render_context.c.ke_render_context) R
 }
 
 /// Releases the GPU objects and sets `setup` created, skipping any still invalid, so it also serves a
-/// module whose setup stopped partway. Used on creation failure and by `destroyHandle`.
+/// module whose setup stopped partway. Used on creation failure and by `destroyOwner`.
 fn destroyModule(gb: *GBufferModule) void {
     if (gb.objects) |*objects| objects.release();
     gb.draws.deinit(gpa);
@@ -336,12 +335,11 @@ fn destroyModule(gb: *GBufferModule) void {
     gb.groups.release();
 }
 
-/// The destroy slot of the handle `ke_render_gbuffer_create` returns: detaches the module, releases
-/// its GPU objects and frees it. A null ref does nothing.
-fn destroyHandle(self: ?*abi_module.c.ke_module) callconv(.c) void {
-    const systems: *pass_systems.Systems(2) = @ptrCast(@alignCast((self orelse return).handle));
-    const gb: *GBufferModule = @fieldParentPtr("systems", systems);
-    pass_systems.Systems(2).detach(self);
+/// The `destroy` of the owner `ke_render_gbuffer_create` hands out: unregisters the systems, releases the GPU
+/// objects and frees the pass; a null argument is ignored.
+fn destroyOwner(ref: ?*anyopaque) callconv(.c) void {
+    const gb: *GBufferModule = @ptrCast(@alignCast(ref orelse return));
+    gb.systems.unregister();
     destroyModule(gb);
     gpa.destroy(gb);
 }
@@ -349,24 +347,43 @@ fn destroyHandle(self: ?*abi_module.c.ke_module) callconv(.c) void {
 /// The factory the plugin exports, declared in the plugin's factory header. A missing scene, frame,
 /// render service or device fails as an invalid argument and a failed allocation as out of memory.
 /// A failing setup fails with its code and leaves the handle zeroed after releasing the module.
-export fn ke_render_gbuffer_create(context_in: ?*const abi_render_context.c.ke_render_context, out_module: ?*abi_module.c.ke_module_handle) callconv(.c) abi_result.c.ke_result {
-    const out = out_module orelse return R.code(error.InvalidArgument);
-    out.* = std.mem.zeroes(abi_module.c.ke_module_handle);
-    const p = context_in orelse return R.code(error.InvalidArgument);
-    if (p.scene == null or p.frame == null or p.service == null or p.device == null) return R.code(error.InvalidArgument);
+export fn ke_render_gbuffer_create(
+    service_in: ?*abi_render.c.ke_render_service,
+    device_in: ?*abi_render_gpu.c.ke_gpu_device,
+    frame_in: ?*abi_render_frame.c.ke_render_frame,
+    scene_in: ?*abi_render.c.ke_render_scene_resolve,
+    render_prepare: ?*abi_schedule.c.ke_schedule,
+    render_prepare_set: abi_schedule.c.ke_schedule_set_id,
+    render_queue: ?*abi_schedule.c.ke_schedule,
+    render_queue_set: abi_schedule.c.ke_schedule_set_id,
+    out_pass: ?*abi_part.c.ke_owner,
+) callconv(.c) abi_result.c.ke_result {
+    const out = out_pass orelse return R.code(error.InvalidArgument);
+    out.* = .{ .ref = null, .destroy = null };
+    const service = service_in orelse return R.code(error.InvalidArgument);
+    const device = device_in orelse return R.code(error.InvalidArgument);
+    const frame = frame_in orelse return R.code(error.InvalidArgument);
+    const scene = scene_in orelse return R.code(error.InvalidArgument);
+    if (render_prepare == null) return R.code(error.InvalidArgument);
+    if (render_queue == null) return R.code(error.InvalidArgument);
 
     const gb = gpa.create(GBufferModule) catch |err| return R.code(err);
     gb.* = .{};
-    setup(gb, p) catch |err| {
+    setup(gb, service, device, frame, scene) catch |err| {
         destroyModule(gb);
         gpa.destroy(gb);
         return R.code(err);
     };
-    gb.systems.init(.{
-        .{ .name = "render.gbuffer.targets", .execute = prepareSystem, .user = gb, .set = .prepare, .access = &gb.access },
-        .{ .name = "render.gbuffer", .execute = queueSystem, .user = gb, .set = .queue, .queries = &gb.queries, .access = &gb.access },
-    });
-    out.* = .{ .ref = &gb.systems.module, .destroy = destroyHandle };
+    const registered = gb.systems.register(.{
+        .{ .name = "render.gbuffer.targets", .execute = prepareSystem, .user = gb, .hook = 0, .access = &gb.access },
+        .{ .name = "render.gbuffer", .execute = queueSystem, .user = gb, .hook = 1, .queries = &gb.queries, .access = &gb.access },
+    }, &.{ .{ .schedule = render_prepare, .set = render_prepare_set }, .{ .schedule = render_queue, .set = render_queue_set } });
+    if (registered != R.ok) {
+        destroyModule(gb);
+        gpa.destroy(gb);
+        return registered;
+    }
+    out.* = .{ .ref = gb, .destroy = destroyOwner };
     return R.ok;
 }
 
@@ -564,14 +581,8 @@ const Rig = struct {
         self.dev.deinit();
     }
 
-    fn context(self: *Rig) abi_render_context.c.ke_render_context {
-        return std.mem.zeroInit(abi_render_context.c.ke_render_context, .{ .scene = &test_scene, .frame = self.frame.api(), .service = self.core.api(), .device = self.dev.api() });
-    }
-
-    fn targets(self: *Rig) abi_module.c.ke_module_targets {
-        var t = std.mem.zeroes(abi_module.c.ke_module_targets);
-        t.render = @ptrCast(self.schedule.api());
-        return t;
+    fn create(self: *Rig, out: *abi_part.c.ke_owner) abi_result.c.ke_result {
+        return ke_render_gbuffer_create(self.core.api(), self.dev.api(), self.frame.api(), &test_scene, self.schedule.api(), 4, self.schedule.api(), 5, out);
     }
 
     fn expectReleased(self: *Rig) !void {
@@ -581,20 +592,16 @@ const Rig = struct {
     }
 };
 
-fn passOf(h: abi_module.c.ke_module_handle) *GBufferModule {
-    const systems: *pass_systems.Systems(2) = @ptrCast(@alignCast(h.ref.?.handle));
-    return @fieldParentPtr("systems", systems);
+fn passOf(h: abi_part.c.ke_owner) *GBufferModule {
+    return @ptrCast(@alignCast(h.ref.?));
 }
 
-test "the gbuffer module attaches its two systems to the render schedule, and destroying it detaches them and releases the GPU objects" {
+test "the gbuffer pass registers its two systems in its hooks, and destroying it unregisters them and releases the GPU objects" {
     var rig: Rig = undefined;
     try rig.init();
     defer rig.deinit();
-    const p = rig.context();
-    var h: abi_module.c.ke_module_handle = undefined;
-    try R.check(ke_render_gbuffer_create(&p, &h));
-    const t = rig.targets();
-    try R.check(h.ref.?.attach.?(h.ref, &t));
+    var h: abi_part.c.ke_owner = undefined;
+    try R.check(rig.create(&h));
     try rig.schedule.received(.register_system).times(2);
     h.destroy.?(h.ref);
     try rig.schedule.received(.unregister_system).times(2);
@@ -605,9 +612,8 @@ test "the gbuffer publishes its three targets each frame, and declares its pass 
     var rig: Rig = undefined;
     try rig.init();
     defer rig.deinit();
-    const p = rig.context();
-    var h: abi_module.c.ke_module_handle = undefined;
-    try R.check(ke_render_gbuffer_create(&p, &h));
+    var h: abi_part.c.ke_owner = undefined;
+    try R.check(rig.create(&h));
     defer h.destroy.?(h.ref);
     try testing.expectEqual(R.ok, prepareSystem(&empty_ctx, passOf(h), 0));
     try rig.graph.received(.create_texture).times(3);
@@ -621,9 +627,8 @@ test "a frame not being declared gets no gbuffer" {
     try rig.init();
     defer rig.deinit();
     _ = rig.frame.when(.live).returns(false);
-    const p = rig.context();
-    var h: abi_module.c.ke_module_handle = undefined;
-    try R.check(ke_render_gbuffer_create(&p, &h));
+    var h: abi_part.c.ke_owner = undefined;
+    try R.check(rig.create(&h));
     defer h.destroy.?(h.ref);
     try testing.expectEqual(R.ok, prepareSystem(&empty_ctx, passOf(h), 0));
     try testing.expectEqual(R.ok, queueSystem(&camera_ctx, passOf(h), 0));
@@ -636,9 +641,8 @@ test "a gbuffer pass whose shader fails to load releases what it had created" {
     try rig.init();
     defer rig.deinit();
     _ = rig.core.when(.load_shader).returns(abi_result.c.KE_RESULT_GENERAL);
-    const p = rig.context();
-    var h: abi_module.c.ke_module_handle = undefined;
-    try testing.expect(ke_render_gbuffer_create(&p, &h) != R.ok);
+    var h: abi_part.c.ke_owner = undefined;
+    try testing.expect(rig.create(&h) != R.ok);
     try testing.expect(h.ref == null);
     try rig.expectReleased();
 }
@@ -647,10 +651,8 @@ test "a gbuffer pass missing its scene is refused" {
     var rig: Rig = undefined;
     try rig.init();
     defer rig.deinit();
-    var p = rig.context();
-    p.scene = null;
-    var h: abi_module.c.ke_module_handle = undefined;
-    try testing.expectError(error.InvalidArgument, R.check(ke_render_gbuffer_create(&p, &h)));
+    var h: abi_part.c.ke_owner = undefined;
+    try testing.expectError(error.InvalidArgument, R.check(ke_render_gbuffer_create(rig.core.api(), rig.dev.api(), rig.frame.api(), null, rig.schedule.api(), 4, rig.schedule.api(), 5, &h)));
 }
 
 test "creating and destroying gbuffer passes leaves no block allocated" {

@@ -12,9 +12,8 @@ pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @imp
 const feature_bindings = @import("feature_bindings");
 const cluster_buffers = feature_bindings.cluster_buffers;
 const abi_ecs = @import("abi_ecs");
-const abi_module = @import("abi_module");
+const abi_part = @import("abi_part");
 const abi_render = @import("abi_render");
-const abi_render_context = @import("abi_render_context");
 const abi_render_cluster_factory = @import("abi_render_cluster_factory");
 const abi_render_frame = @import("abi_render_frame");
 const abi_render_graph = @import("abi_render_graph");
@@ -91,12 +90,12 @@ const Published = struct { buffer: abi_asset_resolver.c.ke_gpu_buffer, size: usi
 /// The buffers the cull writes, by their index in `cluster_buffers`.
 const written = [_]usize{ 2, 3, 4, 5 };
 
-/// State of one cluster pass, allocated by `ke_render_cluster_create` and freed by `destroyHandle`
-/// after it detaches `systems`. The core, device, view space and camera are borrowed. The grid fields
+/// State of one cluster pass, allocated by `ke_render_cluster_create` and freed by `destroyOwner`
+/// after it unregisters `systems`. The core, device, view space and camera are borrowed. The grid fields
 /// are assigned by `setup`; the GPU fields are the invalid handle until their own creation succeeds.
 /// `resources` are the published buffers of the frame, imported by `prepareSystem`.
 const ClusterModule = struct {
-    systems: pass_systems.Systems(2) = undefined,
+    systems: pass_systems.Systems(2) = .{},
     core: *abi_render.c.ke_render_service = undefined,
     device: *abi_render_gpu.c.ke_gpu_device = undefined,
     frame: *abi_render_frame.c.ke_render_frame = undefined,
@@ -318,15 +317,15 @@ fn makeStorageBuffer(dev: *abi_render_gpu.c.ke_gpu_device, label: [*c]const u8, 
 /// the buffers it publishes each frame in `published`, and fills the access list and the queries
 /// over the render world. A failed step fails with its code, and the objects created before it stay
 /// set for `destroyModule` to release.
-fn setup(cm: *ClusterModule, p: *const abi_render_context.c.ke_render_context, config: *const Config) R.Error!void {
-    const core: *abi_render.c.ke_render_service = p.service.?;
-    const dev: *abi_render_gpu.c.ke_gpu_device = p.device.?;
-    const ids = p.scene.?.render_component_ids.?(p.scene).?;
+fn setup(cm: *ClusterModule, service: *abi_render.c.ke_render_service, device: *abi_render_gpu.c.ke_gpu_device, frame: *abi_render_frame.c.ke_render_frame, scene: *abi_render.c.ke_render_scene_resolve, camera: *abi_render.c.ke_render_camera, view_space: *abi_view.c.ke_view_space, config: *const Config) R.Error!void {
+    const core: *abi_render.c.ke_render_service = service;
+    const dev: *abi_render_gpu.c.ke_gpu_device = device;
+    const ids = scene.render_component_ids.?(scene).?;
     cm.core = core;
     cm.device = dev;
-    cm.frame = p.frame.?;
-    cm.view_space = p.view_space.?;
-    cm.camera = p.camera.?;
+    cm.frame = frame;
+    cm.view_space = view_space;
+    cm.camera = camera;
     cm.grid_x = config.grid_x;
     cm.grid_y = config.grid_y;
     cm.grid_z = config.grid_z;
@@ -423,12 +422,11 @@ fn destroyModule(cm: *const ClusterModule) void {
     }
 }
 
-/// The `destroy` slot of the handle `ke_render_cluster_create` returns: detaches the module and frees
-/// it with its GPU objects.
-fn destroyHandle(self: ?*abi_module.c.ke_module) callconv(.c) void {
-    const systems: *pass_systems.Systems(2) = @ptrCast(@alignCast((self orelse return).handle));
-    const cm: *ClusterModule = @fieldParentPtr("systems", systems);
-    pass_systems.Systems(2).detach(self);
+/// The `destroy` of the owner `ke_render_cluster_create` hands out: unregisters the systems, releases the GPU
+/// objects and frees the pass; a null argument is ignored.
+fn destroyOwner(ref: ?*anyopaque) callconv(.c) void {
+    const cm: *ClusterModule = @ptrCast(@alignCast(ref orelse return));
+    cm.systems.unregister();
     destroyModule(cm);
     gpa.destroy(cm);
 }
@@ -437,11 +435,30 @@ fn destroyHandle(self: ?*abi_module.c.ke_module) callconv(.c) void {
 /// the schema refuses, fails as an invalid argument and a module that cannot be allocated as out of
 /// memory. The handle stays zeroed when `setup` fails, and the objects created so far are released
 /// then.
-export fn ke_render_cluster_create(context_in: ?*const abi_render_context.c.ke_render_context, settings: ?*abi_settings.c.ke_settings, out_module: ?*abi_module.c.ke_module_handle) callconv(.c) abi_result.c.ke_result {
-    const out = out_module orelse return R.code(error.InvalidArgument);
-    out.* = std.mem.zeroes(abi_module.c.ke_module_handle);
-    const p = context_in orelse return R.code(error.InvalidArgument);
-    if (p.service == null or p.device == null or p.view_space == null or p.camera == null or p.scene == null or p.frame == null) return R.code(error.InvalidArgument);
+export fn ke_render_cluster_create(
+    service_in: ?*abi_render.c.ke_render_service,
+    device_in: ?*abi_render_gpu.c.ke_gpu_device,
+    frame_in: ?*abi_render_frame.c.ke_render_frame,
+    scene_in: ?*abi_render.c.ke_render_scene_resolve,
+    camera_in: ?*abi_render.c.ke_render_camera,
+    view_space_in: ?*abi_view.c.ke_view_space,
+    render_prepare: ?*abi_schedule.c.ke_schedule,
+    render_prepare_set: abi_schedule.c.ke_schedule_set_id,
+    render_queue: ?*abi_schedule.c.ke_schedule,
+    render_queue_set: abi_schedule.c.ke_schedule_set_id,
+    settings: ?*abi_settings.c.ke_settings,
+    out_pass: ?*abi_part.c.ke_owner,
+) callconv(.c) abi_result.c.ke_result {
+    const out = out_pass orelse return R.code(error.InvalidArgument);
+    out.* = .{ .ref = null, .destroy = null };
+    const service = service_in orelse return R.code(error.InvalidArgument);
+    const device = device_in orelse return R.code(error.InvalidArgument);
+    const frame = frame_in orelse return R.code(error.InvalidArgument);
+    const scene = scene_in orelse return R.code(error.InvalidArgument);
+    const camera = camera_in orelse return R.code(error.InvalidArgument);
+    const view_space = view_space_in orelse return R.code(error.InvalidArgument);
+    if (render_prepare == null) return R.code(error.InvalidArgument);
+    if (render_queue == null) return R.code(error.InvalidArgument);
     const values = settings_schema.read(Config, settings orelse {
         log.warn("cluster pass: no settings", .{});
         return R.code(error.InvalidArgument);
@@ -449,16 +466,21 @@ export fn ke_render_cluster_create(context_in: ?*const abi_render_context.c.ke_r
     const given = &values;
     const cm = gpa.create(ClusterModule) catch |err| return R.code(err);
     cm.* = .{};
-    setup(cm, p, given) catch |err| {
+    setup(cm, service, device, frame, scene, camera, view_space, given) catch |err| {
         destroyModule(cm);
         gpa.destroy(cm);
         return R.code(err);
     };
-    cm.systems.init(.{
-        .{ .name = "render.cluster.buffers", .execute = prepareSystem, .user = cm, .set = .prepare, .access = &cm.access },
-        .{ .name = "render.cull", .execute = queueSystem, .user = cm, .set = .queue, .queries = &cm.cull_queries, .access = &cm.access },
-    });
-    out.* = .{ .ref = &cm.systems.module, .destroy = destroyHandle };
+    const registered = cm.systems.register(.{
+        .{ .name = "render.cluster.buffers", .execute = prepareSystem, .user = cm, .hook = 0, .access = &cm.access },
+        .{ .name = "render.cull", .execute = queueSystem, .user = cm, .hook = 1, .queries = &cm.cull_queries, .access = &cm.access },
+    }, &.{ .{ .schedule = render_prepare, .set = render_prepare_set }, .{ .schedule = render_queue, .set = render_queue_set } });
+    if (registered != R.ok) {
+        destroyModule(cm);
+        gpa.destroy(cm);
+        return registered;
+    }
+    out.* = .{ .ref = cm, .destroy = destroyOwner };
     return R.ok;
 }
 
@@ -533,14 +555,8 @@ const Rig = struct {
         self.dev.deinit();
     }
 
-    fn context(self: *Rig) abi_render_context.c.ke_render_context {
-        return std.mem.zeroInit(abi_render_context.c.ke_render_context, .{ .scene = &test_scene, .frame = self.frame.api(), .service = self.core.api(), .device = self.dev.api(), .camera = self.camera.api(), .view_space = &self.view_space });
-    }
-
-    fn targets(self: *Rig) abi_module.c.ke_module_targets {
-        var t = std.mem.zeroes(abi_module.c.ke_module_targets);
-        t.render = @ptrCast(self.schedule.api());
-        return t;
+    fn create(self: *Rig, settings: ?*abi_settings.c.ke_settings, out: *abi_part.c.ke_owner) abi_result.c.ke_result {
+        return ke_render_cluster_create(self.core.api(), self.dev.api(), self.frame.api(), &test_scene, self.camera.api(), &self.view_space, self.schedule.api(), 4, self.schedule.api(), 5, settings, out);
     }
 
     fn expectReleased(self: *Rig) !void {
@@ -553,20 +569,16 @@ const Rig = struct {
 
 var test_settings = settings_schema.Fixed.init(&.{ .{ .key = "grid_x", .value = .{ .int = 4 } }, .{ .key = "grid_y", .value = .{ .int = 4 } }, .{ .key = "grid_z", .value = .{ .int = 4 } }, .{ .key = "max_lights_per_cluster", .value = .{ .int = 8 } } });
 
-fn passOf(h: abi_module.c.ke_module_handle) *ClusterModule {
-    const systems: *pass_systems.Systems(2) = @ptrCast(@alignCast(h.ref.?.handle));
-    return @fieldParentPtr("systems", systems);
+fn passOf(h: abi_part.c.ke_owner) *ClusterModule {
+    return @ptrCast(@alignCast(h.ref.?));
 }
 
-test "the cluster module attaches its two systems to the render schedule, and destroying it detaches them and releases the GPU objects" {
+test "the cluster pass registers its two systems in its hooks, and destroying it unregisters them and releases the GPU objects" {
     var rig: Rig = undefined;
     try rig.init();
     defer rig.deinit();
-    const p = rig.context();
-    var h: abi_module.c.ke_module_handle = undefined;
-    try R.check(ke_render_cluster_create(&p, &test_settings.api, &h));
-    const t = rig.targets();
-    try R.check(h.ref.?.attach.?(h.ref, &t));
+    var h: abi_part.c.ke_owner = undefined;
+    try R.check(rig.create(&test_settings.api, &h));
     try rig.schedule.received(.register_system).times(2);
     h.destroy.?(h.ref);
     try rig.schedule.received(.unregister_system).times(2);
@@ -577,9 +589,8 @@ test "the cluster publishes every buffer of its result, and declares the cull at
     var rig: Rig = undefined;
     try rig.init();
     defer rig.deinit();
-    const p = rig.context();
-    var h: abi_module.c.ke_module_handle = undefined;
-    try R.check(ke_render_cluster_create(&p, &test_settings.api, &h));
+    var h: abi_part.c.ke_owner = undefined;
+    try R.check(rig.create(&test_settings.api, &h));
     defer h.destroy.?(h.ref);
     try testing.expectEqual(R.ok, prepareSystem(&empty_ctx, passOf(h), 0));
     try rig.frame.received(.publish).times(cluster_buffers.len);
@@ -591,10 +602,9 @@ test "a cluster setting of zero is refused and releases what it had created" {
     var rig: Rig = undefined;
     try rig.init();
     defer rig.deinit();
-    const p = rig.context();
-    var bad = settings_schema.Fixed.init(&.{.{ .key = "grid_z", .value = .{ .int = 0 } }});
-    var h: abi_module.c.ke_module_handle = undefined;
-    try testing.expectError(error.InvalidArgument, R.check(ke_render_cluster_create(&p, &bad.api, &h)));
+        var bad = settings_schema.Fixed.init(&.{.{ .key = "grid_z", .value = .{ .int = 0 } }});
+    var h: abi_part.c.ke_owner = undefined;
+    try testing.expectError(error.InvalidArgument, R.check(rig.create(&bad.api, &h)));
     try testing.expect(h.ref == null);
     try rig.expectReleased();
 }
@@ -603,10 +613,8 @@ test "a cluster pass missing its camera is refused as an invalid argument" {
     var rig: Rig = undefined;
     try rig.init();
     defer rig.deinit();
-    var p = rig.context();
-    p.camera = null;
-    var h: abi_module.c.ke_module_handle = undefined;
-    try testing.expectError(error.InvalidArgument, R.check(ke_render_cluster_create(&p, &test_settings.api, &h)));
+    var h: abi_part.c.ke_owner = undefined;
+    try testing.expectError(error.InvalidArgument, R.check(ke_render_cluster_create(rig.core.api(), rig.dev.api(), rig.frame.api(), &test_scene, null, &rig.view_space, rig.schedule.api(), 4, rig.schedule.api(), 5, &test_settings.api, &h)));
 }
 
 test "creating and destroying cluster passes leaves no block allocated" {

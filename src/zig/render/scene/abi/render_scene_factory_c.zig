@@ -5,8 +5,8 @@ const abi_ecs = @import("ecs");
 const abi_extraction = @import("extraction");
 const abi_logger = @import("logger");
 const abi_module = @import("module");
+const abi_part = @import("part");
 const abi_render = @import("render");
-const abi_render_context = @import("render_context");
 const abi_render_graph = @import("render_graph");
 const abi_render_ui = @import("render_ui");
 const abi_result = @import("result");
@@ -63,6 +63,13 @@ pub const ke_render_graph_condition_fn = ?*const fn (?*anyopaque) callconv(.c) b
 /// Receives the bytes of a resource the pass declared READBACK, once the frame retires.
 pub const ke_render_graph_readback_fn = ?*const fn (?*anyopaque, ke_render_graph_resource, ?*const anyopaque, usize) callconv(.c) void;
 
+/// Receives one line a plugin library logged. Each plugin library exports ` <library
+/// >_set_log_callback(ke_log_callback callback, void *ctx)`, declared in its ` <library
+/// >_log.h`; the host sets it once, before the library logs, and a NULL callback sends the
+/// library's lines to stderr, which is also where they go until it is set. Called on whichever
+/// thread logged.
+pub const ke_log_callback = ?*const fn (?*anyopaque, abi_logger.c.ke_log_level, ?[*:0]const u8, ?[*:0]const u8) callconv(.c) void;
+
 /// A structural operation applied when the queue holding it is drained. `user` points at the
 /// copy of the payload passed to defer; `ecs` is the live world. A failure is returned, and the
 /// queue stops there: the operations recorded after it are dropped.
@@ -77,16 +84,10 @@ pub const ke_schedule_execute_fn = ?*const fn (?*abi_schedule.c.ke_schedule_ctx,
 /// on the thread that called run. A failure fails the run before any wave starts.
 pub const ke_schedule_condition_fn = ?*const fn (?*anyopaque, ?*bool) callconv(.c) abi_result.c.ke_result;
 
-/// Receives one line a plugin library logged. Each plugin library exports ` <library
-/// >_set_log_callback(ke_log_callback callback, void *ctx)`, declared in its ` <library
-/// >_log.h`; the host sets it once, before the library logs, and a NULL callback sends the
-/// library's lines to stderr, which is also where they go until it is set. Called on whichever
-/// thread logged.
-pub const ke_log_callback = ?*const fn (?*anyopaque, abi_logger.c.ke_log_level, ?[*:0]const u8, ?[*:0]const u8) callconv(.c) void;
-
-/// Makes the label resolve. Attached, its system "render.label.resolve" gives each label of the
-/// main world, in the update set, the font it names.
-pub extern fn ke_render_label_resolve_create(context: ?*const abi_render_context.c.ke_render_context, ui: ?*abi_render_ui.c.ke_render_ui, resolver: ?*abi_asset_resolver.c.ke_asset_resolver, settings: ?*abi_settings.c.ke_settings, out_module: ?*abi_module.c.ke_module_handle) abi_result.c.ke_result;
+/// Makes the label resolve, whose system "render.label.resolve", in update_set of update, gives
+/// each label of the main world the font it names. Every argument but out_resolve must outlive
+/// it.
+pub extern fn ke_render_label_resolve_create(service: ?*abi_render.c.ke_render_service, scene: ?*abi_render.c.ke_render_scene_resolve, ui: ?*abi_render_ui.c.ke_render_ui, resolver: ?*abi_asset_resolver.c.ke_asset_resolver, update: ?*abi_schedule.c.ke_schedule, update_set: ke_schedule_set_id, settings: ?*abi_settings.c.ke_settings, out_resolve: ?*abi_part.c.ke_owner) abi_result.c.ke_result;
 
 /// Sends every line ke_render_scene logs to callback, with ctx; a NULL callback sends them back
 /// to stderr, where they go until this is called. Called once, before the library logs.

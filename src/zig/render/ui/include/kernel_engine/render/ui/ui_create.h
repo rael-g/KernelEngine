@@ -2,7 +2,8 @@
 #define KERNEL_ENGINE_RENDER_UI_UI_CREATE_H_
 
 #include <kernel_engine/result/result.h>
-#include <kernel_engine/render/context.h>
+#include <kernel_engine/ecs/ke_ecs.h>
+#include <kernel_engine/extraction/extraction.h>
 #include <kernel_engine/ecs/ecs.h>
 #include <kernel_engine/render/frame.h>
 #include <kernel_engine/render/scene_resolve.h>
@@ -29,14 +30,15 @@ extern "C"
 {
 #endif
 
-    /// Makes the ui pass and registers its quad and label components in the main and the render world,
-    /// with a copy of each in the extraction. Its systems come from ke_render_ui_systems_create.
-    /// @param context [borrowed] The parts the pass is built on; read during the call.
+    /// Makes the ui pass and registers its quad and label components in @p main and @p render, with a copy of
+    /// each in @p extraction. Its systems come from ke_render_ui_systems_create. Every argument but @p out_ui
+    /// must outlive the pass.
     /// @param out_ui [out] Receives the handle; left zeroed on failure.
-    /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT when the context or a part the pass uses is NULL; the
-    ///         code of the world, the extraction or the GPU object that failed.
-    KE_RENDER_UI_API ke_result ke_render_ui_create(const ke_render_context *context,
-                                                   ke_render_ui_handle *out_ui);
+    /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a NULL pointer; the code of the world, the extraction or
+    ///         the GPU object that failed.
+    KE_RENDER_UI_API ke_result ke_render_ui_create(
+        ke_ecs *main, ke_ecs *render, ke_extraction *extraction, ke_render_service *service, ke_gpu_device *device,
+        ke_render_frame *frame, ke_render_ui_handle *out_ui);
 
 #ifdef __cplusplus
 }

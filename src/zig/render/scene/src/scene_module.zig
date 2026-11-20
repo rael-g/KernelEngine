@@ -13,8 +13,8 @@ const log = std.log.scoped(.render_scene);
 pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @import("log").Destination("ke_render_scene").logFn };
 
 pub const abi_ecs = @import("abi_ecs");
+const abi_part = @import("abi_part");
 const abi_render = @import("abi_render");
-const abi_render_context = @import("abi_render_context");
 const abi_render_scene_factory = @import("abi_render_scene_factory");
 const abi_render_ui_factory = @import("abi_render_ui_factory");
 const abi_render_ui = @import("abi_render_ui");
@@ -215,58 +215,26 @@ export fn ke_render_scene_resolve_systems_create(scene: ?*abi_render.c.ke_render
     return R.ok;
 }
 
-/// The state of one label resolve, which is its own module. The factory allocates it and
-/// `destroyLabel` frees it. The schedule receives `state` as the context of the system, and its
-/// query points into it, so it is not moved after creation. `destroyLabel` detaches it first.
+/// The state of one label resolve. The factory allocates it and `destroyLabel` frees it. The schedule receives
+/// `state` as the context of the system, and its query points into it, so it is not moved after creation.
 const LabelResolve = struct {
-    module: abi_module.c.ke_module,
     state: label_resolve.State,
-    schedule: ?*abi_schedule.c.ke_schedule = null,
+    schedule: *abi_schedule.c.ke_schedule,
     system: abi_schedule.c.ke_schedule_system_id = 0,
-    set: [1]abi_schedule.c.ke_schedule_set_id = .{0},
+    set: [1]abi_schedule.c.ke_schedule_set_id,
     terms: [1]abi_ecs.c.ke_ecs_query_term,
     queries: [1]abi_ecs.c.ke_ecs_query_desc,
 };
 
-fn labelOf(self: ?*abi_module.c.ke_module) ?*LabelResolve {
-    return @ptrCast(@alignCast((self orelse return null).handle));
+/// The `destroy` of the owner `ke_render_label_resolve_create` hands out: unregisters the system and frees the
+/// resolve; a null argument is ignored.
+fn destroyLabel(ref: ?*anyopaque) callconv(.c) void {
+    const st: *LabelResolve = @ptrCast(@alignCast(ref orelse return));
+    _ = st.schedule.unregister_system.?(st.schedule, st.system);
+    freeLabel(st);
 }
 
-/// Slot `attach` of the label resolve: "render.label.resolve" in the update set.
-fn attachLabel(self: ?*abi_module.c.ke_module, targets_in: ?*const abi_module.c.ke_module_targets) callconv(.c) abi_result.c.ke_result {
-    const st = labelOf(self) orelse return R.code(error.InvalidArgument);
-    const targets = targets_in orelse return R.code(error.InvalidArgument);
-    if (st.schedule != null) return R.code(error.NotSupported);
-    const schedule: *abi_schedule.c.ke_schedule = @ptrCast(targets.update orelse return R.code(error.InvalidArgument));
-    st.set = .{targets.update_set};
-    const label: abi_schedule.c.ke_schedule_system_desc = .{
-        .name = "render.label.resolve",
-        .user_data = &st.state,
-        .execute = label_resolve.system,
-        .queries = &st.queries,
-        .query_count = st.queries.len,
-        .sets = &st.set,
-        .set_count = 1,
-    };
-    const registered = schedule.register_system.?(schedule, &label, &st.system);
-    if (registered != R.ok) return registered;
-    st.schedule = schedule;
-    return R.ok;
-}
-
-/// Slot `detach` of the label resolve.
-fn detachLabel(self: ?*abi_module.c.ke_module) callconv(.c) void {
-    const st = labelOf(self) orelse return;
-    const schedule = st.schedule orelse return;
-    _ = schedule.unregister_system.?(schedule, st.system);
-    st.schedule = null;
-}
-
-/// The `destroy` slot of the handle `ke_render_label_resolve_create` returns; a null argument is
-/// ignored.
-fn destroyLabel(self: ?*abi_module.c.ke_module) callconv(.c) void {
-    const st = labelOf(self) orelse return;
-    detachLabel(self);
+fn freeLabel(st: *LabelResolve) void {
     if (st.state.default_font) |d| gpa.free(d);
     gpa.destroy(st);
 }
@@ -277,22 +245,32 @@ const LabelSettings = struct {
     default_font: [:0]const u8 = "",
 };
 
-/// The factory declared in label_resolve_create.h. A missing context, scene, service, ui or
-/// settings, or a setting the schema refuses, fails as an invalid argument and a failed allocation
-/// as out of memory.
-export fn ke_render_label_resolve_create(context_in: ?*const abi_render_context.c.ke_render_context, ui_in: ?*abi_render_ui.c.ke_render_ui, resolver: ?*abi_asset_resolver.c.ke_asset_resolver, settings: ?*abi_settings.c.ke_settings, out_module: ?*abi_module.c.ke_module_handle) callconv(.c) abi_result.c.ke_result {
-    const out = out_module orelse return R.code(error.InvalidArgument);
-    out.* = std.mem.zeroes(abi_module.c.ke_module_handle);
-    const p = context_in orelse return R.code(error.InvalidArgument);
-    const core = p.service orelse return R.code(error.InvalidArgument);
+/// The factory declared in label_resolve_create.h. A missing service, scene, ui, update schedule or settings,
+/// or a setting the schema refuses, fails as an invalid argument, a failed allocation as out of memory, and a
+/// refused system with the schedule's code.
+export fn ke_render_label_resolve_create(
+    service_in: ?*abi_render.c.ke_render_service,
+    scene_in: ?*abi_render.c.ke_render_scene_resolve,
+    ui_in: ?*abi_render_ui.c.ke_render_ui,
+    resolver: ?*abi_asset_resolver.c.ke_asset_resolver,
+    update_in: ?*abi_schedule.c.ke_schedule,
+    update_set: abi_schedule.c.ke_schedule_set_id,
+    settings: ?*abi_settings.c.ke_settings,
+    out_resolve: ?*abi_part.c.ke_owner,
+) callconv(.c) abi_result.c.ke_result {
+    const out = out_resolve orelse return R.code(error.InvalidArgument);
+    out.* = .{ .ref = null, .destroy = null };
+    const core = service_in orelse return R.code(error.InvalidArgument);
+    const scene = scene_in orelse return R.code(error.InvalidArgument);
     const ui = ui_in orelse return R.code(error.InvalidArgument);
-    const scene = p.scene orelse return R.code(error.InvalidArgument);
+    const update = update_in orelse return R.code(error.InvalidArgument);
     const values = settings_schema.read(LabelSettings, settings orelse return R.code(error.InvalidArgument)) catch |err| return R.code(err);
 
     const st = gpa.create(LabelResolve) catch |err| return R.code(err);
     st.* = .{
-        .module = .{ .handle = st, .attach = attachLabel, .detach = detachLabel },
         .state = .{ .core = core, .ui = ui, .resolver = resolver },
+        .schedule = update,
+        .set = .{update_set},
         .terms = .{.{ .component = scene.component_ids.?(scene).?.*.label, .access = abi_ecs.c.KE_ECS_ACCESS_WRITE }},
         .queries = undefined,
     };
@@ -301,7 +279,21 @@ export fn ke_render_label_resolve_create(context_in: ?*const abi_render_context.
         gpa.destroy(st);
         return R.code(err);
     };
-    out.* = .{ .ref = &st.module, .destroy = destroyLabel };
+    const label: abi_schedule.c.ke_schedule_system_desc = .{
+        .name = "render.label.resolve",
+        .user_data = &st.state,
+        .execute = label_resolve.system,
+        .queries = &st.queries,
+        .query_count = st.queries.len,
+        .sets = &st.set,
+        .set_count = 1,
+    };
+    const registered = update.register_system.?(update, &label, &st.system);
+    if (registered != R.ok) {
+        freeLabel(st);
+        return registered;
+    }
+    out.* = .{ .ref = st, .destroy = destroyLabel };
     return R.ok;
 }
 
@@ -416,16 +408,13 @@ test "a scene resolve missing its extraction is refused as an invalid argument" 
 
 var default_font = settings_schema.Fixed.init(&.{.{ .key = "default_font", .value = .{ .string = "res://default.ttf" } }});
 
-test "the label resolve attaches its system to the update set, and detaching removes it" {
+test "the label resolve registers its system in its update hook, and destroying it unregisters it" {
     var rig: Rig = undefined;
     try rig.init();
     defer rig.deinit();
     var ui = std.mem.zeroes(abi_render_ui.c.ke_render_ui);
-    const p = std.mem.zeroInit(abi_render_context.c.ke_render_context, .{ .service = rig.core.api(), .scene = &test_scene });
-    var m: abi_module.c.ke_module_handle = undefined;
-    try R.check(ke_render_label_resolve_create(&p, &ui, null, &default_font.api, &m));
-    const t = rig.targets();
-    try R.check(m.ref.?.attach.?(m.ref, &t));
+    var m: abi_part.c.ke_owner = undefined;
+    try R.check(ke_render_label_resolve_create(rig.core.api(), &test_scene, &ui, null, rig.schedule.api(), 4, &default_font.api, &m));
     try rig.schedule.received(.register_system).times(1);
     m.destroy.?(m.ref);
     try rig.schedule.received(.unregister_system).times(1);
@@ -435,9 +424,8 @@ test "a label resolve missing its ui is refused as an invalid argument" {
     var rig: Rig = undefined;
     try rig.init();
     defer rig.deinit();
-    const p = std.mem.zeroInit(abi_render_context.c.ke_render_context, .{ .service = rig.core.api(), .scene = &test_scene });
-    var m: abi_module.c.ke_module_handle = undefined;
-    try testing.expectError(error.InvalidArgument, R.check(ke_render_label_resolve_create(&p, null, null, &default_font.api, &m)));
+    var m: abi_part.c.ke_owner = undefined;
+    try testing.expectError(error.InvalidArgument, R.check(ke_render_label_resolve_create(rig.core.api(), &test_scene, null, null, rig.schedule.api(), 4, &default_font.api, &m)));
     try testing.expect(m.ref == null);
 }
 

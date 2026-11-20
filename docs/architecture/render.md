@@ -15,21 +15,21 @@ part works inside is on the generated page of its file. Contracts are under `src
 | camera | `ke_render_camera` | camera | `ke_view_space`, the clip-space convention | view and projection matrices from a camera component |
 | scene | `ke_render_scene_resolve` | scene | the main and the render world, `ke_extraction`, service | the scene's component ids in both worlds, and the meshes, sprites and fonts they name |
 | frame | `ke_render_frame` | frame | the render world, graph, service, camera, scene | the frame every pass declares into, and its begin and end |
-| pass | `ke_module` | one plugin per pass | `ke_render_context` | the passes it declares into the frame |
+| pass | `ke_owner` | one plugin per pass | the service, device, frame and scene it uses, and the schedule and set of each hook | the passes it declares into the frame |
 
 No plugin composes the renderer. The host creates the service, the graph, the camera, the scene,
-the frame and the passes it wants, and attaches the modules of each.
+the frame and the passes it wants, giving each pass the schedule and set of each of its hooks.
 
 ## What ties the parts together
 
 **Passes read the render world.** `ke_extraction` copies the scene's components from the main
-world into the render world at the start of each run of the render schedule; an entity carrying
+world into the render world when the scheduler runs it, before the render schedule; an entity carrying
 a drawable component gets a pair there. The scene's systems run in the main world and resolve
 names into handles before the copy.
 
-**A pass is a module of the render schedule.** Attached, it registers its systems in the render
-sets of `ke_module_targets`: what it makes for others in `render_prepare_set`, its passes in
-`render_queue_set`. The frame's systems take `render_begin_set` and `render_submit_set`.
+**A pass registers its systems when it is made.** Its factory takes a schedule and a set per
+hook: `render_prepare` for what it makes for others, `render_queue` for its passes; destroying the
+pass unregisters them. The frame's systems take `render_begin` and `render_submit`.
 
 **The graph orders the passes.** A pass declares to `ke_render_graph` the resources it uses and a
 record callback. The graph orders passes by their uses, then by injection point, which is the

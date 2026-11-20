@@ -149,11 +149,11 @@ typedef struct renderer
     ke_render_scene_resolve_handle scene;
     ke_render_frame_handle frame;
     ke_module_handle frame_systems;
-    ke_module_handle shadow;
-    ke_module_handle cluster;
-    ke_module_handle gbuffer;
-    ke_module_handle deferred;
-    ke_module_handle tonemap;
+    ke_owner shadow;
+    ke_owner cluster;
+    ke_owner gbuffer;
+    ke_owner deferred;
+    ke_owner tonemap;
     ke_schedule_set_id sets[4];
 } renderer;
 
@@ -173,24 +173,20 @@ static void renderer_compose(renderer *r, ke_ecs *main_world, ke_ecs *render_wor
         clear, &r->frame));
     check("frame systems", ke_render_frame_systems_create(r->frame.ref, &r->frame_systems));
 
-    const ke_render_context context = {
-        .ecs = render_world, .main = main_world, .extraction = extraction, .service = core, .device = gpu, .view_space = r->view_space.ref,
-        .camera = r->camera.ref, .scene = r->scene.ref, .frame = r->frame.ref,
-    };
-    check("shadow pass", ke_render_shadow_create(&context, unset, &r->shadow));
-    check("cluster pass", ke_render_cluster_create(&context, unset, &r->cluster));
-    check("gbuffer pass", ke_render_gbuffer_create(&context, &r->gbuffer));
-    check("deferred lighting pass", ke_render_deferred_lighting_create(&context, unset, &r->deferred));
-    check("tonemap pass", ke_render_tonemap_create(&context, &r->tonemap));
-
     const char *names[4] = { "render_begin", "render_prepare", "render_queue", "render_submit" };
     for (int i = 0; i < 4; ++i)
         check("render set", schedule->register_set(schedule, &(ke_schedule_set_desc){ .name = names[i], .after = i ? &r->sets[i - 1] : NULL, .after_count = i ? 1u : 0u }, &r->sets[i]));
+    ke_schedule_set_id prepare = r->sets[1], queue = r->sets[2];
+    check("shadow pass", ke_render_shadow_create(core, gpu, r->frame.ref, r->scene.ref, r->view_space.ref, schedule, prepare, schedule, queue, unset, &r->shadow));
+    check("cluster pass", ke_render_cluster_create(core, gpu, r->frame.ref, r->scene.ref, r->camera.ref, r->view_space.ref, schedule, prepare, schedule, queue, unset, &r->cluster));
+    check("gbuffer pass", ke_render_gbuffer_create(core, gpu, r->frame.ref, r->scene.ref, schedule, prepare, schedule, queue, &r->gbuffer));
+    check("deferred lighting pass", ke_render_deferred_lighting_create(core, gpu, r->frame.ref, r->scene.ref, schedule, queue, unset, &r->deferred));
+    check("tonemap pass", ke_render_tonemap_create(core, gpu, r->frame.ref, schedule, queue, &r->tonemap));
+
     const ke_module_targets targets = {
         .render = schedule, .render_begin_set = r->sets[0], .render_prepare_set = r->sets[1], .render_queue_set = r->sets[2], .render_submit_set = r->sets[3],
     };
-    ke_module *modules[] = { r->frame_systems.ref, r->shadow.ref, r->cluster.ref, r->gbuffer.ref, r->deferred.ref, r->tonemap.ref };
-    for (size_t i = 0; i < sizeof modules / sizeof modules[0]; ++i) check("attach", modules[i]->attach(modules[i], &targets));
+    check("attach", r->frame_systems.ref->attach(r->frame_systems.ref, &targets));
 }
 
 static void renderer_destroy(renderer *r)

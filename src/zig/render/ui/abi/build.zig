@@ -10,7 +10,6 @@ pub fn build(b: *std.Build) void {
     abi.addImport("logger", b.dependency("abi_logger", .{}).module("abi"));
     abi.addImport("module", b.dependency("abi_module", .{}).module("abi"));
     abi.addImport("render", b.dependency("abi_render", .{}).module("abi"));
-    abi.addImport("render_context", b.dependency("abi_render_context", .{}).module("abi"));
     abi.addImport("render_frame", b.dependency("abi_render_frame", .{}).module("abi"));
     abi.addImport("render_gpu", b.dependency("abi_render_gpu", .{}).module("abi"));
     abi.addImport("render_graph", b.dependency("abi_render_graph", .{}).module("abi"));
@@ -43,7 +42,6 @@ pub fn build(b: *std.Build) void {
     translated.addIncludePath(b.path("../../../../c/settings"));
     translated.addIncludePath(b.path("../../../../c/spatial"));
     translated.addIncludePath(b.path("../../../../c/text"));
-    translated.addIncludePath(b.path("../../../../c/view"));
     const tests = b.addTest(.{ .root_module = b.createModule(.{
         .root_source_file = b.path("layout_test.zig"),
         .link_libc = true,
@@ -72,6 +70,5 @@ pub fn build(b: *std.Build) void {
     tests.root_module.addIncludePath(b.path("../../../../c/settings"));
     tests.root_module.addIncludePath(b.path("../../../../c/spatial"));
     tests.root_module.addIncludePath(b.path("../../../../c/text"));
-    tests.root_module.addIncludePath(b.path("../../../../c/view"));
     b.step("test", "Check the render_ui_factory ABI against its headers").dependOn(&b.addRunArtifact(tests).step);
 }
