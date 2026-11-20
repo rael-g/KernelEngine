@@ -5,8 +5,8 @@
 
 namespace KernelEngine.Render.Webgpu;
 
-/// <summary>Creates the module of scene: attaching it registers, in the main world's update set, "render.sprite2d.resolve" and "render.mesh.resolve", the second after the first, which give a sprite and a mesh the GPU resources they name.</summary>
-public sealed unsafe partial class RenderSceneResolveSystemsModule : KernelEngine.Module.Module
+/// <summary>Registers the systems of scene, which give a sprite and a mesh the GPU resources they name: "render.sprite2d.resolve" in update_set of update and "render.mesh.resolve" in post_update_set of post_update, after it. Every argument but out_systems must outlive the systems.</summary>
+public sealed unsafe partial class RenderSceneResolveSystems : IDisposable
 {
 
     /// <summary>Turns a result code into the exception that carries it, and back.</summary>
@@ -50,18 +50,50 @@ public sealed unsafe partial class RenderSceneResolveSystemsModule : KernelEngin
         }
     }
 
-    /// <summary>Creates the module of scene: attaching it registers, in the main world's update set, "render.sprite2d.resolve" and "render.mesh.resolve", the second after the first, which give a sprite and a mesh the GPU resources they name.</summary>
-    /// <param name="scene">Created by this library; must outlive the module.</param>
-    public RenderSceneResolveSystemsModule(KernelEngine.Render.INativeRenderSceneResolve scene) : base(Create(scene))
+    /// <summary>Registers the systems of scene, which give a sprite and a mesh the GPU resources they name: "render.sprite2d.resolve" in update_set of update and "render.mesh.resolve" in post_update_set of post_update, after it. Every argument but out_systems must outlive the systems.</summary>
+    /// <param name="scene">Created by this library.</param>
+    /// <param name="update"></param>
+    /// <param name="updateSet"></param>
+    /// <param name="postUpdate"></param>
+    /// <param name="postUpdateSet"></param>
+    public RenderSceneResolveSystems(KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Schedule.INativeSchedule update, uint updateSet, KernelEngine.Schedule.INativeSchedule postUpdate, uint postUpdateSet) : this(Create(scene, update, updateSet, postUpdate, postUpdateSet))
     {
         Hold(scene.Owner);
+        Hold(update.Owner);
+        Hold(postUpdate.Owner);
     }
 
-    private static KernelEngine.Module.Native.ke_module_handle Create(KernelEngine.Render.INativeRenderSceneResolve scene)
+    private KernelEngine.Part.Native.ke_owner _handle;
+
+    private readonly List<global::System.Runtime.InteropServices.SafeHandle> _held = new();
+
+    private RenderSceneResolveSystems(KernelEngine.Part.Native.ke_owner handle) => _handle = handle;
+
+    private void Hold(global::System.Runtime.InteropServices.SafeHandle? owner)
+    {
+        if (owner is null) return;
+        var added = false;
+        owner.DangerousAddRef(ref added);
+        _held.Add(owner);
+    }
+
+    /// <summary>Releases the native object, then what it held.</summary>
+    public void Dispose()
+    {
+        if (_handle.@ref == null) return;
+        _handle.destroy(_handle.@ref);
+        _handle = default;
+        foreach (var held in _held) held.DangerousRelease();
+        _held.Clear();
+    }
+
+    private static KernelEngine.Part.Native.ke_owner Create(KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Schedule.INativeSchedule update, uint updateSet, KernelEngine.Schedule.INativeSchedule postUpdate, uint postUpdateSet)
     {
         ArgumentNullException.ThrowIfNull(scene);
-        KernelEngine.Module.Native.ke_module_handle handle;
-        NativeResult.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_scene_resolve_systems_create(scene.Native, &handle), "ke_render_scene_resolve_systems_create");
+        ArgumentNullException.ThrowIfNull(update);
+        ArgumentNullException.ThrowIfNull(postUpdate);
+        KernelEngine.Part.Native.ke_owner handle;
+        NativeResult.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_scene_resolve_systems_create(scene.Native, update.Native, updateSet, postUpdate.Native, postUpdateSet, &handle), "ke_render_scene_resolve_systems_create");
         return handle;
     }
 }

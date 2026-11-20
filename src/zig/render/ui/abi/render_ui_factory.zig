@@ -3,7 +3,7 @@
 const abi_ecs = @import("ecs");
 const abi_extraction = @import("extraction");
 const abi_logger = @import("logger");
-const abi_module = @import("module");
+const abi_part = @import("part");
 const abi_render = @import("render");
 const abi_render_frame = @import("render_frame");
 const abi_render_gpu = @import("render_gpu");
@@ -34,12 +34,12 @@ pub fn renderUiCreate(main: ?*abi_ecs.c.ke_ecs, render: ?*abi_ecs.c.ke_ecs, extr
     return written;
 }
 
-/// Creates the module of ui: attaching it registers, in the render schedule, "render.ui.labels"
-/// in the render prepare set, which lays out each label's text, and "render.ui" in the render
-/// queue set, which declares, at KE_RENDER_STAGE_OVERLAY, the pass drawing the quads and the
-/// labels over the frame's colour.
-pub fn renderUiSystemsCreate(ui: ?*abi_render_ui.c.ke_render_ui) Error!abi_module.c.ke_module_handle {
-    var written: abi_module.c.ke_module_handle = undefined;
-    try checkResult(c.ke_render_ui_systems_create(ui, &written));
+/// Registers the systems of ui: "render.ui.labels" in render_prepare_set of render_prepare,
+/// which lays out each label's text, and "render.ui" in render_queue_set of render_queue, which
+/// declares, at KE_RENDER_STAGE_OVERLAY, the pass drawing the quads and the labels over the
+/// frame's colour. Every argument but out_systems must outlive the systems.
+pub fn renderUiSystemsCreate(ui: ?*abi_render_ui.c.ke_render_ui, render_prepare: ?*abi_schedule.c.ke_schedule, render_prepare_set: c.ke_schedule_set_id, render_queue: ?*abi_schedule.c.ke_schedule, render_queue_set: c.ke_schedule_set_id) Error!abi_part.c.ke_owner {
+    var written: abi_part.c.ke_owner = undefined;
+    try checkResult(c.ke_render_ui_systems_create(ui, render_prepare, render_prepare_set, render_queue, render_queue_set, &written));
     return written;
 }

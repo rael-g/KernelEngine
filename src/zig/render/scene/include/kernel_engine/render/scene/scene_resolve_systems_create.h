@@ -1,7 +1,8 @@
 #ifndef KERNEL_ENGINE_RENDER_SCENE_SCENE_RESOLVE_SYSTEMS_CREATE_H_
 #define KERNEL_ENGINE_RENDER_SCENE_SCENE_RESOLVE_SYSTEMS_CREATE_H_
 
-#include <kernel_engine/module/module.h>
+#include <kernel_engine/part/part.h>
+#include <kernel_engine/schedule/schedule.h>
 #include <kernel_engine/result/result.h>
 #include <kernel_engine/render/scene_resolve.h>
 
@@ -22,13 +23,16 @@ extern "C"
 {
 #endif
 
-    /// Creates the module of @p scene: attaching it registers, in the main world's update set,
-    /// "render.sprite2d.resolve" and "render.mesh.resolve", the second after the first, which give a
-    /// sprite and a mesh the GPU resources they name.
-    /// @param scene [borrowed] Created by this library; must outlive the module.
-    /// @param out_module [out] Receives the module; left zeroed on failure.
-    /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null argument; KE_RESULT_OUT_OF_MEMORY.
-    KE_RENDER_SCENE_API ke_result ke_render_scene_resolve_systems_create(ke_render_scene_resolve *scene, ke_module_handle *out_module);
+    /// Registers the systems of @p scene, which give a sprite and a mesh the GPU resources they name:
+    /// "render.sprite2d.resolve" in @p update_set of @p update and "render.mesh.resolve" in @p post_update_set of
+    /// @p post_update, after it. Every argument but @p out_systems must outlive the systems.
+    /// @param scene Created by this library.
+    /// @param out_systems [out] Receives the systems, whose destroy unregisters them; left zeroed on failure.
+    /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a NULL pointer; KE_RESULT_NOT_SUPPORTED when the systems of
+    ///         @p scene are registered; the code of the schedule that refused a system.
+    KE_RENDER_SCENE_API ke_result ke_render_scene_resolve_systems_create(
+        ke_render_scene_resolve *scene, ke_schedule *update, ke_schedule_set_id update_set, ke_schedule *post_update,
+        ke_schedule_set_id post_update_set, ke_owner *out_systems);
 
 #ifdef __cplusplus
 }

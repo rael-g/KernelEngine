@@ -23,7 +23,7 @@ const settings_schema = @import("settings_schema");
 const abi_schedule = @import("abi_schedule");
 const abi_spatial = @import("abi_spatial");
 const abi_view = @import("abi_view");
-const pass_systems = @import("pass_systems");
+const hooked_systems = @import("hooked_systems");
 const R = @import("result").Result(.{});
 /// The pass's settings, with this implementation's defaults.
 const Config = struct {
@@ -95,7 +95,7 @@ const written = [_]usize{ 2, 3, 4, 5 };
 /// are assigned by `setup`; the GPU fields are the invalid handle until their own creation succeeds.
 /// `resources` are the published buffers of the frame, imported by `prepareSystem`.
 const ClusterModule = struct {
-    systems: pass_systems.Systems(2) = .{},
+    systems: hooked_systems.Systems(2) = .{},
     core: *abi_render.c.ke_render_service = undefined,
     device: *abi_render_gpu.c.ke_gpu_device = undefined,
     frame: *abi_render_frame.c.ke_render_frame = undefined,

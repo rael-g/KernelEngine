@@ -4,7 +4,6 @@ const abi_asset_resolver = @import("asset_resolver");
 const abi_ecs = @import("ecs");
 const abi_extraction = @import("extraction");
 const abi_logger = @import("logger");
-const abi_module = @import("module");
 const abi_part = @import("part");
 const abi_render = @import("render");
 const abi_render_graph = @import("render_graph");
@@ -97,7 +96,8 @@ pub extern fn ke_render_scene_set_log_callback(callback: ke_log_callback, ctx: ?
 /// of each in the extraction. Its systems come from ke_render_scene_resolve_systems_create.
 pub extern fn ke_render_scene_resolve_create(main: ?*abi_ecs.c.ke_ecs, render: ?*abi_ecs.c.ke_ecs, extraction: ?*abi_extraction.c.ke_extraction, service: ?*abi_render.c.ke_render_service, resolver: ?*abi_asset_resolver.c.ke_asset_resolver, out_resolve: ?*abi_render.c.ke_render_scene_resolve_handle) abi_result.c.ke_result;
 
-/// Creates the module of scene: attaching it registers, in the main world's update set,
-/// "render.sprite2d.resolve" and "render.mesh.resolve", the second after the first, which give a
-/// sprite and a mesh the GPU resources they name.
-pub extern fn ke_render_scene_resolve_systems_create(scene: ?*abi_render.c.ke_render_scene_resolve, out_module: ?*abi_module.c.ke_module_handle) abi_result.c.ke_result;
+/// Registers the systems of scene, which give a sprite and a mesh the GPU resources they name:
+/// "render.sprite2d.resolve" in update_set of update and "render.mesh.resolve" in
+/// post_update_set of post_update, after it. Every argument but out_systems must outlive the
+/// systems.
+pub extern fn ke_render_scene_resolve_systems_create(scene: ?*abi_render.c.ke_render_scene_resolve, update: ?*abi_schedule.c.ke_schedule, update_set: ke_schedule_set_id, post_update: ?*abi_schedule.c.ke_schedule, post_update_set: ke_schedule_set_id, out_systems: ?*abi_part.c.ke_owner) abi_result.c.ke_result;

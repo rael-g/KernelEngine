@@ -1,6 +1,6 @@
 //! The UI pass: draws the render world's entities carrying a UI quad component or a label component
 //! as alpha-blended textured triangles over the frame's output, and shapes labels from registered
-//! fonts. It owns the creation and teardown of that pass and of its module, behind two factories.
+//! fonts. It owns the creation and teardown of that pass and of its systems, behind two factories.
 
 const abi_render_contract = @import("abi_render_contract");
 const abi_asset_resolver = @import("abi_asset_resolver");
@@ -18,7 +18,8 @@ const abi_render_ui_factory = @import("abi_render_ui_factory");
 const abi_render_ui = @import("abi_render_ui");
 const abi_result = @import("abi_result");
 const abi_schedule = @import("abi_schedule");
-const abi_module = @import("abi_module");
+const abi_part = @import("abi_part");
+const hooked_systems = @import("hooked_systems");
 const abi_render_frame = @import("abi_render_frame");
 const abi_render_graph = @import("abi_render_graph");
 const abi_extraction = @import("abi_extraction");
@@ -59,16 +60,13 @@ const UiFont = struct {
 
 /// Everything the pass owns. It is allocated by `ke_render_ui_create` and freed by `destroyHandle`,
 /// or by the create itself when it fails. The handle's reference is `api`, whose `handle` points
-/// back at the state, as does that of `module`. The query declarations are filled by the create and
-/// passed to the registrations by address. `vertices`, `batches` and `output` are rewritten by
-/// `queueSystem` on every frame, and read by `record` when the graph executes. `destroyHandle`
-/// detaches the module before it frees the state.
+/// back at the state. The query declarations are filled by the create and passed to the
+/// registrations by address. `vertices`, `batches` and `output` are rewritten by `queueSystem` on
+/// every frame, and read by `record` when the graph executes. `destroyHandle` unregisters the
+/// systems before it frees the state.
 const UiState = struct {
     api: abi_render_ui.c.ke_render_ui = undefined,
-    module: abi_module.c.ke_module = undefined,
-    schedule: ?*abi_schedule.c.ke_schedule = null,
-    systems: [2]abi_schedule.c.ke_schedule_system_id = .{ 0, 0 },
-    sets: [2]abi_schedule.c.ke_schedule_set_id = .{ 0, 0 },
+    systems: hooked_systems.Systems(2) = .{},
 
     core: *abi_render.c.ke_render_service = undefined,
     device: *abi_render_gpu.c.ke_gpu_device = undefined,
@@ -519,61 +517,16 @@ fn destroyState(ui: *UiState) void {
     }
 }
 
-/// Slot `attach` of the module: "render.ui.labels" in the render prepare set and "render.ui" in the
-/// render queue set, removing the first when the second is refused.
-fn attach(self: ?*abi_module.c.ke_module, targets_in: ?*const abi_module.c.ke_module_targets) callconv(.c) abi_result.c.ke_result {
-    const ui: *UiState = @ptrCast(@alignCast((self orelse return R.code(error.InvalidArgument)).handle));
-    const targets = targets_in orelse return R.code(error.InvalidArgument);
-    if (ui.schedule != null) return R.code(error.NotSupported);
-    const schedule: *abi_schedule.c.ke_schedule = @ptrCast(targets.render orelse return R.code(error.InvalidArgument));
-    ui.sets = .{ targets.render_prepare_set, targets.render_queue_set };
-    const shape: abi_schedule.c.ke_schedule_system_desc = .{
-        .name = "render.ui.labels",
-        .user_data = ui,
-        .execute = labelShapeSystem,
-        .queries = &ui.label_shape_queries,
-        .query_count = ui.label_shape_queries.len,
-        .sets = ui.sets[0..].ptr,
-        .set_count = 1,
-    };
-    const shaped = schedule.register_system.?(schedule, &shape, &ui.systems[0]);
-    if (shaped != R.ok) return shaped;
-    const draw: abi_schedule.c.ke_schedule_system_desc = .{
-        .name = "render.ui",
-        .user_data = ui,
-        .execute = queueSystem,
-        .queries = &ui.queries,
-        .query_count = ui.queries.len,
-        .access = &ui.access,
-        .access_count = ui.access.len,
-        .sets = ui.sets[1..].ptr,
-        .set_count = 1,
-    };
-    const drawn = schedule.register_system.?(schedule, &draw, &ui.systems[1]);
-    if (drawn != R.ok) {
-        _ = schedule.unregister_system.?(schedule, ui.systems[0]);
-        return drawn;
-    }
-    ui.schedule = schedule;
-    return R.ok;
-}
-
-/// Slot `detach` of the module.
-fn detach(self: ?*abi_module.c.ke_module) callconv(.c) void {
-    const ui: *UiState = @ptrCast(@alignCast((self orelse return).handle));
-    const schedule = ui.schedule orelse return;
-    for (ui.systems) |id| _ = schedule.unregister_system.?(schedule, id);
-    ui.schedule = null;
-}
-
-fn destroyModule(self: ?*abi_module.c.ke_module) callconv(.c) void {
-    detach(self);
+/// The `destroy` of the owner `ke_render_ui_systems_create` hands out: unregisters both systems; the pass stays.
+fn destroySystems(ref: ?*anyopaque) callconv(.c) void {
+    const ui: *UiState = @ptrCast(@alignCast(ref orelse return));
+    ui.systems.unregister();
 }
 
 /// The destroy slot of the handle that `ke_render_ui_create` returns.
 fn destroyHandle(self: ?*abi_render_ui.c.ke_render_ui) callconv(.c) void {
     const ui = stateOf(self orelse return);
-    detach(&ui.module);
+    ui.systems.unregister();
     destroyState(ui);
     gpa.destroy(ui);
 }
@@ -604,7 +557,6 @@ export fn ke_render_ui_create(
     const ui = gpa.create(UiState) catch |err| return R.code(err);
     ui.* = .{};
     ui.api = .{ .handle = ui, .load_font = uiLoadFont };
-    ui.module = .{ .handle = ui, .attach = attach, .detach = detach };
     register(ui, main, render, extraction, service, device, frame) catch |err| {
         destroyState(ui);
         gpa.destroy(ui);
@@ -640,13 +592,27 @@ fn register(ui: *UiState, main: *abi_ecs.c.ke_ecs, render: *abi_ecs.c.ke_ecs, ex
     ui.label_shape_queries = .{.{ .terms = ui.label_shape_queries_terms[0..].ptr, .term_count = 1 }};
 }
 
-/// The factory declared in ui_systems_create.h: the module is a view of the pass, destroyed with
-/// it or on its own.
-export fn ke_render_ui_systems_create(ui_in: ?*abi_render_ui.c.ke_render_ui, out_module: ?*abi_module.c.ke_module_handle) callconv(.c) abi_result.c.ke_result {
-    const out = out_module orelse return R.code(error.InvalidArgument);
-    out.* = std.mem.zeroes(abi_module.c.ke_module_handle);
+/// The factory declared in ui_systems_create.h: registers "render.ui.labels" in the prepare hook and "render.ui"
+/// in the queue hook, removing the first when the second is refused. A pass whose systems are registered refuses
+/// another registration as not supported.
+export fn ke_render_ui_systems_create(
+    ui_in: ?*abi_render_ui.c.ke_render_ui,
+    render_prepare: ?*abi_schedule.c.ke_schedule,
+    render_prepare_set: abi_schedule.c.ke_schedule_set_id,
+    render_queue: ?*abi_schedule.c.ke_schedule,
+    render_queue_set: abi_schedule.c.ke_schedule_set_id,
+    out_systems: ?*abi_part.c.ke_owner,
+) callconv(.c) abi_result.c.ke_result {
+    const out = out_systems orelse return R.code(error.InvalidArgument);
+    out.* = .{ .ref = null, .destroy = null };
     const ui = stateOf(ui_in orelse return R.code(error.InvalidArgument));
-    out.* = .{ .ref = &ui.module, .destroy = destroyModule };
+    if (ui.systems.schedules[0] != null) return R.code(error.NotSupported);
+    const registered = ui.systems.register(.{
+        .{ .name = "render.ui.labels", .execute = labelShapeSystem, .user = ui, .hook = 0, .queries = &ui.label_shape_queries },
+        .{ .name = "render.ui", .execute = queueSystem, .user = ui, .hook = 1, .queries = &ui.queries, .access = &ui.access },
+    }, &.{ .{ .schedule = render_prepare, .set = render_prepare_set }, .{ .schedule = render_queue, .set = render_queue_set } });
+    if (registered != R.ok) return registered;
+    out.* = .{ .ref = ui, .destroy = destroySystems };
     return R.ok;
 }
 
@@ -729,10 +695,8 @@ const Rig = struct {
         return h;
     }
 
-    fn targets(self: *Rig) abi_module.c.ke_module_targets {
-        var t = std.mem.zeroes(abi_module.c.ke_module_targets);
-        t.render = @ptrCast(self.schedule.api());
-        return t;
+    fn systems(self: *Rig, h: abi_render_ui.c.ke_render_ui_handle, out: *abi_part.c.ke_owner) abi_result.c.ke_result {
+        return ke_render_ui_systems_create(h.ref, self.schedule.api(), 2, self.schedule.api(), 3, out);
     }
 
     fn expectReleased(self: *Rig) !void {
@@ -755,32 +719,29 @@ test "the ui pass registers its components in both worlds, copies them into the 
     try rig.expectReleased();
 }
 
-test "the ui module attaches its label and draw systems to the render prepare and queue sets, and detaching removes them" {
+test "the ui's label and draw systems join the prepare and queue hooks and leave with their owner" {
     var rig: Rig = undefined;
     try rig.init();
     defer rig.deinit();
     const h = try rig.ui();
     defer h.destroy.?(h.ref);
-    var m: abi_module.c.ke_module_handle = undefined;
-    try R.check(ke_render_ui_systems_create(h.ref, &m));
-    const t = rig.targets();
-    try R.check(m.ref.?.attach.?(m.ref, &t));
+    var m: abi_part.c.ke_owner = undefined;
+    try R.check(rig.systems(h, &m));
     try rig.schedule.received(.register_system).times(2);
     m.destroy.?(m.ref);
     try rig.schedule.received(.unregister_system).sameAs(rig.schedule.received(.register_system));
 }
 
-test "a ui module whose draw system the schedule refuses takes its label system back" {
+test "ui systems whose draw system the schedule refuses take the label system back" {
     var rig: Rig = undefined;
     try rig.init();
     defer rig.deinit();
     _ = rig.schedule.when(.register_system).returnsSeq(&.{ abi_result.c.KE_OK, abi_result.c.KE_RESULT_OUT_OF_MEMORY });
     const h = try rig.ui();
     defer h.destroy.?(h.ref);
-    var m: abi_module.c.ke_module_handle = undefined;
-    try R.check(ke_render_ui_systems_create(h.ref, &m));
-    const t = rig.targets();
-    try testing.expect(m.ref.?.attach.?(m.ref, &t) != R.ok);
+    var m: abi_part.c.ke_owner = undefined;
+    try testing.expect(rig.systems(h, &m) != R.ok);
+    try testing.expect(m.ref == null);
     try rig.schedule.received(.unregister_system).times(1);
 }
 

@@ -20,7 +20,7 @@ const abi_render_graph = @import("abi_render_graph");
 const abi_result = @import("abi_result");
 const abi_schedule = @import("abi_schedule");
 const abi_spatial = @import("abi_spatial");
-const pass_systems = @import("pass_systems");
+const hooked_systems = @import("hooked_systems");
 const R = @import("result").Result(.{});
 const log = std.log.scoped(.render_gbuffer);
 
@@ -94,7 +94,7 @@ const Prepared = struct {
 /// `targets` are the frame's, made by `prepareSystem`; `prepared` is rebuilt by `queueSystem` and
 /// read by `record`.
 const GBufferModule = struct {
-    systems: pass_systems.Systems(2) = .{},
+    systems: hooked_systems.Systems(2) = .{},
     core: *abi_render.c.ke_render_service = undefined,
     device: *abi_render_gpu.c.ke_gpu_device = undefined,
     frame: *abi_render_frame.c.ke_render_frame = undefined,

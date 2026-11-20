@@ -9,10 +9,11 @@ using global::KernelEngine.Text;
 
 using KernelEngine.Ecs.Native;
 using KernelEngine.Extraction.Native;
-using KernelEngine.Module.Native;
+using KernelEngine.Part.Native;
 using KernelEngine.Render.Frame.Native;
 using KernelEngine.Render.Native;
 using KernelEngine.Result.Native;
+using KernelEngine.Schedule.Native;
 
 namespace KernelEngine.Render.Webgpu.Native;
 
@@ -24,7 +25,7 @@ public static unsafe partial class NativeMethods
 
     [DllImport("ke_render_ui", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_render_ui_systems_create", ExactSpelling = true)]
     [return: NativeTypeName("ke_result")]
-    public static extern KernelEngine.Result.Native.Result render_ui_systems_create(ke_render_ui* ui, [NativeTypeName("ke_module_handle *")] KernelEngine.Module.Native.ke_module_handle* out_module);
+    public static extern KernelEngine.Result.Native.Result render_ui_systems_create(ke_render_ui* ui, [NativeTypeName("ke_schedule *")] KernelEngine.Schedule.Native.ke_schedule* render_prepare, [NativeTypeName("ke_schedule_set_id")] uint render_prepare_set, [NativeTypeName("ke_schedule *")] KernelEngine.Schedule.Native.ke_schedule* render_queue, [NativeTypeName("ke_schedule_set_id")] uint render_queue_set, [NativeTypeName("ke_owner *")] KernelEngine.Part.Native.ke_owner* out_systems);
 
     [DllImport("ke_render_ui", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_render_ui_set_log_callback", ExactSpelling = true)]
     public static extern void render_ui_set_log_callback([NativeTypeName("ke_log_callback")] delegate* unmanaged[Cdecl]<void*, global::KernelEngine.Logger.LogLevel, sbyte*, sbyte*, void> callback, void* ctx);

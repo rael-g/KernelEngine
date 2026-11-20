@@ -8,10 +8,11 @@ using global::KernelEngine.Text;
 
 using KernelEngine.Ecs.Native;
 using KernelEngine.Extraction.Native;
-using KernelEngine.Module.Native;
+using KernelEngine.Part.Native;
 using KernelEngine.Render.Frame.Native;
 using KernelEngine.Render.Native;
 using KernelEngine.Result.Native;
+using KernelEngine.Schedule.Native;
 
 namespace KernelEngine.Render.Webgpu.Native;
 

@@ -95,17 +95,16 @@ public static class DefaultCore
             Get<Configuration.Configuration>(sp).Section("render.frame")));
         services.TryAddSingleton<RenderUi>(sp => new DefaultRenderUi(Get<Ecs.EcsRegistry>(sp), RenderWorld(sp), Get<Extraction.Extraction>(sp), Get<RenderService>(sp), Get<Render.Gpu.GpuDevice>(sp), Get<Render.Frame.RenderFrame>(sp)));
 
-        void Pass<T>(Func<IServiceProvider, T> make) where T : Module.Module => services.TryAddEnumerable(ServiceDescriptor.Singleton<Module.Module, T>(make));
-        Pass(sp => new RenderSceneResolveSystemsModule(Get<RenderSceneResolve>(sp)));
-        Pass(sp => new RenderFrameSystemsModule(Get<Render.Frame.RenderFrame>(sp)));
         void Hook(Func<IServiceProvider, EngineSchedules, EngineSets, IDisposable> make) => services.AddSingleton<Func<EngineSchedules, EngineSets, IDisposable>>(sp => (schedules, sets) => make(sp, schedules, sets));
+        Hook((sp, schedules, sets) => new RenderSceneResolveSystems(Get<RenderSceneResolve>(sp), schedules.Update, sets.Update, schedules.Update, sets.PostUpdate));
+        Hook((sp, schedules, sets) => new RenderFrameSystems(Get<Render.Frame.RenderFrame>(sp), schedules.Render!, sets.RenderBegin, schedules.Render!, sets.RenderSubmit));
         Hook((sp, schedules, sets) => new RenderShadow(Get<RenderService>(sp), Get<Render.Gpu.GpuDevice>(sp), Get<Render.Frame.RenderFrame>(sp), Get<RenderSceneResolve>(sp), Get<ViewSpace>(sp), schedules.Render!, sets.RenderPrepare, schedules.Render!, sets.RenderQueue, Get<Configuration.Configuration>(sp).Section("render.shadow")));
         Hook((sp, schedules, sets) => new RenderCluster(Get<RenderService>(sp), Get<Render.Gpu.GpuDevice>(sp), Get<Render.Frame.RenderFrame>(sp), Get<RenderSceneResolve>(sp), Get<RenderCamera>(sp), Get<ViewSpace>(sp), schedules.Render!, sets.RenderPrepare, schedules.Render!, sets.RenderQueue, Get<Configuration.Configuration>(sp).Section("render.cluster")));
         Hook((sp, schedules, sets) => new RenderGbuffer(Get<RenderService>(sp), Get<Render.Gpu.GpuDevice>(sp), Get<Render.Frame.RenderFrame>(sp), Get<RenderSceneResolve>(sp), schedules.Render!, sets.RenderPrepare, schedules.Render!, sets.RenderQueue));
         Hook((sp, schedules, sets) => new RenderDeferredLighting(Get<RenderService>(sp), Get<Render.Gpu.GpuDevice>(sp), Get<Render.Frame.RenderFrame>(sp), Get<RenderSceneResolve>(sp), schedules.Render!, sets.RenderQueue, Get<Configuration.Configuration>(sp).Section("render.deferred_lighting")));
         Hook((sp, schedules, sets) => new RenderForward(Get<RenderService>(sp), Get<Render.Gpu.GpuDevice>(sp), Get<Render.Frame.RenderFrame>(sp), Get<RenderSceneResolve>(sp), schedules.Render!, sets.RenderQueue, Get<Configuration.Configuration>(sp).Section("render.forward")));
         Hook((sp, schedules, sets) => new RenderTonemap(Get<RenderService>(sp), Get<Render.Gpu.GpuDevice>(sp), Get<Render.Frame.RenderFrame>(sp), schedules.Render!, sets.RenderQueue));
-        Pass(sp => new RenderUiSystemsModule(Get<RenderUi>(sp)));
+        Hook((sp, schedules, sets) => new RenderUiSystems(Get<RenderUi>(sp), schedules.Render!, sets.RenderPrepare, schedules.Render!, sets.RenderQueue));
         Hook((sp, schedules, sets) => new RenderLabelResolve(Get<RenderService>(sp), Get<RenderSceneResolve>(sp), Get<RenderUi>(sp), Get<AssetResolver>(sp), schedules.Update, sets.Update, Get<Configuration.Configuration>(sp).Section("render.label")));
         return services;
     }

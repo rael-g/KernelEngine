@@ -6,7 +6,7 @@
     .dependencies = .{
         .abi_settings = .{ .path = "../../abi/settings" },
         .ke_settings_schema = .{ .path = "../../settings/schema" },
-        .ke_render_pass_systems = .{ .path = "../pass_systems" },
+        .ke_hooked_systems = .{ .path = "../../hooked_systems" },
         .abi_completion = .{ .path = "../../abi/completion" },
         .abi_extraction = .{ .path = "../../abi/extraction" },
         .abi_render_graph = .{ .path = "../../abi/render_graph" },

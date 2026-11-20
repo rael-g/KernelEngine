@@ -3,7 +3,7 @@
 const abi_ecs = @import("ecs");
 const abi_extraction = @import("extraction");
 const abi_logger = @import("logger");
-const abi_module = @import("module");
+const abi_part = @import("part");
 const abi_render = @import("render");
 const abi_render_frame = @import("render_frame");
 const abi_render_gpu = @import("render_gpu");
@@ -66,6 +66,9 @@ pub const ke_render_graph_condition_fn = ?*const fn (?*anyopaque) callconv(.c) b
 /// Receives the bytes of a resource the pass declared READBACK, once the frame retires.
 pub const ke_render_graph_readback_fn = ?*const fn (?*anyopaque, ke_render_graph_resource, ?*const anyopaque, usize) callconv(.c) void;
 
+/// Receives one key the settings hold.
+pub const ke_settings_key_func = ?*const fn (?[*:0]const u8, ?*anyopaque) callconv(.c) void;
+
 /// A structural operation applied when the queue holding it is drained. `user` points at the
 /// copy of the payload passed to defer; `ecs` is the live world. A failure is returned, and the
 /// queue stops there: the operations recorded after it are dropped.
@@ -89,8 +92,8 @@ pub extern fn ke_render_ui_set_log_callback(callback: ke_log_callback, ctx: ?*an
 /// out_ui must outlive the pass.
 pub extern fn ke_render_ui_create(main: ?*abi_ecs.c.ke_ecs, render: ?*abi_ecs.c.ke_ecs, extraction: ?*abi_extraction.c.ke_extraction, service: ?*abi_render.c.ke_render_service, device: ?*abi_render_gpu.c.ke_gpu_device, frame: ?*abi_render_frame.c.ke_render_frame, out_ui: ?*abi_render_ui.c.ke_render_ui_handle) abi_result.c.ke_result;
 
-/// Creates the module of ui: attaching it registers, in the render schedule, "render.ui.labels"
-/// in the render prepare set, which lays out each label's text, and "render.ui" in the render
-/// queue set, which declares, at KE_RENDER_STAGE_OVERLAY, the pass drawing the quads and the
-/// labels over the frame's colour.
-pub extern fn ke_render_ui_systems_create(ui: ?*abi_render_ui.c.ke_render_ui, out_module: ?*abi_module.c.ke_module_handle) abi_result.c.ke_result;
+/// Registers the systems of ui: "render.ui.labels" in render_prepare_set of render_prepare,
+/// which lays out each label's text, and "render.ui" in render_queue_set of render_queue, which
+/// declares, at KE_RENDER_STAGE_OVERLAY, the pass drawing the quads and the labels over the
+/// frame's colour. Every argument but out_systems must outlive the systems.
+pub extern fn ke_render_ui_systems_create(ui: ?*abi_render_ui.c.ke_render_ui, render_prepare: ?*abi_schedule.c.ke_schedule, render_prepare_set: ke_schedule_set_id, render_queue: ?*abi_schedule.c.ke_schedule, render_queue_set: ke_schedule_set_id, out_systems: ?*abi_part.c.ke_owner) abi_result.c.ke_result;

@@ -11,7 +11,8 @@ pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @imp
 
 const abi_completion = @import("abi_completion");
 const abi_ecs = @import("abi_ecs");
-const abi_module = @import("abi_module");
+const abi_part = @import("abi_part");
+const hooked_systems = @import("hooked_systems");
 const abi_render = @import("abi_render");
 const abi_render_frame_factory = @import("abi_render_frame_factory");
 const abi_result = @import("abi_result");
@@ -80,11 +81,10 @@ const Published = struct {
 
 /// The state of one frame. The factory allocates it and `destroyFrame` frees it. The frame's
 /// resources and published names are those of the frame being declared, renewed by `beginSystem`;
-/// `live` is false until a frame begins with a view to draw into. The module's systems and queries
-/// point into it, so it is not moved after creation.
+/// `live` is false until a frame begins with a view to draw into. Its systems and queries point into
+/// it, so it is not moved after creation.
 const State = struct {
     api: Frame,
-    module: abi_module.c.ke_module,
     graph: *g.ke_render_graph,
     service: *abi_render.c.ke_render_service,
     producer: frame_producer.State,
@@ -99,19 +99,13 @@ const State = struct {
     output: g.ke_render_graph_resource = g.KE_RENDER_GRAPH_RESOURCE_INVALID,
     output_format: abi_render_gpu.c.ke_gpu_texture_format = abi_render_gpu.c.KE_GPU_TEXTURE_FORMAT_INVALID,
     published: std.ArrayList(Published) = .empty,
-    schedule: ?*abi_schedule.c.ke_schedule = null,
-    systems: [2]abi_schedule.c.ke_schedule_system_id = .{ 0, 0 },
-    sets: [2]abi_schedule.c.ke_schedule_set_id = .{ 0, 0 },
+    systems: hooked_systems.Systems(2) = .{},
     access: [1]abi_ecs.c.ke_ecs_query_term = undefined,
     query_terms: [4]abi_ecs.c.ke_ecs_query_term = undefined,
     queries: [3]abi_ecs.c.ke_ecs_query_desc = undefined,
 };
 
 fn stateOf(self: ?*Frame) ?*State {
-    return @ptrCast(@alignCast((self orelse return null).handle));
-}
-
-fn moduleStateOf(self: ?*abi_module.c.ke_module) ?*State {
     return @ptrCast(@alignCast((self orelse return null).handle));
 }
 
@@ -328,62 +322,17 @@ fn endSystem(_: ?*abi_schedule.c.ke_schedule_ctx, user: ?*anyopaque, _: f32) cal
     return st.service.*.end_frame.?(st.service);
 }
 
-/// Slot `attach`: registers "render.begin_frame" in the render begin set and "render.end_frame" in
-/// the render submit set, removing the first when the second is refused.
-fn attach(self: ?*abi_module.c.ke_module, targets_in: ?*const abi_module.c.ke_module_targets) callconv(.c) abi_result.c.ke_result {
-    const st = moduleStateOf(self) orelse return R.code(error.InvalidArgument);
-    const targets = targets_in orelse return R.code(error.InvalidArgument);
-    if (st.schedule != null) return R.code(error.NotSupported);
-    const schedule: *abi_schedule.c.ke_schedule = @ptrCast(targets.render orelse return R.code(error.InvalidArgument));
-    st.sets = .{ targets.render_begin_set, targets.render_submit_set };
-    const begin: abi_schedule.c.ke_schedule_system_desc = .{
-        .name = "render.begin_frame",
-        .user_data = st,
-        .execute = beginSystem,
-        .queries = &st.queries,
-        .query_count = st.queries.len,
-        .access = &st.access,
-        .access_count = st.access.len,
-        .sets = st.sets[0..].ptr,
-        .set_count = 1,
-    };
-    const registered = schedule.register_system.?(schedule, &begin, &st.systems[0]);
-    if (registered != R.ok) return registered;
-    const end: abi_schedule.c.ke_schedule_system_desc = .{
-        .name = "render.end_frame",
-        .user_data = st,
-        .execute = endSystem,
-        .access = &st.access,
-        .access_count = st.access.len,
-        .sets = st.sets[1..].ptr,
-        .set_count = 1,
-    };
-    const ended = schedule.register_system.?(schedule, &end, &st.systems[1]);
-    if (ended != R.ok) {
-        _ = schedule.unregister_system.?(schedule, st.systems[0]);
-        return ended;
-    }
-    st.schedule = schedule;
-    return R.ok;
+/// The `destroy` of the owner `ke_render_frame_systems_create` hands out: unregisters both systems; the frame
+/// stays.
+fn destroySystems(ref: ?*anyopaque) callconv(.c) void {
+    const st: *State = @ptrCast(@alignCast(ref orelse return));
+    st.systems.unregister();
 }
 
-/// Slot `detach`: unregisters both systems.
-fn detach(self: ?*abi_module.c.ke_module) callconv(.c) void {
-    const st = moduleStateOf(self) orelse return;
-    const schedule = st.schedule orelse return;
-    for (st.systems) |id| _ = schedule.unregister_system.?(schedule, id);
-    st.schedule = null;
-}
-
-/// The `destroy` of the module handle: detaches; the frame stays.
-fn destroyModule(self: ?*abi_module.c.ke_module) callconv(.c) void {
-    detach(self);
-}
-
-/// The `destroy` of the frame handle: detaches its module and frees the frame.
+/// The `destroy` of the frame handle: unregisters its systems and frees the frame.
 fn destroyFrame(self: ?*Frame) callconv(.c) void {
     const st = stateOf(self) orelse return;
-    detach(&st.module);
+    st.systems.unregister();
     forgetPublished(st);
     st.published.deinit(gpa);
     gpa.destroy(st);
@@ -424,7 +373,6 @@ fn create(e: *abi_ecs.c.ke_ecs, graph: *g.ke_render_graph, service: *abi_render.
             .depth_format = depthFormat,
             .output_format = outputFormat,
         },
-        .module = .{ .handle = st, .attach = attach, .detach = detach },
         .graph = graph,
         .service = service,
         .producer = .{ .core = service, .camera = camera },
@@ -452,13 +400,27 @@ fn create(e: *abi_ecs.c.ke_ecs, graph: *g.ke_render_graph, service: *abi_render.
     return st;
 }
 
-/// The factory declared in frame_systems_create.h: the module is a view of the frame, destroyed
-/// with it or on its own.
-export fn ke_render_frame_systems_create(frame: ?*Frame, out_module: ?*abi_module.c.ke_module_handle) callconv(.c) abi_result.c.ke_result {
-    const out = out_module orelse return R.code(error.InvalidArgument);
-    out.* = std.mem.zeroes(abi_module.c.ke_module_handle);
+/// The factory declared in frame_systems_create.h: registers "render.begin_frame" in the begin hook and
+/// "render.end_frame" in the submit hook, removing the first when the second is refused. A frame whose systems
+/// are registered refuses another registration as not supported.
+export fn ke_render_frame_systems_create(
+    frame: ?*Frame,
+    render_begin: ?*abi_schedule.c.ke_schedule,
+    render_begin_set: abi_schedule.c.ke_schedule_set_id,
+    render_submit: ?*abi_schedule.c.ke_schedule,
+    render_submit_set: abi_schedule.c.ke_schedule_set_id,
+    out_systems: ?*abi_part.c.ke_owner,
+) callconv(.c) abi_result.c.ke_result {
+    const out = out_systems orelse return R.code(error.InvalidArgument);
+    out.* = .{ .ref = null, .destroy = null };
     const st = stateOf(frame) orelse return R.code(error.InvalidArgument);
-    out.* = .{ .ref = &st.module, .destroy = destroyModule };
+    if (st.systems.schedules[0] != null) return R.code(error.NotSupported);
+    const registered = st.systems.register(.{
+        .{ .name = "render.begin_frame", .execute = beginSystem, .user = st, .hook = 0, .queries = &st.queries, .access = &st.access },
+        .{ .name = "render.end_frame", .execute = endSystem, .user = st, .hook = 1, .access = &st.access },
+    }, &.{ .{ .schedule = render_begin, .set = render_begin_set }, .{ .schedule = render_submit, .set = render_submit_set } });
+    if (registered != R.ok) return registered;
+    out.* = .{ .ref = st, .destroy = destroySystems };
     return R.ok;
 }
 
@@ -568,12 +530,9 @@ const Rig = struct {
         return h;
     }
 
-    fn attached(self: *Rig, frame_h: abi_render_frame.c.ke_render_frame_handle) !abi_module.c.ke_module_handle {
-        var m: abi_module.c.ke_module_handle = undefined;
-        try R.check(ke_render_frame_systems_create(frame_h.ref, &m));
-        var targets = std.mem.zeroes(abi_module.c.ke_module_targets);
-        targets.render = @ptrCast(self.schedule.api());
-        try R.check(m.ref.?.attach.?(m.ref, &targets));
+    fn registered(self: *Rig, frame_h: abi_render_frame.c.ke_render_frame_handle) !abi_part.c.ke_owner {
+        var m: abi_part.c.ke_owner = undefined;
+        try R.check(ke_render_frame_systems_create(frame_h.ref, self.schedule.api(), 1, self.schedule.api(), 4, &m));
         return m;
     }
 
@@ -598,29 +557,27 @@ fn stateOfHandle(h: abi_render_frame.c.ke_render_frame_handle) *State {
     return stateOf(h.ref).?;
 }
 
-test "the frame registers its tag, and its module attaches a system to the render begin and submit sets and detaches both" {
+test "the frame registers its tag, and its systems join the begin and submit hooks and leave with their owner" {
     var rig: Rig = undefined;
     try rig.init();
     defer rig.deinit();
     const h = rig.frame(&no_settings.api);
     try testing.expect(h.ref.?.frame_cid.?(h.ref) != abi_ecs.c.KE_COMPONENT_INVALID);
-    const m = try rig.attached(h);
+    const m = try rig.registered(h);
     try rig.schedule.received(.register_system).times(2);
     m.destroy.?(m.ref);
     try rig.schedule.received(.unregister_system).sameAs(rig.schedule.received(.register_system));
     h.destroy.?(h.ref);
 }
 
-test "a frame module attached without a render schedule is refused" {
+test "frame systems without a submit schedule are refused" {
     var rig: Rig = undefined;
     try rig.init();
     defer rig.deinit();
     const h = rig.frame(&no_settings.api);
     defer h.destroy.?(h.ref);
-    var m: abi_module.c.ke_module_handle = undefined;
-    try R.check(ke_render_frame_systems_create(h.ref, &m));
-    const targets = std.mem.zeroes(abi_module.c.ke_module_targets);
-    try testing.expectEqual(R.code(error.InvalidArgument), m.ref.?.attach.?(m.ref, &targets));
+    var m: abi_part.c.ke_owner = undefined;
+    try testing.expectEqual(R.code(error.InvalidArgument), ke_render_frame_systems_create(h.ref, rig.schedule.api(), 1, null, 4, &m));
     try rig.schedule.received(.register_system).never();
 }
 

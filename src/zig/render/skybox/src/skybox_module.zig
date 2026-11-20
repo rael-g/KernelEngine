@@ -21,7 +21,7 @@ const abi_schedule = @import("abi_schedule");
 const abi_part = @import("abi_part");
 const abi_render_frame = @import("abi_render_frame");
 const abi_render_graph = @import("abi_render_graph");
-const pass_systems = @import("pass_systems");
+const hooked_systems = @import("hooked_systems");
 const abi_spatial = @import("abi_spatial");
 const R = @import("result").Result(.{});
 const log = std.log.scoped(.render_skybox);
@@ -48,7 +48,7 @@ const shader_layout = abi_render_gpu.c.ke_render_shader_layout_desc{
 /// into its own arrays. `env_view` and `depth` are what `queueSystem` declared this frame, read by
 /// `record`.
 const SkyboxModule = struct {
-    systems: pass_systems.Systems(1) = .{},
+    systems: hooked_systems.Systems(1) = .{},
     frame: *abi_render_frame.c.ke_render_frame = undefined,
     env_view: abi_asset_resolver.c.ke_gpu_texture_view = abi_render_gpu.c.KE_GPU_INVALID_HANDLE,
     depth: rg.ke_render_graph_resource = rg.KE_RENDER_GRAPH_RESOURCE_INVALID,

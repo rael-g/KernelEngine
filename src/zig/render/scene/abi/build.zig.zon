@@ -8,7 +8,6 @@
         .abi_ecs = .{ .path = "../../../abi/ecs" },
         .abi_extraction = .{ .path = "../../../abi/extraction" },
         .abi_logger = .{ .path = "../../../abi/logger" },
-        .abi_module = .{ .path = "../../../abi/module" },
         .abi_part = .{ .path = "../../../abi/part" },
         .abi_render = .{ .path = "../../../abi/render" },
         .abi_render_graph = .{ .path = "../../../abi/render_graph" },

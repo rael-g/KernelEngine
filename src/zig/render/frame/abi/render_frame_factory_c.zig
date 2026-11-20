@@ -2,7 +2,7 @@
 
 const abi_ecs = @import("ecs");
 const abi_logger = @import("logger");
-const abi_module = @import("module");
+const abi_part = @import("part");
 const abi_render = @import("render");
 const abi_render_frame = @import("render_frame");
 const abi_render_graph = @import("render_graph");
@@ -54,6 +54,13 @@ pub const ke_render_graph_condition_fn = ?*const fn (?*anyopaque) callconv(.c) b
 /// Receives the bytes of a resource the pass declared READBACK, once the frame retires.
 pub const ke_render_graph_readback_fn = ?*const fn (?*anyopaque, ke_render_graph_resource, ?*const anyopaque, usize) callconv(.c) void;
 
+/// Receives one line a plugin library logged. Each plugin library exports ` <library
+/// >_set_log_callback(ke_log_callback callback, void *ctx)`, declared in its ` <library
+/// >_log.h`; the host sets it once, before the library logs, and a NULL callback sends the
+/// library's lines to stderr, which is also where they go until it is set. Called on whichever
+/// thread logged.
+pub const ke_log_callback = ?*const fn (?*anyopaque, abi_logger.c.ke_log_level, ?[*:0]const u8, ?[*:0]const u8) callconv(.c) void;
+
 /// A structural operation applied when the queue holding it is drained. `user` points at the
 /// copy of the payload passed to defer; `ecs` is the live world. A failure is returned, and the
 /// queue stops there: the operations recorded after it are dropped.
@@ -68,24 +75,17 @@ pub const ke_schedule_execute_fn = ?*const fn (?*abi_schedule.c.ke_schedule_ctx,
 /// on the thread that called run. A failure fails the run before any wave starts.
 pub const ke_schedule_condition_fn = ?*const fn (?*anyopaque, ?*bool) callconv(.c) abi_result.c.ke_result;
 
-/// Receives one line a plugin library logged. Each plugin library exports ` <library
-/// >_set_log_callback(ke_log_callback callback, void *ctx)`, declared in its ` <library
-/// >_log.h`; the host sets it once, before the library logs, and a NULL callback sends the
-/// library's lines to stderr, which is also where they go until it is set. Called on whichever
-/// thread logged.
-pub const ke_log_callback = ?*const fn (?*anyopaque, abi_logger.c.ke_log_level, ?[*:0]const u8, ?[*:0]const u8) callconv(.c) void;
-
 /// Makes the frame and registers the tag "render.frame" in ecs. Its systems come from
 /// ke_render_frame_systems_create.
 pub extern fn ke_render_frame_create(ecs: ?*abi_ecs.c.ke_ecs, graph: ?*abi_render_graph.c.ke_render_graph, service: ?*abi_render.c.ke_render_service, camera: ?*abi_render.c.ke_render_camera, scene: ?*abi_render.c.ke_render_scene_resolve, settings: ?*abi_settings.c.ke_settings, out_frame: ?*abi_render_frame.c.ke_render_frame_handle) abi_result.c.ke_result;
 
-/// Creates the module of frame: attaching it registers, in the render schedule,
-/// "render.begin_frame" in the render begin set, which begins the frame, publishes the frame
-/// globals and the scene's light and declares the clear of the frame's colour and depth, and
-/// "render.end_frame" in the render submit set, which copies the colour into the output when no
-/// pass claimed it, submits the uploads, executes the graph and presents. A frame the render
-/// target has nothing to draw into is neither declared nor executed.
-pub extern fn ke_render_frame_systems_create(frame: ?*abi_render_frame.c.ke_render_frame, out_module: ?*abi_module.c.ke_module_handle) abi_result.c.ke_result;
+/// Registers the systems of frame: "render.begin_frame" in render_begin_set of render_begin,
+/// which begins the frame, publishes the frame globals and the scene's light and declares the
+/// clear of the frame's colour and depth, and "render.end_frame" in render_submit_set of
+/// render_submit, which copies the colour into the output when no pass claimed it, submits the
+/// uploads, executes the graph and presents. A frame the render target has nothing to draw into
+/// is neither declared nor executed. Every argument but out_systems must outlive the systems.
+pub extern fn ke_render_frame_systems_create(frame: ?*abi_render_frame.c.ke_render_frame, render_begin: ?*abi_schedule.c.ke_schedule, render_begin_set: ke_schedule_set_id, render_submit: ?*abi_schedule.c.ke_schedule, render_submit_set: ke_schedule_set_id, out_systems: ?*abi_part.c.ke_owner) abi_result.c.ke_result;
 
 /// Sends every line ke_render_frame logs to callback, with ctx; a NULL callback sends them back
 /// to stderr, where they go until this is called. Called once, before the library logs.

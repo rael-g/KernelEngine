@@ -21,7 +21,7 @@ const abi_result = @import("abi_result");
 const abi_settings = @import("abi_settings");
 const settings_schema = @import("settings_schema");
 const abi_schedule = @import("abi_schedule");
-const pass_systems = @import("pass_systems");
+const hooked_systems = @import("hooked_systems");
 const R = @import("result").Result(.{});
 
 const heap = @import("heap");
@@ -43,7 +43,7 @@ const shader_layout = abi_render_gpu.c.ke_render_shader_layout_desc{
 /// what `queueSystem` found this frame, read by `record`, which replaces both sets each frame since
 /// every view it binds is the graph's for that frame.
 const DeferredLightingModule = struct {
-    systems: pass_systems.Systems(1) = .{},
+    systems: hooked_systems.Systems(1) = .{},
     core: *abi_render.c.ke_render_service = undefined,
     device: *abi_render_gpu.c.ke_gpu_device = undefined,
     frame: *abi_render_frame.c.ke_render_frame = undefined,

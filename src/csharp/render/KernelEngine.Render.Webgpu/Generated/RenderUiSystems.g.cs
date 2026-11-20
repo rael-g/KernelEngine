@@ -5,8 +5,8 @@
 
 namespace KernelEngine.Render.Webgpu;
 
-/// <summary>Creates the module of frame: attaching it registers, in the render schedule, "render.begin_frame" in the render begin set, which begins the frame, publishes the frame globals and the scene's light and declares the clear of the frame's colour and depth, and "render.end_frame" in the render submit set, which copies the colour into the output when no pass claimed it, submits the uploads, executes the graph and presents. A frame the render target has nothing to draw into is neither declared nor executed.</summary>
-public sealed unsafe partial class RenderFrameSystemsModule : KernelEngine.Module.Module
+/// <summary>Registers the systems of ui: "render.ui.labels" in render_prepare_set of render_prepare, which lays out each label's text, and "render.ui" in render_queue_set of render_queue, which declares, at KE_RENDER_STAGE_OVERLAY, the pass drawing the quads and the labels over the frame's colour. Every argument but out_systems must outlive the systems.</summary>
+public sealed unsafe partial class RenderUiSystems : IDisposable
 {
 
     /// <summary>Turns a result code into the exception that carries it, and back.</summary>
@@ -50,18 +50,50 @@ public sealed unsafe partial class RenderFrameSystemsModule : KernelEngine.Modul
         }
     }
 
-    /// <summary>Creates the module of frame: attaching it registers, in the render schedule, "render.begin_frame" in the render begin set, which begins the frame, publishes the frame globals and the scene's light and declares the clear of the frame's colour and depth, and "render.end_frame" in the render submit set, which copies the colour into the output when no pass claimed it, submits the uploads, executes the graph and presents. A frame the render target has nothing to draw into is neither declared nor executed.</summary>
-    /// <param name="frame">Created by this library; must outlive the module.</param>
-    public RenderFrameSystemsModule(KernelEngine.Render.Frame.INativeRenderFrame frame) : base(Create(frame))
+    /// <summary>Registers the systems of ui: "render.ui.labels" in render_prepare_set of render_prepare, which lays out each label's text, and "render.ui" in render_queue_set of render_queue, which declares, at KE_RENDER_STAGE_OVERLAY, the pass drawing the quads and the labels over the frame's colour. Every argument but out_systems must outlive the systems.</summary>
+    /// <param name="ui">Created by this library.</param>
+    /// <param name="renderPrepare"></param>
+    /// <param name="renderPrepareSet"></param>
+    /// <param name="renderQueue"></param>
+    /// <param name="renderQueueSet"></param>
+    public RenderUiSystems(KernelEngine.Render.Webgpu.INativeRenderUi ui, KernelEngine.Schedule.INativeSchedule renderPrepare, uint renderPrepareSet, KernelEngine.Schedule.INativeSchedule renderQueue, uint renderQueueSet) : this(Create(ui, renderPrepare, renderPrepareSet, renderQueue, renderQueueSet))
     {
-        Hold(frame.Owner);
+        Hold(ui.Owner);
+        Hold(renderPrepare.Owner);
+        Hold(renderQueue.Owner);
     }
 
-    private static KernelEngine.Module.Native.ke_module_handle Create(KernelEngine.Render.Frame.INativeRenderFrame frame)
+    private KernelEngine.Part.Native.ke_owner _handle;
+
+    private readonly List<global::System.Runtime.InteropServices.SafeHandle> _held = new();
+
+    private RenderUiSystems(KernelEngine.Part.Native.ke_owner handle) => _handle = handle;
+
+    private void Hold(global::System.Runtime.InteropServices.SafeHandle? owner)
     {
-        ArgumentNullException.ThrowIfNull(frame);
-        KernelEngine.Module.Native.ke_module_handle handle;
-        NativeResult.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_frame_systems_create(frame.Native, &handle), "ke_render_frame_systems_create");
+        if (owner is null) return;
+        var added = false;
+        owner.DangerousAddRef(ref added);
+        _held.Add(owner);
+    }
+
+    /// <summary>Releases the native object, then what it held.</summary>
+    public void Dispose()
+    {
+        if (_handle.@ref == null) return;
+        _handle.destroy(_handle.@ref);
+        _handle = default;
+        foreach (var held in _held) held.DangerousRelease();
+        _held.Clear();
+    }
+
+    private static KernelEngine.Part.Native.ke_owner Create(KernelEngine.Render.Webgpu.INativeRenderUi ui, KernelEngine.Schedule.INativeSchedule renderPrepare, uint renderPrepareSet, KernelEngine.Schedule.INativeSchedule renderQueue, uint renderQueueSet)
+    {
+        ArgumentNullException.ThrowIfNull(ui);
+        ArgumentNullException.ThrowIfNull(renderPrepare);
+        ArgumentNullException.ThrowIfNull(renderQueue);
+        KernelEngine.Part.Native.ke_owner handle;
+        NativeResult.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_ui_systems_create(ui.Native, renderPrepare.Native, renderPrepareSet, renderQueue.Native, renderQueueSet, &handle), "ke_render_ui_systems_create");
         return handle;
     }
 }

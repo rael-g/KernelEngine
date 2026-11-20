@@ -22,7 +22,7 @@ const abi_result = @import("abi_result");
 const abi_settings = @import("abi_settings");
 const settings_schema = @import("settings_schema");
 const abi_schedule = @import("abi_schedule");
-const abi_module = @import("abi_module");
+const hooked_systems = @import("hooked_systems");
 const abi_extraction = @import("abi_extraction");
 const abi_spatial = @import("abi_spatial");
 const R = @import("result").Result(.{});
@@ -34,16 +34,13 @@ const heap = @import("heap");
 const gpa = heap.gpa;
 
 /// The state of one scene resolve. The factory allocates it and `destroyScene` frees it. The
-/// schedule receives the core and `sprite` as the contexts of the two systems of `module`, and
-/// their queries point into it, so it is not moved after creation. `destroyScene` detaches the
-/// module before it frees the resolve.
+/// schedule receives the core and `sprite` as the contexts of its two systems, and their queries
+/// point into it, so it is not moved after creation. `destroyScene` unregisters the systems before
+/// it frees the resolve.
 const SceneResolve = struct {
     api: abi_render.c.ke_render_scene_resolve,
-    module: abi_module.c.ke_module,
     core: *abi_render.c.ke_render_service,
-    schedule: ?*abi_schedule.c.ke_schedule = null,
-    systems: [2]abi_schedule.c.ke_schedule_system_id = .{ 0, 0 },
-    sets: [2]abi_schedule.c.ke_schedule_set_id = .{ 0, 0 },
+    systems: hooked_systems.Systems(2) = .{},
     ids: abi_render.c.ke_render_scene_component_ids,
     render_ids: abi_render.c.ke_render_scene_component_ids,
     sprite: sprite_resolve.State,
@@ -54,10 +51,6 @@ const SceneResolve = struct {
 };
 
 fn sceneOf(self: ?*abi_render.c.ke_render_scene_resolve) ?*SceneResolve {
-    return @ptrCast(@alignCast((self orelse return null).handle));
-}
-
-fn sceneOfModule(self: ?*abi_module.c.ke_module) ?*SceneResolve {
     return @ptrCast(@alignCast((self orelse return null).handle));
 }
 
@@ -75,7 +68,7 @@ fn renderComponentIds(self: ?*abi_render.c.ke_render_scene_resolve) callconv(.c)
 /// ignored.
 fn destroyScene(self: ?*abi_render.c.ke_render_scene_resolve) callconv(.c) void {
     const st = sceneOf(self) orelse return;
-    detachScene(&st.module);
+    st.systems.unregister();
     gpa.destroy(st);
 }
 
@@ -133,7 +126,6 @@ export fn ke_render_scene_resolve_create(main_in: ?*abi_ecs.c.ke_ecs, render_in:
 fn registerScene(st: *SceneResolve, resolver: ?*abi_asset_resolver.c.ke_asset_resolver, main: *abi_ecs.c.ke_ecs, render: *abi_ecs.c.ke_ecs, extraction: *abi_extraction.c.ke_extraction, core: *abi_render.c.ke_render_service) R.Error!void {
     st.* = .{
         .api = .{ .handle = st, .component_ids = componentIds, .render_component_ids = renderComponentIds },
-        .module = .{ .handle = st, .attach = attachScene, .detach = detachScene },
         .core = core,
         .ids = undefined,
         .render_ids = undefined,
@@ -155,63 +147,35 @@ fn registerScene(st: *SceneResolve, resolver: ?*abi_asset_resolver.c.ke_asset_re
     st.mesh_queries = .{.{ .terms = st.mesh_terms[0..].ptr, .term_count = 1 }};
 }
 
-/// Slot `attach` of the scene's module: "render.sprite2d.resolve" in the update set and
-/// "render.mesh.resolve" in the post-update set, so the mesh a sprite was given is resolved in the
-/// same tick; the first is removed when the second is refused.
-fn attachScene(self: ?*abi_module.c.ke_module, targets_in: ?*const abi_module.c.ke_module_targets) callconv(.c) abi_result.c.ke_result {
-    const st = sceneOfModule(self) orelse return R.code(error.InvalidArgument);
-    const targets = targets_in orelse return R.code(error.InvalidArgument);
-    if (st.schedule != null) return R.code(error.NotSupported);
-    const schedule: *abi_schedule.c.ke_schedule = @ptrCast(targets.update orelse return R.code(error.InvalidArgument));
-    st.sets = .{ targets.update_set, targets.post_update_set };
-    const sprite: abi_schedule.c.ke_schedule_system_desc = .{
-        .name = "render.sprite2d.resolve",
-        .user_data = &st.sprite,
-        .execute = sprite_resolve.system,
-        .queries = &st.sprite_queries,
-        .query_count = st.sprite_queries.len,
-        .sets = st.sets[0..].ptr,
-        .set_count = 1,
-    };
-    const registered = schedule.register_system.?(schedule, &sprite, &st.systems[0]);
-    if (registered != R.ok) return registered;
-    const mesh: abi_schedule.c.ke_schedule_system_desc = .{
-        .name = "render.mesh.resolve",
-        .user_data = st.core,
-        .execute = mesh_resolve.system,
-        .queries = &st.mesh_queries,
-        .query_count = st.mesh_queries.len,
-        .sets = st.sets[1..].ptr,
-        .set_count = 1,
-    };
-    const meshed = schedule.register_system.?(schedule, &mesh, &st.systems[1]);
-    if (meshed != R.ok) {
-        _ = schedule.unregister_system.?(schedule, st.systems[0]);
-        return meshed;
-    }
-    st.schedule = schedule;
-    return R.ok;
+/// The `destroy` of the owner `ke_render_scene_resolve_systems_create` hands out: unregisters both systems; the
+/// resolve stays.
+fn destroySceneSystems(ref: ?*anyopaque) callconv(.c) void {
+    const st: *SceneResolve = @ptrCast(@alignCast(ref orelse return));
+    st.systems.unregister();
 }
 
-/// Slot `detach` of the scene's module.
-fn detachScene(self: ?*abi_module.c.ke_module) callconv(.c) void {
-    const st = sceneOfModule(self) orelse return;
-    const schedule = st.schedule orelse return;
-    for (st.systems) |id| _ = schedule.unregister_system.?(schedule, id);
-    st.schedule = null;
-}
-
-fn destroySceneModule(self: ?*abi_module.c.ke_module) callconv(.c) void {
-    detachScene(self);
-}
-
-/// The factory declared in scene_resolve_systems_create.h: the module is a view of the resolve,
-/// destroyed with it or on its own.
-export fn ke_render_scene_resolve_systems_create(scene: ?*abi_render.c.ke_render_scene_resolve, out_module: ?*abi_module.c.ke_module_handle) callconv(.c) abi_result.c.ke_result {
-    const out = out_module orelse return R.code(error.InvalidArgument);
-    out.* = std.mem.zeroes(abi_module.c.ke_module_handle);
+/// The factory declared in scene_resolve_systems_create.h: registers "render.sprite2d.resolve" in the update hook
+/// and "render.mesh.resolve" in the post-update hook, so the mesh a sprite was given is resolved in the same tick;
+/// the first is removed when the second is refused. A resolve whose systems are registered refuses another
+/// registration as not supported.
+export fn ke_render_scene_resolve_systems_create(
+    scene: ?*abi_render.c.ke_render_scene_resolve,
+    update: ?*abi_schedule.c.ke_schedule,
+    update_set: abi_schedule.c.ke_schedule_set_id,
+    post_update: ?*abi_schedule.c.ke_schedule,
+    post_update_set: abi_schedule.c.ke_schedule_set_id,
+    out_systems: ?*abi_part.c.ke_owner,
+) callconv(.c) abi_result.c.ke_result {
+    const out = out_systems orelse return R.code(error.InvalidArgument);
+    out.* = .{ .ref = null, .destroy = null };
     const st = sceneOf(scene) orelse return R.code(error.InvalidArgument);
-    out.* = .{ .ref = &st.module, .destroy = destroySceneModule };
+    if (st.systems.schedules[0] != null) return R.code(error.NotSupported);
+    const registered = st.systems.register(.{
+        .{ .name = "render.sprite2d.resolve", .execute = sprite_resolve.system, .user = &st.sprite, .hook = 0, .queries = &st.sprite_queries },
+        .{ .name = "render.mesh.resolve", .execute = mesh_resolve.system, .user = st.core, .hook = 1, .queries = &st.mesh_queries },
+    }, &.{ .{ .schedule = update, .set = update_set }, .{ .schedule = post_update, .set = post_update_set } });
+    if (registered != R.ok) return registered;
+    out.* = .{ .ref = st, .destroy = destroySceneSystems };
     return R.ok;
 }
 
@@ -340,10 +304,8 @@ const Rig = struct {
         return h;
     }
 
-    fn targets(self: *Rig) abi_module.c.ke_module_targets {
-        var t = std.mem.zeroes(abi_module.c.ke_module_targets);
-        t.update = @ptrCast(self.schedule.api());
-        return t;
+    fn systems(self: *Rig, h: abi_render.c.ke_render_scene_resolve_handle, out: *abi_part.c.ke_owner) abi_result.c.ke_result {
+        return ke_render_scene_resolve_systems_create(h.ref, self.schedule.api(), 4, self.schedule.api(), 5, out);
     }
 };
 
@@ -368,32 +330,29 @@ test "the scene resolve registers every component in both worlds, copies each in
     }
 }
 
-test "the scene's module registers both resolve systems in the update schedule and detaching removes them" {
+test "the scene's systems join the update and post-update hooks and leave with their owner" {
     var rig: Rig = undefined;
     try rig.init();
     defer rig.deinit();
     const h = rig.scene();
     defer h.destroy.?(h.ref);
-    var m: abi_module.c.ke_module_handle = undefined;
-    try R.check(ke_render_scene_resolve_systems_create(h.ref, &m));
-    const t = rig.targets();
-    try R.check(m.ref.?.attach.?(m.ref, &t));
+    var m: abi_part.c.ke_owner = undefined;
+    try R.check(rig.systems(h, &m));
     try rig.schedule.received(.register_system).times(2);
     m.destroy.?(m.ref);
     try rig.schedule.received(.unregister_system).sameAs(rig.schedule.received(.register_system));
 }
 
-test "a scene module whose mesh system the schedule refuses removes its sprite system and fails" {
+test "scene systems whose mesh system the schedule refuses remove the sprite system and fail" {
     var rig: Rig = undefined;
     try rig.init();
     defer rig.deinit();
     _ = rig.schedule.when(.register_system).returnsSeq(&.{ abi_result.c.KE_OK, abi_result.c.KE_RESULT_OUT_OF_MEMORY });
     const h = rig.scene();
     defer h.destroy.?(h.ref);
-    var m: abi_module.c.ke_module_handle = undefined;
-    try R.check(ke_render_scene_resolve_systems_create(h.ref, &m));
-    const t = rig.targets();
-    try testing.expect(m.ref.?.attach.?(m.ref, &t) != R.ok);
+    var m: abi_part.c.ke_owner = undefined;
+    try testing.expect(rig.systems(h, &m) != R.ok);
+    try testing.expect(m.ref == null);
     try rig.schedule.received(.unregister_system).times(1);
 }
 

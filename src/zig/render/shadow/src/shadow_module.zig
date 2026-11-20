@@ -23,7 +23,7 @@ const settings_schema = @import("settings_schema");
 const abi_schedule = @import("abi_schedule");
 const abi_spatial = @import("abi_spatial");
 const abi_view = @import("abi_view");
-const pass_systems = @import("pass_systems");
+const hooked_systems = @import("hooked_systems");
 const R = @import("result").Result(.{});
 const log = std.log.scoped(.render_shadow);
 
@@ -74,7 +74,7 @@ const Prepared = struct { vbo: abi_asset_resolver.c.ke_gpu_buffer, ibo: abi_asse
 /// frame's, made by `prepareSystem` when a light is in the render world; `prepared` is rebuilt by
 /// `queueSystem` and read by `record`.
 const ShadowModule = struct {
-    systems: pass_systems.Systems(2) = .{},
+    systems: hooked_systems.Systems(2) = .{},
     core: *abi_render.c.ke_render_service = undefined,
     device: *abi_render_gpu.c.ke_gpu_device = undefined,
     frame: *abi_render_frame.c.ke_render_frame = undefined,

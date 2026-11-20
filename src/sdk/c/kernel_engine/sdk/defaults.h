@@ -73,9 +73,9 @@ typedef struct ke_sdk_renderer
     ke_view_space_handle             view_space;
     ke_render_camera_handle          camera;
     ke_render_scene_resolve_handle   scene;
-    ke_module_handle                 scene_systems;
+    ke_owner                         scene_systems;
     ke_render_frame_handle           frame;
-    ke_module_handle                 frame_systems;
+    ke_owner                         frame_systems;
     ke_owner                         shadow;
     ke_owner                         cluster;
     ke_owner                         gbuffer;
@@ -83,7 +83,7 @@ typedef struct ke_sdk_renderer
     ke_owner                         forward;
     ke_owner                         tonemap;
     ke_render_ui_handle              ui;
-    ke_module_handle                 ui_systems;
+    ke_owner                         ui_systems;
     ke_owner                         labels;
 } ke_sdk_renderer;
 
@@ -235,7 +235,7 @@ static inline ke_result ke_sdk_scene_tree(ke_sdk_engine *e)
 
 /**
  * The render service, the render graph, and the camera, scene and frame every pass is built on, the frame cleared to
- * `render.clear_color`; the scene's systems and the frame's are modules of the engine. It needs the render stage, and
+ * `render.clear_color`; the scene's systems join the update schedule and the frame's the render schedule. It needs the render stage, and
  * starts the renderer of the ke_sdk_default_engine @p e is the engine of, which the engine then releases.
  */
 static inline ke_result ke_sdk_render_service(ke_sdk_engine *e)
@@ -250,12 +250,12 @@ static inline ke_result ke_sdk_render_service(ke_sdk_engine *e)
     if (made == KE_OK) made = ke_view_space_rh_create(&r->view_space);
     if (made == KE_OK) made = ke_render_camera_create(r->view_space.ref, gpu, &r->camera);
     if (made == KE_OK) made = ke_render_scene_resolve_create(e->ecs.ref, e->render_world.ref, e->extraction.ref, r->service.ref, NULL, &r->scene);
-    if (made == KE_OK) made = ke_render_scene_resolve_systems_create(r->scene.ref, &r->scene_systems);
-    if (made == KE_OK) made = ke_sdk_add_module(e, r->scene_systems.ref);
+    if (made == KE_OK) made = ke_render_scene_resolve_systems_create(r->scene.ref, e->schedules.update.ref, e->sets.update,
+        e->schedules.update.ref, e->sets.post_update, &r->scene_systems);
     if (made == KE_OK) made = ke_render_frame_create(e->render_world.ref, r->graph.ref, r->service.ref, r->camera.ref, r->scene.ref,
         ke_sdk_settings(e, "render.frame"), &r->frame);
-    if (made == KE_OK) made = ke_render_frame_systems_create(r->frame.ref, &r->frame_systems);
-    if (made == KE_OK) made = ke_sdk_add_module(e, r->frame_systems.ref);
+    if (made == KE_OK) made = ke_render_frame_systems_create(r->frame.ref, e->render_schedule.ref, e->sets.render_begin,
+        e->render_schedule.ref, e->sets.render_submit, &r->frame_systems);
     return made;
 }
 
@@ -317,8 +317,9 @@ static inline ke_result ke_sdk_ui(ke_sdk_engine *e)
 {
     ke_sdk_renderer *r = ke_sdk_renderer_of(e);
     ke_result made = ke_render_ui_create(e->ecs.ref, e->render_world.ref, e->extraction.ref, r->service.ref, e->gpu_device.ref, r->frame.ref, &r->ui);
-    if (made == KE_OK) made = ke_render_ui_systems_create(r->ui.ref, &r->ui_systems);
-    return made == KE_OK ? ke_sdk_add_module(e, r->ui_systems.ref) : made;
+    if (made == KE_OK) made = ke_render_ui_systems_create(r->ui.ref, e->render_schedule.ref, e->sets.render_prepare,
+        e->render_schedule.ref, e->sets.render_queue, &r->ui_systems);
+    return made;
 }
 
 /** The labels' text, laid out with the project's default font, drawn by the UI. */

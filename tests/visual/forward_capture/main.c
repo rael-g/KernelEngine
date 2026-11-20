@@ -148,7 +148,7 @@ typedef struct renderer
     ke_render_camera_handle camera;
     ke_render_scene_resolve_handle scene;
     ke_render_frame_handle frame;
-    ke_module_handle frame_systems;
+    ke_owner frame_systems;
     ke_owner shadow;
     ke_owner cluster;
     ke_owner gbuffer;
@@ -171,7 +171,6 @@ static void renderer_compose(renderer *r, ke_ecs *main_world, ke_ecs *render_wor
     check("scene resolve", ke_render_scene_resolve_create(main_world, render_world, extraction, core, NULL, &r->scene));
     check("frame", ke_render_frame_create(render_world, r->graph.ref, core, r->camera.ref, r->scene.ref,
         clear, &r->frame));
-    check("frame systems", ke_render_frame_systems_create(r->frame.ref, &r->frame_systems));
 
     const char *names[4] = { "render_begin", "render_prepare", "render_queue", "render_submit" };
     for (int i = 0; i < 4; ++i)
@@ -183,10 +182,7 @@ static void renderer_compose(renderer *r, ke_ecs *main_world, ke_ecs *render_wor
     check("deferred lighting pass", ke_render_deferred_lighting_create(core, gpu, r->frame.ref, r->scene.ref, schedule, queue, unset, &r->deferred));
     check("tonemap pass", ke_render_tonemap_create(core, gpu, r->frame.ref, schedule, queue, &r->tonemap));
 
-    const ke_module_targets targets = {
-        .render = schedule, .render_begin_set = r->sets[0], .render_prepare_set = r->sets[1], .render_queue_set = r->sets[2], .render_submit_set = r->sets[3],
-    };
-    check("attach", r->frame_systems.ref->attach(r->frame_systems.ref, &targets));
+    check("frame systems", ke_render_frame_systems_create(r->frame.ref, schedule, r->sets[0], schedule, r->sets[3], &r->frame_systems));
 }
 
 static void renderer_destroy(renderer *r)

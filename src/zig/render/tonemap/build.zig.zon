@@ -4,7 +4,7 @@
     .fingerprint = 0x6d34b09043939674,
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
-        .ke_render_pass_systems = .{ .path = "../pass_systems" },
+        .ke_hooked_systems = .{ .path = "../../hooked_systems" },
         .abi_completion = .{ .path = "../../abi/completion" },
         .abi_extraction = .{ .path = "../../abi/extraction" },
         .abi_render_graph = .{ .path = "../../abi/render_graph" },
