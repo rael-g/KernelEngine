@@ -30,7 +30,7 @@ const schedule_contract = "ke_schedule";
 
 const Binding = struct { slot: Name, target: Name };
 const Hooking = struct { hook: Name, schedule: Name, set: ?Name };
-const Order = struct { slot: Name, first: Name, then: Name };
+const Order = struct { slot: ?Name, first: Name, then: Name };
 const SetOrder = struct { first: Name, then: Name };
 const External = struct { contract: Name, ref: *anyopaque };
 const Problem = struct { failure: A.ke_assembly_failure, instance: ?Name, name: ?Name, detail: Name };
@@ -48,6 +48,7 @@ const Instance = struct {
     hookings: std.ArrayListUnmanaged(Hooking) = .empty,
     orders: std.ArrayListUnmanaged(Order) = .empty,
     slots: [][]usize = &.{},
+    positions: [][]usize = &.{},
     hooked: []Hooked = &.{},
     made: ?P.ke_owner = null,
 
@@ -241,7 +242,7 @@ fn hook(self: ?*A.ke_assembly, instance: ?[*:0]const u8, hook_name: ?[*:0]const 
 fn order(self: ?*A.ke_assembly, instance: ?[*:0]const u8, slot: ?[*:0]const u8, first: ?[*:0]const u8, then: ?[*:0]const u8) callconv(.c) abi_result.c.ke_result {
     return code(blk: {
         const s = gathering(self) catch |err| break :blk err;
-        const o = Order{ .slot = s.copy(slot) catch |err| break :blk err, .first = s.copy(first) catch |err| break :blk err, .then = s.copy(then) catch |err| break :blk err };
+        const o = Order{ .slot = if (slot != null) s.copy(slot) catch |err| break :blk err else null, .first = s.copy(first) catch |err| break :blk err, .then = s.copy(then) catch |err| break :blk err };
         const at = declared(s, instance) catch |err| break :blk err;
         break :blk at.orders.append(s.names(), o);
     });
@@ -387,6 +388,46 @@ fn resolveSlots(s: *State, report: *Report, at: usize) R.Error!void {
         }
         self.slots[k] = try orderSlot(s, report, self, slot_name, chosen.items);
     }
+    try positionSlots(s, report, at);
+}
+
+/// The position of every instance bound to a slot of the instance at `at`, among all of them: each slot's in its
+/// own order, and those the composition ordered across slots in that order.
+fn positionSlots(s: *State, report: *Report, at: usize) R.Error!void {
+    const self = &s.instances.items[at];
+    var offsets = try s.names().alloc(usize, self.slots.len + 1);
+    offsets[0] = 0;
+    for (self.slots, 0..) |targets, k| offsets[k + 1] = offsets[k] + targets.len;
+    const total = offsets[self.slots.len];
+    var edges: std.ArrayListUnmanaged([2]usize) = .empty;
+    for (self.slots, 0..) |targets, k| {
+        if (targets.len > 1) for (1..targets.len) |i| try edges.append(s.names(), .{ offsets[k] + i - 1, offsets[k] + i });
+    }
+    for (self.orders.items) |o| {
+        if (o.slot != null) continue;
+        const a = s.by_name.get(o.first);
+        const b = s.by_name.get(o.then);
+        var firsts: std.ArrayListUnmanaged(usize) = .empty;
+        var thens: std.ArrayListUnmanaged(usize) = .empty;
+        for (self.slots, 0..) |targets, k| for (targets, 0..) |t, i| {
+            if (a != null and t == a.?) try firsts.append(s.names(), offsets[k] + i);
+            if (b != null and t == b.?) try thens.append(s.names(), offsets[k] + i);
+        };
+        if (firsts.items.len == 0 or thens.items.len == 0) {
+            report.add(A.KE_ASSEMBLY_FAILURE_UNKNOWN_NAME, self.name, null, "{s} orders {s} before {s}, and both must be bound to its slots", .{ self.name, o.first, o.then });
+            continue;
+        }
+        for (firsts.items) |f| for (thens.items) |t| try edges.append(s.names(), .{ f, t });
+    }
+    const sorted = try s.names().alloc(usize, total);
+    if (!try topological(s.names(), total, edges.items, sorted)) {
+        report.add(A.KE_ASSEMBLY_FAILURE_CYCLE, self.name, null, "the orders across the slots of {s} contradict each other", .{self.name});
+        return;
+    }
+    const position = try s.names().alloc(usize, total);
+    for (sorted, 0..) |node, p| position[node] = p;
+    self.positions = try s.names().alloc([]usize, self.slots.len);
+    for (self.slots, 0..) |targets, k| self.positions[k] = position[offsets[k] .. offsets[k] + targets.len];
 }
 
 fn anyBinding(self: *const Instance, slot: []const u8) bool {
@@ -397,7 +438,8 @@ fn anyBinding(self: *const Instance, slot: []const u8) bool {
 fn orderSlot(s: *State, report: *Report, self: *const Instance, slot: []const u8, chosen: []const usize) R.Error![]usize {
     var edges: std.ArrayListUnmanaged([2]usize) = .empty;
     for (self.orders.items) |o| {
-        if (!std.mem.eql(u8, o.slot, slot)) continue;
+        const of = o.slot orelse continue;
+        if (!std.mem.eql(u8, of, slot)) continue;
         const a = indexIn(chosen, s.by_name.get(o.first) orelse std.math.maxInt(usize));
         const b = indexIn(chosen, s.by_name.get(o.then) orelse std.math.maxInt(usize));
         if (a == null or b == null) {
@@ -633,7 +675,7 @@ fn make(s: *State, at: usize) R.Error!void {
     for (self.slots, 0..) |targets, k| {
         const refs = try s.names().alloc(?*anyopaque, targets.len);
         for (targets, 0..) |t, i| refs[i] = s.instances.items[t].refFor(std.mem.span(slots[k].contract.?));
-        bound[k] = .{ .instances = if (refs.len > 0) @ptrCast(refs.ptr) else null, .count = refs.len };
+        bound[k] = .{ .instances = if (refs.len > 0) @ptrCast(refs.ptr) else null, .positions = if (refs.len > 0) &self.positions[k][0] else null, .count = refs.len };
     }
     const hooked = try s.names().alloc(P.ke_part_hooked, self.hooked.len);
     for (self.hooked, 0..) |h, k| {
@@ -793,6 +835,7 @@ const Probe = struct {
     var logs_set: usize = 0;
     var ready_done = true;
     var seen_settings: ?*abi_settings.c.ke_settings = null;
+    var seen_positions: [2][4]usize = undefined;
 
     fn reset() void {
         created_count = 0;
@@ -813,6 +856,10 @@ fn thingCreate(self: ?*const P.ke_part, bound: ?*const P.ke_part_bound, hooked: 
     const name = std.mem.span(part.name.?);
     if (Probe.fail_on) |f| if (std.mem.eql(u8, f, name)) return R.code(error.Io);
     if (bound) |b| {
+        const all: [*]const P.ke_part_bound = @ptrCast(b);
+        for (0..@min(part.slot_count, 2)) |k| if (all[k].count > 0) for (@as([*]const usize, @ptrCast(all[k].positions.?))[0..all[k].count], 0..) |pos, i| {
+            Probe.seen_positions[k][i] = pos;
+        };
         const first: *const P.ke_part_bound = b;
         Probe.seen_count = first.count;
         if (first.count > 0) for (@as([*]const ?*anyopaque, @ptrCast(first.instances))[0..first.count], 0..) |r, i| {
@@ -857,6 +904,11 @@ fn pumpProbe(_: ?*anyopaque) callconv(.c) void {
     Probe.pumps += 1;
 }
 
+const front_and_back = [_]P.ke_part_slot{
+    .{ .name = "front", .contract = "ke_gear", .cardinality = P.KE_PART_CARDINALITY_MANY },
+    .{ .name = "back", .contract = "ke_gear", .cardinality = P.KE_PART_CARDINALITY_MANY },
+};
+const gearbox = P.ke_part{ .name = "gearbox", .slots = &front_and_back[0], .slot_count = 2, .create = thingCreate };
 const one_gear = [_]P.ke_part_slot{.{ .name = "gear", .contract = "ke_gear", .cardinality = P.KE_PART_CARDINALITY_ONE }};
 const many_gears = [_]P.ke_part_slot{.{ .name = "gears", .contract = "ke_gear", .cardinality = P.KE_PART_CARDINALITY_MANY }};
 const tick_hook = [_]P.ke_part_hook{.{ .name = "tick", .default_set = "update" }};
@@ -1298,6 +1350,43 @@ test "an instance providing several contracts hands each slot the vtable of its 
     try R.check(outside.a().advance.?(outside.a()));
     try testing.expectEqual(@as(?*anyopaque, &gear), Probe.seen_slots[0]);
     try testing.expectEqual(@as(?*anyopaque, &spare), try outside.ref("given", "ke_axle"));
+}
+
+test "instances ordered across slots receive positions in that order, each slot's own order kept, and contradicting orders are a cycle" {
+    var rig: Rig = undefined;
+    try rig.init();
+    defer rig.deinit();
+    try rig.part(&gearbox);
+    try rig.part(&gear_a);
+    try rig.instance("box", "gearbox");
+    try rig.instance("a", "gear_a");
+    try rig.instance("b", "gear_a");
+    try rig.instance("c", "gear_a");
+    try R.check(rig.a().bind.?(rig.a(), "box", "front", "a"));
+    try R.check(rig.a().bind.?(rig.a(), "box", "front", "c"));
+    try R.check(rig.a().bind.?(rig.a(), "box", "back", "b"));
+    try R.check(rig.a().order.?(rig.a(), "box", "front", "a", "c"));
+    try R.check(rig.a().order.?(rig.a(), "box", null, "a", "b"));
+    try R.check(rig.a().order.?(rig.a(), "box", null, "b", "c"));
+    try R.check(rig.resolve());
+    try R.check(rig.a().advance.?(rig.a()));
+    try testing.expectEqual([2]usize{ 0, 2 }, Probe.seen_positions[0][0..2].*);
+    try testing.expectEqual(@as(usize, 1), Probe.seen_positions[1][0]);
+
+    var contradicting: Rig = undefined;
+    try contradicting.init();
+    defer contradicting.deinit();
+    try contradicting.part(&gearbox);
+    try contradicting.part(&gear_a);
+    try contradicting.instance("box", "gearbox");
+    try contradicting.instance("a", "gear_a");
+    try contradicting.instance("b", "gear_a");
+    try R.check(contradicting.a().bind.?(contradicting.a(), "box", "front", "a"));
+    try R.check(contradicting.a().bind.?(contradicting.a(), "box", "back", "b"));
+    try R.check(contradicting.a().order.?(contradicting.a(), "box", null, "a", "b"));
+    try R.check(contradicting.a().order.?(contradicting.a(), "box", null, "b", "a"));
+    try testing.expectEqual(abi_assembly.c.KE_RESULT_ASSEMBLY_UNRESOLVED, contradicting.resolve());
+    try testing.expect(contradicting.reported(A.KE_ASSEMBLY_FAILURE_CYCLE));
 }
 
 test "assembling and destroying leaves no block allocated" {

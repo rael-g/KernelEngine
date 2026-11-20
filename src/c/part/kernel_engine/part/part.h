@@ -57,6 +57,10 @@ typedef struct ke_part_set {
 typedef struct ke_part_bound {
     /// [borrowed] Each the instance of the slot's contract; NULL when @p count is zero.
     void *const *instances;
+    /// [borrowed] The position of each of @p instances among every instance bound to any slot of the part, counted
+    /// from zero: two the composition ordered, within a slot or across slots, have positions in that order. NULL
+    /// when @p count is zero.
+    const size_t *positions;
     size_t count;
 } ke_part_bound;
 

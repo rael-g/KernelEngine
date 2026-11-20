@@ -83,7 +83,7 @@ pub const Assembly = struct {
             .order = &struct {
                 fn call(self: ?*c.ke_assembly, a0: ?[*:0]const u8, a1: ?[*:0]const u8, a2: ?[*:0]const u8, a3: ?[*:0]const u8) callconv(.c) abi_result.c.ke_result {
                     const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
-                    T.order(state, std.mem.span(a0 orelse return resultOf(error.Failed)), std.mem.span(a1 orelse return resultOf(error.Failed)), std.mem.span(a2 orelse return resultOf(error.Failed)), std.mem.span(a3 orelse return resultOf(error.Failed))) catch |failure| return resultOf(failure);
+                    T.order(state, std.mem.span(a0 orelse return resultOf(error.Failed)), if (a1) |text| std.mem.span(text) else null, std.mem.span(a2 orelse return resultOf(error.Failed)), std.mem.span(a3 orelse return resultOf(error.Failed))) catch |failure| return resultOf(failure);
                     return abi_result.c.KE_OK;
                 }
             }.call,
@@ -168,9 +168,11 @@ pub const Assembly = struct {
     }
 
     /// Orders two instances bound to the slot slot of instance: first comes before then. Instances
-    /// of a slot with no order between them come in no guaranteed order.
-    pub fn order(self: Assembly, instance: [:0]const u8, slot: [:0]const u8, first: [:0]const u8, then: [:0]const u8) Error!void {
-        try checkResult(self.ptr.order.?(self.ptr, instance.ptr, slot.ptr, first.ptr, then.ptr));
+    /// of a slot with no order between them come in no guaranteed order. With no slot, orders two
+    /// instances bound to slots of instance, the same or different ones, by the positions the part
+    /// receives.
+    pub fn order(self: Assembly, instance: [:0]const u8, slot: ?[:0]const u8, first: [:0]const u8, then: [:0]const u8) Error!void {
+        try checkResult(self.ptr.order.?(self.ptr, instance.ptr, if (slot) |text| text.ptr else null, first.ptr, then.ptr));
     }
 
     /// Introduces the set name in the schedule instance schedule.

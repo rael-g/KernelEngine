@@ -16,6 +16,9 @@ public unsafe partial struct ke_part_bound
     [NativeTypeName("void *const *")]
     public void** instances;
 
+    [NativeTypeName("const size_t *")]
+    public nuint* positions;
+
     [NativeTypeName("size_t")]
     public nuint count;
 }

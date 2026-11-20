@@ -50,7 +50,7 @@ test "every enum value is the header's value" {
     try std.testing.expectEqual(@as(i64, c.KE_PART_CARDINALITY_MANY), @as(i64, abi.c.KE_PART_CARDINALITY_MANY));
 }
 
-extern const layout_values: [36]c_ulonglong;
+extern const layout_values: [37]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
@@ -68,6 +68,7 @@ test "every size and offset is the one C computes" {
         @offsetOf(abi.c.ke_part_set, "after"),
         @sizeOf(abi.c.ke_part_bound),
         @offsetOf(abi.c.ke_part_bound, "instances"),
+        @offsetOf(abi.c.ke_part_bound, "positions"),
         @offsetOf(abi.c.ke_part_bound, "count"),
         @sizeOf(abi.c.ke_part_hooked),
         @offsetOf(abi.c.ke_part_hooked, "schedule"),

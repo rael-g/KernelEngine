@@ -82,6 +82,10 @@ pub const ke_part_set = extern struct {
 pub const ke_part_bound = extern struct {
     /// Each the instance of the slot's contract; NULL when count is zero.
     instances: ?*const ?*anyopaque = std.mem.zeroes(?*const ?*anyopaque),
+    /// The position of each of instances among every instance bound to any slot of the part, counted
+    /// from zero: two the composition ordered, within a slot or across slots, have positions in that
+    /// order. NULL when count is zero.
+    positions: ?*const usize = std.mem.zeroes(?*const usize),
     count: usize = std.mem.zeroes(usize),
 };
 

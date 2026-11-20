@@ -1260,9 +1260,10 @@ ke_part_set size=24 align=8
   name 0
   hook 8
   after 16
-ke_part_bound size=16 align=8
+ke_part_bound size=24 align=8
   instances 0
-  count 8
+  positions 8
+  count 16
 ke_part_hooked size=16 align=8
   schedule 0
   set 8

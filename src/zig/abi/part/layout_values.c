@@ -14,6 +14,7 @@ const unsigned long long layout_values[] = {
     offsetof(ke_part_set, after),
     sizeof(ke_part_bound),
     offsetof(ke_part_bound, instances),
+    offsetof(ke_part_bound, positions),
     offsetof(ke_part_bound, count),
     sizeof(ke_part_hooked),
     offsetof(ke_part_hooked, schedule),

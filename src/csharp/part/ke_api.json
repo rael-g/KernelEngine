@@ -981,6 +981,14 @@
           "doc": "Each the instance of the slot\u0027s contract; NULL when count is zero."
         },
         {
+          "name": "positions",
+          "type": "const size_t *",
+          "tags": [
+            "borrowed"
+          ],
+          "doc": "The position of each of instances among every instance bound to any slot of the part, counted from zero: two the composition ordered, within a slot or across slots, have positions in that order. NULL when count is zero."
+        },
+        {
           "name": "count",
           "type": "size_t",
           "tags": [],

@@ -270,7 +270,8 @@ public unsafe partial class Assembly : IDisposable, INativeAssembly, IAssembly
         }
     }
 
-    /// <summary>Orders two instances bound to the slot slot of instance: first comes before then. Instances of a slot with no order between them come in no guaranteed order.</summary>
+    /// <summary>Orders two instances bound to the slot slot of instance: first comes before then. Instances of a slot with no order between them come in no guaranteed order. With no slot, orders two instances bound to slots of instance, the same or different ones, by the positions the part receives.</summary>
+    /// <param name="slot">NULL orders across the slots of instance.</param>
     /// <exception cref="Exception">The native call failed.</exception>
     public void Order(string instance, string slot, string first, string then)
     {

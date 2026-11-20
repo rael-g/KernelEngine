@@ -100,12 +100,14 @@ typedef struct ke_assembly {
                       const char *set);
 
     /// Orders two instances bound to the slot @p slot of @p instance: @p first comes before @p then. Instances of a
-    /// slot with no order between them come in no guaranteed order.
+    /// slot with no order between them come in no guaranteed order. With no @p slot, orders two instances bound to
+    /// slots of @p instance, the same or different ones, by the positions the part receives.
     /// @param instance [utf8]
-    /// @param slot [utf8]
+    /// @param slot [utf8,optional] NULL orders across the slots of @p instance.
     /// @param first [utf8]
     /// @param then [utf8]
-    /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null argument; KE_RESULT_NOT_SUPPORTED after resolve;
+    /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null argument other than @p slot; KE_RESULT_NOT_SUPPORTED
+    ///         after resolve;
     ///         KE_RESULT_OUT_OF_MEMORY.
     ke_result (*order)(struct ke_assembly *self, const char *instance, const char *slot, const char *first,
                        const char *then);

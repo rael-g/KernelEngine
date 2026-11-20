@@ -2593,8 +2593,8 @@
           "name": "order",
           "returns": "ke_result",
           "tags": [],
-          "doc": "Orders two instances bound to the slot slot of instance: first comes before then. Instances of a slot with no order between them come in no guaranteed order.",
-          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a null argument; KE_RESULT_NOT_SUPPORTED after resolve; KE_RESULT_OUT_OF_MEMORY.",
+          "doc": "Orders two instances bound to the slot slot of instance: first comes before then. Instances of a slot with no order between them come in no guaranteed order. With no slot, orders two instances bound to slots of instance, the same or different ones, by the positions the part receives.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a null argument other than slot; KE_RESULT_NOT_SUPPORTED after resolve; KE_RESULT_OUT_OF_MEMORY.",
           "params": [
             {
               "name": "instance",
@@ -2608,9 +2608,10 @@
               "name": "slot",
               "type": "const char *",
               "tags": [
-                "utf8"
+                "utf8",
+                "optional"
               ],
-              "doc": null
+              "doc": "NULL orders across the slots of instance."
             },
             {
               "name": "first",

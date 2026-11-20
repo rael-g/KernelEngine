@@ -91,7 +91,9 @@ pub const ke_assembly = extern struct {
     /// nothing binds joins the only schedule that has its default set.
     hook: ?*const fn (?*ke_assembly, ?[*:0]const u8, ?[*:0]const u8, ?[*:0]const u8, ?[*:0]const u8) callconv(.c) abi_result.c.ke_result = null,
     /// Orders two instances bound to the slot slot of instance: first comes before then. Instances
-    /// of a slot with no order between them come in no guaranteed order.
+    /// of a slot with no order between them come in no guaranteed order. With no slot, orders two
+    /// instances bound to slots of instance, the same or different ones, by the positions the part
+    /// receives.
     order: ?*const fn (?*ke_assembly, ?[*:0]const u8, ?[*:0]const u8, ?[*:0]const u8, ?[*:0]const u8) callconv(.c) abi_result.c.ke_result = null,
     /// Introduces the set name in the schedule instance schedule.
     add_set: ?*const fn (?*ke_assembly, ?[*:0]const u8, ?[*:0]const u8) callconv(.c) abi_result.c.ke_result = null,
