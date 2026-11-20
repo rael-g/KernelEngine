@@ -17,7 +17,7 @@
     <ProjectReference Include="..\..\io\KernelEngine.Io.Std\KernelEngine.Io.Std.csproj" />
     <ProjectReference Include="..\..\window\KernelEngine.Window.Glfw\KernelEngine.Window.Glfw.csproj" />
     <ProjectReference Include="..\..\render\KernelEngine.Render.Webgpu\KernelEngine.Render.Webgpu.csproj" />
-    <ProjectReference Include="..\..\render_graph\KernelEngine.RenderGraph.Simple\KernelEngine.RenderGraph.Simple.csproj" />
+    <ProjectReference Include="..\..\render\KernelEngine.RenderGraph.Simple\KernelEngine.RenderGraph.Simple.csproj" />
     <ProjectReference Include="..\..\physics\KernelEngine.Physics.Box2D\KernelEngine.Physics.Box2D.csproj" />
     <ProjectReference Include="..\..\audio\KernelEngine.Audio.MiniAudio\KernelEngine.Audio.MiniAudio.csproj" />
     <ProjectReference Include="..\..\text\KernelEngine.Text.StbTrueType\KernelEngine.Text.StbTrueType.csproj" />
@@ -28,7 +28,7 @@
     <ProjectReference Include="..\..\physics\KernelEngine.Physics\KernelEngine.Physics.csproj" />
     <ProjectReference Include="..\..\render\KernelEngine.Render.Frame\KernelEngine.Render.Frame.csproj" />
     <ProjectReference Include="..\..\audio\KernelEngine.Audio\KernelEngine.Audio.csproj" />
-    <ProjectReference Include="..\..\view\KernelEngine.View\KernelEngine.View.csproj" />
+    <ProjectReference Include="..\..\render\KernelEngine.View\KernelEngine.View.csproj" />
     <ProjectReference Include="..\..\scheduling\KernelEngine.Runner.Window\KernelEngine.Runner.Window.csproj" />
     <ProjectReference Include="..\..\scheduling\KernelEngine.Runner.Headless\KernelEngine.Runner.Headless.csproj" />
   </ItemGroup>

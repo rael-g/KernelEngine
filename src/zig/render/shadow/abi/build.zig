@@ -29,14 +29,12 @@ pub fn build(b: *std.Build) void {
     translated.addIncludePath(b.path("../../../../c/math"));
     translated.addIncludePath(b.path("../../../../c/render"));
     translated.addIncludePath(b.path("../../../../c/assembly"));
-    translated.addIncludePath(b.path("../../../../c/render_graph"));
     translated.addIncludePath(b.path("../include"));
     translated.addIncludePath(b.path("../../../common/include"));
     translated.addIncludePath(b.path("../../../../c/result"));
     translated.addIncludePath(b.path("../../../../c/scheduling"));
     translated.addIncludePath(b.path("../../../scheduling/schedule/include"));
     translated.addIncludePath(b.path("../../../../c/configuration"));
-    translated.addIncludePath(b.path("../../../../c/view"));
     const tests = b.addTest(.{ .root_module = b.createModule(.{
         .root_source_file = b.path("layout_test.zig"),
         .link_libc = true,
@@ -54,13 +52,11 @@ pub fn build(b: *std.Build) void {
     tests.root_module.addIncludePath(b.path("../../../../c/math"));
     tests.root_module.addIncludePath(b.path("../../../../c/render"));
     tests.root_module.addIncludePath(b.path("../../../../c/assembly"));
-    tests.root_module.addIncludePath(b.path("../../../../c/render_graph"));
     tests.root_module.addIncludePath(b.path("../include"));
     tests.root_module.addIncludePath(b.path("../../../common/include"));
     tests.root_module.addIncludePath(b.path("../../../../c/result"));
     tests.root_module.addIncludePath(b.path("../../../../c/scheduling"));
     tests.root_module.addIncludePath(b.path("../../../scheduling/schedule/include"));
     tests.root_module.addIncludePath(b.path("../../../../c/configuration"));
-    tests.root_module.addIncludePath(b.path("../../../../c/view"));
     b.step("test", "Check the render_shadow_factory ABI against its headers").dependOn(&b.addRunArtifact(tests).step);
 }

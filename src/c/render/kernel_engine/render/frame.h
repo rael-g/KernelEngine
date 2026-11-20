@@ -3,7 +3,7 @@
 
 #include <kernel_engine/ecs/ecs.h>
 #include <kernel_engine/render/gpu/gpu_enums.h>
-#include <kernel_engine/render_graph/render_graph.h>
+#include <kernel_engine/render/render_graph.h>
 
 #ifdef __cplusplus
 extern "C"

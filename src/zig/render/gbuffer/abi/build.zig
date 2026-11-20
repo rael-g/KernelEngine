@@ -29,7 +29,6 @@ pub fn build(b: *std.Build) void {
     translated.addIncludePath(b.path("../../../../c/assembly"));
     translated.addIncludePath(b.path("../include"));
     translated.addIncludePath(b.path("../../../common/include"));
-    translated.addIncludePath(b.path("../../../../c/render_graph"));
     translated.addIncludePath(b.path("../../../../c/result"));
     translated.addIncludePath(b.path("../../../../c/scheduling"));
     translated.addIncludePath(b.path("../../../scheduling/schedule/include"));
@@ -53,7 +52,6 @@ pub fn build(b: *std.Build) void {
     tests.root_module.addIncludePath(b.path("../../../../c/assembly"));
     tests.root_module.addIncludePath(b.path("../include"));
     tests.root_module.addIncludePath(b.path("../../../common/include"));
-    tests.root_module.addIncludePath(b.path("../../../../c/render_graph"));
     tests.root_module.addIncludePath(b.path("../../../../c/result"));
     tests.root_module.addIncludePath(b.path("../../../../c/scheduling"));
     tests.root_module.addIncludePath(b.path("../../../scheduling/schedule/include"));

@@ -10,7 +10,7 @@
 #include <kernel_engine/render/service/render_service.h>
 #include <kernel_engine/render/gpu/gpu_device.h>
 #include <kernel_engine/render/camera.h>
-#include <kernel_engine/view/view_space.h>
+#include <kernel_engine/render/view_space.h>
 #include <kernel_engine/assembly/part.h>
 #include <kernel_engine/scheduling/schedule.h>
 

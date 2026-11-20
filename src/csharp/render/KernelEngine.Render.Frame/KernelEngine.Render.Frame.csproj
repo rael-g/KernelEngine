@@ -13,6 +13,6 @@
     <ProjectReference Include="..\..\result\KernelEngine.Result\KernelEngine.Result.csproj" />
     <ProjectReference Include="..\..\ecs\KernelEngine.Ecs\KernelEngine.Ecs.csproj" />
     <ProjectReference Include="..\KernelEngine.Render.Abstractions\KernelEngine.Render.Abstractions.csproj" />
-    <ProjectReference Include="..\..\render_graph\KernelEngine.RenderGraph\KernelEngine.RenderGraph.csproj" />
+    <ProjectReference Include="..\..\render\KernelEngine.RenderGraph\KernelEngine.RenderGraph.csproj" />
   </ItemGroup>
 </Project>

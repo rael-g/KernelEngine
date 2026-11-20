@@ -29,12 +29,10 @@ pub fn build(b: *std.Build) void {
     translated.addIncludePath(b.path("../../../../c/asset"));
     translated.addIncludePath(b.path("../../../../c/tasks"));
     translated.addIncludePath(b.path("../../../../c/ecs"));
-    translated.addIncludePath(b.path("../../../../c/extraction"));
+    translated.addIncludePath(b.path("../../../../c/render"));
     translated.addIncludePath(b.path("../../../../c/logger"));
     translated.addIncludePath(b.path("../../../../c/math"));
-    translated.addIncludePath(b.path("../../../../c/render"));
     translated.addIncludePath(b.path("../../../../c/assembly"));
-    translated.addIncludePath(b.path("../../../../c/render_graph"));
     translated.addIncludePath(b.path("../include"));
     translated.addIncludePath(b.path("../../../common/include"));
     translated.addIncludePath(b.path("../../ui/include"));
@@ -57,12 +55,10 @@ pub fn build(b: *std.Build) void {
     tests.root_module.addIncludePath(b.path("../../../../c/asset"));
     tests.root_module.addIncludePath(b.path("../../../../c/tasks"));
     tests.root_module.addIncludePath(b.path("../../../../c/ecs"));
-    tests.root_module.addIncludePath(b.path("../../../../c/extraction"));
+    tests.root_module.addIncludePath(b.path("../../../../c/render"));
     tests.root_module.addIncludePath(b.path("../../../../c/logger"));
     tests.root_module.addIncludePath(b.path("../../../../c/math"));
-    tests.root_module.addIncludePath(b.path("../../../../c/render"));
     tests.root_module.addIncludePath(b.path("../../../../c/assembly"));
-    tests.root_module.addIncludePath(b.path("../../../../c/render_graph"));
     tests.root_module.addIncludePath(b.path("../include"));
     tests.root_module.addIncludePath(b.path("../../../common/include"));
     tests.root_module.addIncludePath(b.path("../../ui/include"));

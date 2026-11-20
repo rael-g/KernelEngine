@@ -5,7 +5,7 @@
 #include <kernel_engine/common/export.h>
 #include <kernel_engine/render/camera.h>
 #include <kernel_engine/render/gpu/gpu_device.h>
-#include <kernel_engine/view/view_space.h>
+#include <kernel_engine/render/view_space.h>
 
 #ifdef __cplusplus
 extern "C"

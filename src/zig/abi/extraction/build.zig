@@ -10,12 +10,12 @@ pub fn build(b: *std.Build) void {
     abi.addImport("result", b.dependency("abi_result", .{}).module("abi"));
 
     const headers = b.addWriteFiles().add("layout.h",
-        \\#include <kernel_engine/extraction/extraction.h>
+        \\#include <kernel_engine/render/extraction.h>
     );
     const translated = b.addTranslateC(.{ .root_source_file = headers, .target = target, .optimize = optimize });
     translated.addIncludePath(b.path("../../../c/tasks"));
     translated.addIncludePath(b.path("../../../c/ecs"));
-    translated.addIncludePath(b.path("../../../c/extraction"));
+    translated.addIncludePath(b.path("../../../c/render"));
     translated.addIncludePath(b.path("../../../c/math"));
     translated.addIncludePath(b.path("../../../c/result"));
     const tests = b.addTest(.{ .root_module = b.createModule(.{
@@ -31,7 +31,7 @@ pub fn build(b: *std.Build) void {
     tests.root_module.addCSourceFile(.{ .file = b.path("layout_values.c") });
     tests.root_module.addIncludePath(b.path("../../../c/tasks"));
     tests.root_module.addIncludePath(b.path("../../../c/ecs"));
-    tests.root_module.addIncludePath(b.path("../../../c/extraction"));
+    tests.root_module.addIncludePath(b.path("../../../c/render"));
     tests.root_module.addIncludePath(b.path("../../../c/math"));
     tests.root_module.addIncludePath(b.path("../../../c/result"));
     b.step("test", "Check the extraction ABI against its headers").dependOn(&b.addRunArtifact(tests).step);

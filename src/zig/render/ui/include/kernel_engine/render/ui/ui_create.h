@@ -3,7 +3,7 @@
 
 #include <kernel_engine/result/result.h>
 #include <kernel_engine/ecs/ke_ecs.h>
-#include <kernel_engine/extraction/extraction.h>
+#include <kernel_engine/render/extraction.h>
 #include <kernel_engine/ecs/ecs.h>
 #include <kernel_engine/render/frame.h>
 #include <kernel_engine/render/scene_resolve.h>

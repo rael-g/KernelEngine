@@ -6,7 +6,7 @@
 #include <kernel_engine/ecs/ke_ecs.h>
 #include <kernel_engine/render/scene_resolve.h>
 #include <kernel_engine/render/service/render_service.h>
-#include <kernel_engine/extraction/extraction.h>
+#include <kernel_engine/render/extraction.h>
 
 #ifndef KE_RENDER_SCENE_API
     #if defined(_WIN32) || defined(__CYGWIN__)

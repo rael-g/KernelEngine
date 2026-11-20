@@ -20,7 +20,7 @@
     <Project Path="src/csharp/sdk/KernelEngine.Sdk/KernelEngine.Sdk.csproj" />
     <Project Path="src/csharp/sdk/KernelEngine.Sdk.Defaults/KernelEngine.Sdk.Defaults.csproj" />
     <Project Path="src/csharp/logger/KernelEngine.Logger/KernelEngine.Logger.csproj" />
-    <Project Path="src/csharp/view/KernelEngine.View/KernelEngine.View.csproj" />
+    <Project Path="src/csharp/render/KernelEngine.View/KernelEngine.View.csproj" />
     <Project Path="src/csharp/input/KernelEngine.Input/KernelEngine.Input.csproj" />
     <Project Path="src/csharp/ecs/KernelEngine.Ecs/KernelEngine.Ecs.csproj" />
     <Project Path="src/csharp/ecs/KernelEngine.Ecs.Flecs/KernelEngine.Ecs.Flecs.csproj" />
@@ -41,9 +41,9 @@
     <Project Path="src/csharp/scheduling/KernelEngine.Runner/KernelEngine.Runner.csproj" />
     <Project Path="src/csharp/scheduling/KernelEngine.Runner.Headless/KernelEngine.Runner.Headless.csproj" />
     <Project Path="src/csharp/scheduling/KernelEngine.Runner.Window/KernelEngine.Runner.Window.csproj" />
-    <Project Path="src/csharp/extraction/KernelEngine.Extraction/KernelEngine.Extraction.csproj" />
-    <Project Path="src/csharp/render_graph/KernelEngine.RenderGraph/KernelEngine.RenderGraph.csproj" />
-    <Project Path="src/csharp/render_graph/KernelEngine.RenderGraph.Simple/KernelEngine.RenderGraph.Simple.csproj" />
+    <Project Path="src/csharp/render/KernelEngine.Extraction/KernelEngine.Extraction.csproj" />
+    <Project Path="src/csharp/render/KernelEngine.RenderGraph/KernelEngine.RenderGraph.csproj" />
+    <Project Path="src/csharp/render/KernelEngine.RenderGraph.Simple/KernelEngine.RenderGraph.Simple.csproj" />
     <Project Path="src/csharp/render/KernelEngine.Render.Frame/KernelEngine.Render.Frame.csproj" />
     <Project Path="src/csharp/tasks/KernelEngine.Job/KernelEngine.Job.csproj" />
     <Project Path="src/csharp/tasks/KernelEngine.Job.Enki/KernelEngine.Job.Enki.csproj" />

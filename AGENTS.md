@@ -12,7 +12,7 @@ the bug.
 | what does a contract require? | its header under `src/c/<domain>/`: the header is the API |
 | what is a symbol or a file for? | `build/native/bin/docir query <name> src`, then the code at the location it gives |
 | which plugins exist? | `grep 'ctx.member("' build.zig`: a plugin not declared there is not built |
-| how does sim hand off to render? | `src/zig/extraction/default/src/extraction_default.zig`, read there and never from prose |
+| how does sim hand off to render? | `src/zig/render/extraction_default/src/extraction_default.zig`, read there and never from prose |
 | what does a generated projection look like? | the kabic submodule (`external/kabic`) and the `scripts/check_*.cs` gate that pins it |
 | how is a document written? | [`docs/conventions/docs.md`](docs/conventions/docs.md) |
 | how does work reach `main`? | [`docs/conventions/git.md`](docs/conventions/git.md) and [`docs/conventions/ci.md`](docs/conventions/ci.md) |

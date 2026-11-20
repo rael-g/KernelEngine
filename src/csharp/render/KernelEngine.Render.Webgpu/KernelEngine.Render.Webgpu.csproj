@@ -32,10 +32,10 @@
   <ItemGroup>
     <ProjectReference Include="..\..\configuration\KernelEngine.Settings\KernelEngine.Settings.csproj" />
     <ProjectReference Include="..\KernelEngine.Render.Frame\KernelEngine.Render.Frame.csproj" />
-    <ProjectReference Include="..\..\render_graph\KernelEngine.RenderGraph\KernelEngine.RenderGraph.csproj" />
-    <ProjectReference Include="..\..\extraction\KernelEngine.Extraction\KernelEngine.Extraction.csproj" />
+    <ProjectReference Include="..\..\render\KernelEngine.RenderGraph\KernelEngine.RenderGraph.csproj" />
+    <ProjectReference Include="..\..\render\KernelEngine.Extraction\KernelEngine.Extraction.csproj" />
     <ProjectReference Include="..\..\common\KernelEngine.Common\KernelEngine.Common.csproj" />
-    <ProjectReference Include="..\..\view\KernelEngine.View\KernelEngine.View.csproj" />
+    <ProjectReference Include="..\..\render\KernelEngine.View\KernelEngine.View.csproj" />
     <ProjectReference Include="..\KernelEngine.Render.Abstractions\KernelEngine.Render.Abstractions.csproj" />
     <ProjectReference Include="..\KernelEngine.Render\KernelEngine.Render.csproj" />
 
