@@ -21,7 +21,6 @@ pub fn build(b: *std.Build) void {
     translated.addIncludePath(b.path("../../../c/ecs"));
     translated.addIncludePath(b.path("../../../c/math"));
     translated.addIncludePath(b.path("../../../c/physics"));
-    translated.addIncludePath(b.path("../../common/include"));
     translated.addIncludePath(b.path("../../../c/result"));
     const tests = b.addTest(.{ .root_module = b.createModule(.{
         .root_source_file = b.path("layout_test.zig"),
@@ -37,7 +36,6 @@ pub fn build(b: *std.Build) void {
     tests.root_module.addIncludePath(b.path("../../../c/ecs"));
     tests.root_module.addIncludePath(b.path("../../../c/math"));
     tests.root_module.addIncludePath(b.path("../../../c/physics"));
-    tests.root_module.addIncludePath(b.path("../../common/include"));
     tests.root_module.addIncludePath(b.path("../../../c/result"));
     b.step("test", "Check the physics_contract ABI against its headers").dependOn(&b.addRunArtifact(tests).step);
 }

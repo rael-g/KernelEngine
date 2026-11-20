@@ -1,7 +1,6 @@
 ﻿#ifndef KERNEL_ENGINE_WINDOW_WINDOW_H_
 #define KERNEL_ENGINE_WINDOW_WINDOW_H_
 
-#include <kernel_engine/common/export.h>
 #include <kernel_engine/result/result.h>
 
 #include <stdbool.h>

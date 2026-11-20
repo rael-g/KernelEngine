@@ -2,7 +2,6 @@
 #define KERNEL_ENGINE_PHYSICS_PHYSICS_2D_H_
 
 #include <kernel_engine/math/math.h>
-#include <kernel_engine/common/export.h>
 #include <kernel_engine/result/result.h>
 #include <stdbool.h>
 #include <stdint.h>
