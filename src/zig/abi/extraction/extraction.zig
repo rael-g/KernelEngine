@@ -133,9 +133,9 @@ pub const Extraction = struct {
         try checkResult(self.ptr.extract.?(self.ptr, alpha));
     }
 
-    /// One run of the render stage, with the ABI of a scheduler's executable whose user is the
-    /// extraction: extracts at the scheduler's fixed alpha, then starts a run of the render
-    /// schedule.
+    /// One extraction, with the ABI of a scheduler's executable whose user is the extraction:
+    /// extracts at the scheduler's fixed alpha. What runs over the render world is added to the
+    /// scheduler after it.
     pub fn run(self: Extraction, dt: f32) Error!?*abi_completion.c.ke_completion {
         var written: ?*abi_completion.c.ke_completion = undefined;
         try checkResult(self.ptr.run.?(self.ptr, dt, &written));

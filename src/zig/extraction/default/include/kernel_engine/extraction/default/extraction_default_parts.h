@@ -20,7 +20,7 @@ extern "C"
 #endif
 
 /**
- * Gives the parts ke_extraction_default contains: `extraction`, providing ke_extraction and ke_scheduler_executable, with the slots `main`, `render`, `scheduler` and `render_schedule`.
+ * Gives the parts ke_extraction_default contains: `extraction`, providing ke_extraction and ke_scheduler_executable, with the slots `main`, `render` and `scheduler`.
  * @param out_count [out] Receives how many parts the returned array holds.
  * @return [borrowed] The parts, valid while the library is loaded.
  */

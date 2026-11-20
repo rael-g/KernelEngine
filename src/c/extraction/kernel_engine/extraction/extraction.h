@@ -85,10 +85,10 @@ typedef struct ke_extraction {
     /// @return KE_OK, or the code of the world or the extraction that failed.
     ke_result (*extract)(ke_extraction *self, float alpha);
 
-    /// One run of the render stage, with the ABI of a scheduler's executable whose user is the extraction:
-    /// extracts at the scheduler's fixed alpha, then starts a run of the render schedule.
-    /// @param out_completion [out] Receives the render schedule's run.
-    /// @return KE_OK, or the code of the extraction or the schedule that failed.
+    /// One extraction, with the ABI of a scheduler's executable whose user is the extraction: extracts at the
+    /// scheduler's fixed alpha. What runs over the render world is added to the scheduler after it.
+    /// @param out_completion [out] Receives a completion already finished with KE_OK, which the caller releases.
+    /// @return KE_OK, or the code of the extraction that failed.
     ke_result (*run)(ke_extraction *self, float dt, ke_completion **out_completion);
 } ke_extraction;
 

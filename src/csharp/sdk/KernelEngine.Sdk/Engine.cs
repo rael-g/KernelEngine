@@ -35,7 +35,7 @@ public sealed class Engine : IDisposable
         Schedules = new EngineSchedules { Startup = make(), PreUpdate = make(), Fixed = make(), Update = make(), Shutdown = make(), Render = services.GetKeyedService<Schedule.Schedule>("render") };
         Sets = EngineSets.Register(Schedules);
         Schedules.AddTo(Scheduler);
-        if (services.GetService<Extraction.Extraction>() is { } extraction) EngineSchedules.AddRender(Scheduler, extraction);
+        if (services.GetService<Extraction.Extraction>() is { } extraction && Schedules.Render is { } render) EngineSchedules.AddRender(Scheduler, extraction, render);
         foreach (var create in services.GetServices<Func<EngineSchedules, EngineSets, IDisposable>>()) _hooked.Add(create(Schedules, Sets));
         _modules = [.. services.GetServices<Module.Module>()];
         _pending = [.. services.GetServices<EngineReadiness>()];

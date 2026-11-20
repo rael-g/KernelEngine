@@ -5,7 +5,7 @@
 
 namespace KernelEngine.Extraction;
 
-/// <summary>Creates the extraction from main into render, registering its tags in each world, whose render stage extracts at scheduler's fixed alpha and runs render_schedule. Every argument but out_extraction must outlive the extraction.</summary>
+/// <summary>Creates the extraction from main into render, registering its tags in each world, whose render stage extracts at scheduler's fixed alpha. Every argument but out_extraction must outlive the extraction.</summary>
 public sealed unsafe partial class DefaultExtraction : KernelEngine.Extraction.Extraction
 {
 
@@ -50,27 +50,24 @@ public sealed unsafe partial class DefaultExtraction : KernelEngine.Extraction.E
         }
     }
 
-    /// <summary>Creates the extraction from main into render, registering its tags in each world, whose render stage extracts at scheduler's fixed alpha and runs render_schedule. Every argument but out_extraction must outlive the extraction.</summary>
+    /// <summary>Creates the extraction from main into render, registering its tags in each world, whose render stage extracts at scheduler's fixed alpha. Every argument but out_extraction must outlive the extraction.</summary>
     /// <param name="main"></param>
     /// <param name="render"></param>
     /// <param name="scheduler"></param>
-    /// <param name="renderSchedule"></param>
-    public DefaultExtraction(KernelEngine.Ecs.INativeEcs main, KernelEngine.Ecs.INativeEcs render, KernelEngine.Scheduler.INativeScheduler scheduler, KernelEngine.Schedule.INativeSchedule renderSchedule) : base(Create(main, render, scheduler, renderSchedule))
+    public DefaultExtraction(KernelEngine.Ecs.INativeEcs main, KernelEngine.Ecs.INativeEcs render, KernelEngine.Scheduler.INativeScheduler scheduler) : base(Create(main, render, scheduler))
     {
         Hold(main.Owner);
         Hold(render.Owner);
         Hold(scheduler.Owner);
-        Hold(renderSchedule.Owner);
     }
 
-    private static KernelEngine.Extraction.Native.ke_extraction_handle Create(KernelEngine.Ecs.INativeEcs main, KernelEngine.Ecs.INativeEcs render, KernelEngine.Scheduler.INativeScheduler scheduler, KernelEngine.Schedule.INativeSchedule renderSchedule)
+    private static KernelEngine.Extraction.Native.ke_extraction_handle Create(KernelEngine.Ecs.INativeEcs main, KernelEngine.Ecs.INativeEcs render, KernelEngine.Scheduler.INativeScheduler scheduler)
     {
         ArgumentNullException.ThrowIfNull(main);
         ArgumentNullException.ThrowIfNull(render);
         ArgumentNullException.ThrowIfNull(scheduler);
-        ArgumentNullException.ThrowIfNull(renderSchedule);
         KernelEngine.Extraction.Native.ke_extraction_handle handle;
-        NativeResult.ThrowIfFailed(KernelEngine.Extraction.Native.NativeMethods.extraction_create(main.Native, render.Native, scheduler.Native, renderSchedule.Native, &handle), "ke_extraction_create");
+        NativeResult.ThrowIfFailed(KernelEngine.Extraction.Native.NativeMethods.extraction_create(main.Native, render.Native, scheduler.Native, &handle), "ke_extraction_create");
         return handle;
     }
 }

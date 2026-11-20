@@ -4,7 +4,6 @@
 #include <kernel_engine/ecs/ke_ecs.h>
 #include <kernel_engine/extraction/extraction.h>
 #include <kernel_engine/extraction/default/extraction_default_log.h>
-#include <kernel_engine/schedule/schedule.h>
 #include <kernel_engine/scheduler/scheduler.h>
 
 #ifdef __cplusplus
@@ -14,7 +13,7 @@ extern "C"
 
 /**
  * Creates the extraction from @p main into @p render, registering its tags in each world, whose render stage
- * extracts at @p scheduler's fixed alpha and runs @p render_schedule. Every argument but @p out_extraction must
+ * extracts at @p scheduler's fixed alpha. Every argument but @p out_extraction must
  * outlive the extraction.
  * @param out_extraction [out] Receives the extraction; left zeroed on failure.
  * @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null argument; KE_RESULT_OUT_OF_MEMORY; the code of the world
@@ -24,7 +23,6 @@ KE_EXTRACTION_DEFAULT_API ke_result ke_extraction_create(
     ke_ecs               *main,
     ke_ecs               *render,
     ke_scheduler         *scheduler,
-    ke_schedule          *render_schedule,
     ke_extraction_handle *out_extraction);
 
 #ifdef __cplusplus

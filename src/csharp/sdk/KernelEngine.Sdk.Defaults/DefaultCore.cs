@@ -57,7 +57,7 @@ public static class DefaultCore
         services.TryAddSingleton<Ecs.EcsRegistry>(sp => new FlecsEcsRegistry(Get<Configuration.Configuration>(sp).Section("ecs")));
         services.TryAddKeyedSingleton<Ecs.EcsRegistry>("render", (sp, _) => new FlecsEcsRegistry(Get<Configuration.Configuration>(sp).Section("ecs")));
         services.TryAddKeyedSingleton<Schedule.Schedule>("render", (sp, _) => new DefaultSchedule(sp.GetRequiredKeyedService<Ecs.EcsRegistry>("render"), Get<Job.JobSystem>(sp), Get<Configuration.Configuration>(sp).Section("schedule")));
-        services.TryAddSingleton<Extraction.Extraction>(sp => new Extraction.DefaultExtraction(Get<Ecs.EcsRegistry>(sp), sp.GetRequiredKeyedService<Ecs.EcsRegistry>("render"), Get<Scheduler.Scheduler>(sp), sp.GetRequiredKeyedService<Schedule.Schedule>("render")));
+        services.TryAddSingleton<Extraction.Extraction>(sp => new Extraction.DefaultExtraction(Get<Ecs.EcsRegistry>(sp), sp.GetRequiredKeyedService<Ecs.EcsRegistry>("render"), Get<Scheduler.Scheduler>(sp)));
         services.TryAddSingleton<Func<Schedule.Schedule>>(sp => () => new DefaultSchedule(Get<Ecs.EcsRegistry>(sp), Get<Job.JobSystem>(sp), Get<Configuration.Configuration>(sp).Section("schedule")));
         services.TryAddSingleton<Scheduler.Scheduler>(sp => new DefaultScheduler(Get<Job.JobSystem>(sp), Get<Async.Async>(sp), Get<Configuration.Configuration>(sp).Section("scheduler")));
 

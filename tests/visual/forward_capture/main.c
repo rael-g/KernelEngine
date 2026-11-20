@@ -266,8 +266,9 @@ int main(int argc, char **argv)
     ke_schedule_handle render_schedule = { 0 };
     check("render schedule", ke_schedule_create(render_world.ref, jobs.ref, unset, &render_schedule));
     ke_extraction_handle extraction = { 0 };
-    check("extraction", ke_extraction_create(ecs.ref, render_world.ref, scheduler.ref, render_schedule.ref, &extraction));
-    check("render stage", scheduler.ref->add(scheduler.ref, (ke_scheduler_run_fn)extraction.ref->run, extraction.ref, KE_SCHEDULER_CADENCE_EVERY_TICK));
+    check("extraction", ke_extraction_create(ecs.ref, render_world.ref, scheduler.ref, &extraction));
+    check("extraction stage", scheduler.ref->add(scheduler.ref, (ke_scheduler_run_fn)extraction.ref->run, extraction.ref, KE_SCHEDULER_CADENCE_EVERY_TICK));
+    check("render stage", scheduler.ref->add(scheduler.ref, (ke_scheduler_run_fn)render_schedule.ref->run, render_schedule.ref, KE_SCHEDULER_CADENCE_EVERY_TICK));
 
     renderer render;
     ke_file_system_handle files = { 0 };

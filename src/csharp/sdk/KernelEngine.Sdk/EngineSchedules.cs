@@ -47,14 +47,16 @@ public sealed class EngineSchedules
             sets.Startup, sets.PreUpdate, sets.FixedPreUpdate, sets.FixedUpdate, sets.FixedPostUpdate, sets.Update, sets.PostUpdate, sets.Shutdown,
             sets.RenderBegin, sets.RenderPrepare, sets.RenderQueue, sets.RenderSubmit);
 
-    /// <summary>Adds the render stage of <paramref name="extraction"/> to <paramref name="scheduler"/>, ticking every tick, run by its own native run slot.</summary>
-    /// <param name="scheduler">The scheduler that runs it.</param>
-    /// <param name="extraction">The extraction whose stage it runs.</param>
-    public static unsafe void AddRender(INativeScheduler scheduler, KernelEngine.Extraction.INativeExtraction extraction)
+    /// <summary>Adds <paramref name="extraction"/> to <paramref name="scheduler"/>, ticking every tick, run by its own native run slot, and <paramref name="render"/> after it.</summary>
+    /// <param name="scheduler">The scheduler that runs them.</param>
+    /// <param name="extraction">The extraction into the render world.</param>
+    /// <param name="render">The schedule over the render world.</param>
+    public static unsafe void AddRender(INativeScheduler scheduler, KernelEngine.Extraction.INativeExtraction extraction, INativeSchedule render)
     {
         var native = extraction.Native;
         var run = (delegate* unmanaged[Cdecl]<void*, float, KernelEngine.Completion.Native.ke_completion**, KernelEngine.Result.Native.Result>)native->run;
         NativeCall.ThrowIfFailed(scheduler.Native->add(scheduler.Native, run, native, SchedulerCadence.EveryTick), "ke_scheduler.add");
+        Add(scheduler, render, SchedulerCadence.EveryTick);
     }
 
     /// <summary>Adds <paramref name="schedule"/> to <paramref name="scheduler"/> as an executable whose user is the schedule, run by its own native run slot.</summary>

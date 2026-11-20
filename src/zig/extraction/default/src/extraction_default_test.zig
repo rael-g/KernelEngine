@@ -221,7 +221,6 @@ const Fixture = struct {
     main: World = undefined,
     render: World = undefined,
     scheduler: zsub.For(abi_scheduler.c.ke_scheduler) = undefined,
-    schedule: zsub.For(abi_schedule.c.ke_schedule) = undefined,
     handle: x.ke_extraction_handle = undefined,
     main_position: Cid = 0,
     render_position: Cid = 0,
@@ -230,19 +229,17 @@ const Fixture = struct {
         f.main.init();
         f.render.init();
         try f.scheduler.init();
-        try f.schedule.init();
         f.main_position = f.main.register("position", @sizeOf(Position), &position_fields);
         f.render_position = f.render.register("position", @sizeOf(Position), &position_fields);
         try R.check(extraction_create(f));
     }
 
     fn extraction_create(f: *Fixture) Result {
-        return ke_extraction_create(&f.main.api, &f.render.api, f.scheduler.api(), f.schedule.api(), &f.handle);
+        return ke_extraction_create(&f.main.api, &f.render.api, f.scheduler.api(), &f.handle);
     }
 
     fn deinit(f: *Fixture) void {
         f.handle.destroy.?(f.handle.ref);
-        f.schedule.deinit();
         f.scheduler.deinit();
         f.render.deinit();
         f.main.deinit();
@@ -271,7 +268,7 @@ const Fixture = struct {
     }
 };
 
-extern fn ke_extraction_create(?*e.ke_ecs, ?*e.ke_ecs, ?*abi_scheduler.c.ke_scheduler, ?*abi_schedule.c.ke_schedule, ?*x.ke_extraction_handle) Result;
+extern fn ke_extraction_create(?*e.ke_ecs, ?*e.ke_ecs, ?*abi_scheduler.c.ke_scheduler, ?*x.ke_extraction_handle) Result;
 extern fn ke_extraction_history_create(?*x.ke_extraction, ?*abi_schedule.c.ke_schedule, abi_schedule.c.ke_schedule_set_id, ?*abi_part.c.ke_owner) Result;
 
 test "a synced entity gets a pair, the pair carries a copy, and the pair goes when the tag does" {
@@ -413,7 +410,7 @@ test "a custom extraction runs at each extraction, and its failure is the extrac
     try testing.expectEqual(R.code(error.InvalidArgument), f.ref().extract_custom.?(f.ref(), null, null));
 }
 
-test "the render stage extracts at the scheduler's alpha and starts the render schedule's run" {
+test "a run extracts at the scheduler's alpha and hands over a completion already finished with KE_OK" {
     var f: Fixture = .{};
     try f.init();
     defer f.deinit();
@@ -424,7 +421,11 @@ test "the render stage extracts at the scheduler's alpha and starts the render s
     try R.check(f.ref().run.?(f.ref(), 0.016, &completion));
     try testing.expectEqual(@as(u32, 1), custom_ran);
     try f.scheduler.received(.fixed_alpha).times(1);
-    try f.schedule.received(.run).times(1);
+    var result: Result = R.code(error.General);
+    try testing.expect(completion.?.poll.?(completion, &result));
+    try testing.expectEqual(R.ok, result);
+    try testing.expectEqual(R.ok, completion.?.wait.?(completion));
+    completion.?.release.?(completion);
 }
 
 var history_desc: abi_schedule.c.ke_schedule_system_desc = undefined;
@@ -460,7 +461,7 @@ test "the extraction's part provides the extraction and, after it, the executabl
     defer f.deinit();
     const p = &extraction.parts[0];
     try testing.expectEqual(@as(usize, 2), p.provides_count);
-    try testing.expectEqual(@as(usize, 4), p.slot_count);
+    try testing.expectEqual(@as(usize, 3), p.slot_count);
     const ref: ?*anyopaque = f.handle.ref;
     try testing.expectEqual(ref, p.provided.?(ref, 0));
     const exec: *abi_scheduler.c.ke_scheduler_executable = @ptrCast(@alignCast(p.provided.?(ref, 1).?));

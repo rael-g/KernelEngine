@@ -1,6 +1,6 @@
 //! The `ke_extraction` contract over two `ke_ecs` worlds, on the calling thread: pairs the synced entities of
 //! the main world with entities of the render world, copies and blends the registered components into them,
-//! and runs the render schedule as the render stage.
+//! extracting as an executable of the scheduler.
 
 const std = @import("std");
 
@@ -61,7 +61,7 @@ const State = struct {
     main: *Ecs,
     render: *Ecs,
     scheduler: *abi_scheduler.c.ke_scheduler,
-    render_schedule: *abi_schedule.c.ke_schedule,
+    done: abi_completion.c.ke_completion = .{ .poll = &donePoll, .wait = &doneWait, .release = &doneRelease },
     synced: Cid = 0,
     interpolated: Cid = 0,
     teleported: Cid = 0,
@@ -350,15 +350,27 @@ fn extract(self: ?*x.ke_extraction, alpha: f32) callconv(.c) Result {
     return R.ok;
 }
 
-/// Slot `run`: the render stage.
-fn run(self: ?*x.ke_extraction, dt: f32, out_completion: ?*?*abi_completion.c.ke_completion) callconv(.c) Result {
+/// Slot `run`: extracts at the scheduler's fixed alpha and hands over the state's one completion, finished.
+fn run(self: ?*x.ke_extraction, _: f32, out_completion: ?*?*abi_completion.c.ke_completion) callconv(.c) Result {
     const out = out_completion orelse return R.code(error.InvalidArgument);
     out.* = null;
     const s = stateOf(self) orelse return R.code(error.InvalidArgument);
     const extracted = extract(&s.api, s.scheduler.fixed_alpha.?(s.scheduler));
     if (extracted != R.ok) return extracted;
-    return s.render_schedule.run.?(s.render_schedule, dt, out);
+    out.* = &s.done;
+    return R.ok;
 }
+
+fn donePoll(_: ?*abi_completion.c.ke_completion, out_result: ?*Result) callconv(.c) bool {
+    if (out_result) |r| r.* = R.ok;
+    return true;
+}
+
+fn doneWait(_: ?*abi_completion.c.ke_completion) callconv(.c) Result {
+    return R.ok;
+}
+
+fn doneRelease(_: ?*abi_completion.c.ke_completion) callconv(.c) void {}
 
 /// The history system of one interpolation: copies each entity's current value into its previous one.
 fn historySystem(ctx: ?*abi_schedule.c.ke_schedule_ctx, user: ?*anyopaque, _: f32) callconv(.c) Result {
@@ -460,7 +472,6 @@ export fn ke_extraction_create(
     main_in: ?*Ecs,
     render_in: ?*Ecs,
     scheduler_in: ?*abi_scheduler.c.ke_scheduler,
-    render_schedule_in: ?*abi_schedule.c.ke_schedule,
     out_extraction: ?*x.ke_extraction_handle,
 ) callconv(.c) Result {
     const out = out_extraction orelse return R.code(error.InvalidArgument);
@@ -469,7 +480,6 @@ export fn ke_extraction_create(
         main_in orelse return R.code(error.InvalidArgument),
         render_in orelse return R.code(error.InvalidArgument),
         scheduler_in orelse return R.code(error.InvalidArgument),
-        render_schedule_in orelse return R.code(error.InvalidArgument),
     ) catch |err| {
         log.warn("creating the extraction failed: {t}", .{err});
         return R.code(err);
@@ -477,7 +487,7 @@ export fn ke_extraction_create(
     return R.ok;
 }
 
-fn create(main: *Ecs, render: *Ecs, scheduler: *abi_scheduler.c.ke_scheduler, render_schedule: *abi_schedule.c.ke_schedule) R.Error!x.ke_extraction_handle {
+fn create(main: *Ecs, render: *Ecs, scheduler: *abi_scheduler.c.ke_scheduler) R.Error!x.ke_extraction_handle {
     const s = gpa.create(State) catch return error.OutOfMemory;
     errdefer gpa.destroy(s);
     s.* = .{
@@ -494,7 +504,6 @@ fn create(main: *Ecs, render: *Ecs, scheduler: *abi_scheduler.c.ke_scheduler, re
         .main = main,
         .render = render,
         .scheduler = scheduler,
-        .render_schedule = render_schedule,
     };
     s.api.handle = s;
     s.executable.user = &s.api;
@@ -522,7 +531,7 @@ fn provided(instance: ?*anyopaque, index: usize) callconv(.c) ?*anyopaque {
 }
 
 pub const parts = [_]abi_part.c.ke_part{
-    part.of(ke_extraction_create, .{ .name = "extraction", .slots = &.{ "main", "render", "scheduler", "render_schedule" }, .also = &.{"ke_scheduler_executable"}, .provided = provided, .set_log = @ptrCast(&@import("log").Destination("ke_extraction_default").setLogCallback) }),
+    part.of(ke_extraction_create, .{ .name = "extraction", .slots = &.{ "main", "render", "scheduler" }, .also = &.{"ke_scheduler_executable"}, .provided = provided, .set_log = @ptrCast(&@import("log").Destination("ke_extraction_default").setLogCallback) }),
 };
 
 /// The library's parts.

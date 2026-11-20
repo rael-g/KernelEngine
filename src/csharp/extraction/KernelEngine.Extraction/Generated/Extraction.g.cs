@@ -266,8 +266,8 @@ public unsafe partial class Extraction : IDisposable, INativeExtraction, IExtrac
         NativeResult.ThrowIfFailed(Handle->extract(Handle, alpha), "extract");
     }
 
-    /// <summary>One run of the render stage, with the ABI of a scheduler's executable whose user is the extraction: extracts at the scheduler's fixed alpha, then starts a run of the render schedule.</summary>
-    /// <returns>Receives the render schedule's run.</returns>
+    /// <summary>One extraction, with the ABI of a scheduler's executable whose user is the extraction: extracts at the scheduler's fixed alpha. What runs over the render world is added to the scheduler after it.</summary>
+    /// <returns>Receives a completion already finished with KE_OK, which the caller releases.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
     public nint Run(float dt)
     {

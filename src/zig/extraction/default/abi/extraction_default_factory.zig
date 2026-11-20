@@ -23,11 +23,11 @@ pub fn extractionDefaultSetLogCallback(callback: c.ke_log_callback, ctx: ?*anyop
 }
 
 /// Creates the extraction from main into render, registering its tags in each world, whose
-/// render stage extracts at scheduler's fixed alpha and runs render_schedule. Every argument but
-/// out_extraction must outlive the extraction.
-pub fn extractionCreate(main: ?*abi_ecs.c.ke_ecs, render: ?*abi_ecs.c.ke_ecs, scheduler: ?*abi_scheduler.c.ke_scheduler, render_schedule: ?*abi_schedule.c.ke_schedule) Error!abi_extraction.c.ke_extraction_handle {
+/// render stage extracts at scheduler's fixed alpha. Every argument but out_extraction must
+/// outlive the extraction.
+pub fn extractionCreate(main: ?*abi_ecs.c.ke_ecs, render: ?*abi_ecs.c.ke_ecs, scheduler: ?*abi_scheduler.c.ke_scheduler) Error!abi_extraction.c.ke_extraction_handle {
     var written: abi_extraction.c.ke_extraction_handle = undefined;
-    try checkResult(c.ke_extraction_create(main, render, scheduler, render_schedule, &written));
+    try checkResult(c.ke_extraction_create(main, render, scheduler, &written));
     return written;
 }
 
@@ -42,7 +42,7 @@ pub fn extractionHistoryCreate(extraction: ?*abi_extraction.c.ke_extraction, fix
 }
 
 /// Gives the parts ke_extraction_default contains: `extraction`, providing ke_extraction and
-/// ke_scheduler_executable, with the slots `main`, `render`, `scheduler` and `render_schedule`.
+/// ke_scheduler_executable, with the slots `main`, `render` and `scheduler`.
 pub fn extractionDefaultParts(out_count: ?*usize) ?*const abi_part.c.ke_part {
     return c.ke_extraction_default_parts(out_count);
 }
