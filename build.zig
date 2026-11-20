@@ -751,8 +751,95 @@ pub fn build(b: *std.Build) void {
     b.getInstallStep().dependOn(&b.addInstallDirectory(.{ .source_dir = .{ .cwd_relative = b.pathJoin(&.{ root, "examples/assets/sounds" }) }, .install_dir = .bin, .install_subdir = "pong/assets/sounds" }).step);
     b.getInstallStep().dependOn(&b.addInstallFile(b.dependency("liberation_fonts", .{}).path("LiberationSans-Regular.ttf"), "bin/pong/assets/fonts/LiberationSans-Regular.ttf").step);
 
+    const pong_headless = ctx.example("c_pong_headless", .{
+        .target = target,
+        .optimize = optimize,
+        .game = pong_dir,
+        .@"include-dirs" = joinPaths(b, &.{
+            b.pathJoin(&.{ src_c, "assembly" }),
+            b.pathJoin(&.{ src_c, "async" }),
+            b.pathJoin(&.{ src_c, "asset" }),
+            b.pathJoin(&.{ src_c, "audio" }),
+            b.pathJoin(&.{ src_c, "completion" }),
+            b.pathJoin(&.{ src_c, "configuration" }),
+            b.pathJoin(&.{ src_c, "ecs" }),
+            b.pathJoin(&.{ src_c, "extraction" }),
+            b.pathJoin(&.{ src_c, "file_system" }),
+            b.pathJoin(&.{ src_c, "framework" }),
+            b.pathJoin(&.{ src_c, "engine_nodes" }),
+            b.pathJoin(&.{ src_c, "input" }),
+            b.pathJoin(&.{ src_c, "io" }),
+            b.pathJoin(&.{ src_c, "job" }),
+            b.pathJoin(&.{ src_c, "logger" }),
+            b.pathJoin(&.{ src_c, "math" }),
+            b.pathJoin(&.{ src_c, "part" }),
+            b.pathJoin(&.{ src_c, "physics" }),
+            b.pathJoin(&.{ src_c, "render" }),
+            b.pathJoin(&.{ src_c, "render_graph" }),
+            b.pathJoin(&.{ src_c, "resource_cache" }),
+            b.pathJoin(&.{ src_c, "result" }),
+            b.pathJoin(&.{ src_c, "runner" }),
+            b.pathJoin(&.{ src_c, "schedule" }),
+            b.pathJoin(&.{ src_c, "scheduler" }),
+            b.pathJoin(&.{ src_c, "settings" }),
+            b.pathJoin(&.{ src_c, "spatial" }),
+            b.pathJoin(&.{ src_c, "text" }),
+            b.pathJoin(&.{ src_c, "view" }),
+            b.pathJoin(&.{ src_c, "window" }),
+            b.pathJoin(&.{ root, "src/sdk/c" }),
+            b.pathJoin(&.{ src_zig, "assembly/default/include" }),
+            b.pathJoin(&.{ src_zig, "async/enki/include" }),
+            b.pathJoin(&.{ src_zig, "configuration/include" }),
+            b.pathJoin(&.{ src_zig, "configuration/toml/include" }),
+            b.pathJoin(&.{ src_zig, "ecs/flecs/include" }),
+            b.pathJoin(&.{ src_zig, "engine_nodes/include" }),
+            b.pathJoin(&.{ src_zig, "file_system/std/include" }),
+            b.pathJoin(&.{ src_zig, "framework/include" }),
+            b.pathJoin(&.{ src_zig, "input/default/include" }),
+            b.pathJoin(&.{ src_zig, "io/std/include" }),
+            b.pathJoin(&.{ src_zig, "job/enki/include" }),
+            b.pathJoin(&.{ src_zig, "physics/body2d/include" }),
+            b.pathJoin(&.{ src_zig, "physics/box2d/include" }),
+            b.pathJoin(&.{ src_zig, "runner/headless/include" }),
+            b.pathJoin(&.{ src_zig, "schedule/include" }),
+            b.pathJoin(&.{ src_zig, "scheduler/include" }),
+            b.pathJoin(&.{ src_zig, "common/include" }),
+        }),
+        .libs = joinPaths(b, &.{
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_assembly_default") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_async_enki") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_configuration") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_configuration_toml") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_ecs_flecs") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_engine_nodes") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_file_system_std") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_framework") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_input_default") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_io_std") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_job_system_enki") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_physics_2d_box2d") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_physics_body2d") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_runner_headless") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_schedule") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_scheduler") }),
+        }),
+    }, &.{ctx.plugins_step});
+    const pong_headless_dir = b.pathJoin(&.{ root, "tests/integration/c/pong_headless" });
+    const pong_headless_files = [_]*std.Build.Step{
+        &b.addInstallFile(.{ .cwd_relative = b.pathJoin(&.{ pong_headless_dir, "Project" }) }, "bin/pong_headless/Project").step,
+        &b.addInstallDirectory(.{ .source_dir = .{ .cwd_relative = b.pathJoin(&.{ pong_dir, "scenes" }) }, .install_dir = .bin, .install_subdir = "pong_headless/scenes" }).step,
+    };
+    const pong_headless_run = b.addSystemCommand(&.{b.getInstallPath(.bin, b.fmt("c_pong_headless{s}", .{ctx.exe_suffix}))});
+    pong_headless_run.expectExitCode(0);
+    pong_headless_run.step.dependOn(&pong_headless.step);
+    for (pong_headless_files) |f| {
+        b.getInstallStep().dependOn(f);
+        pong_headless_run.step.dependOn(f);
+    }
+    ctx.test_step.dependOn(&pong_headless_run.step);
+
     const all_examples = [_]*std.Build.Step.InstallArtifact{
-        demo15, demo16, pong,
+        demo15, demo16, pong, pong_headless,
     };
     for (all_examples) |e| b.getInstallStep().dependOn(&e.step);
     installSdk(&ctx, src_c, b.pathJoin(&.{ root, "src/sdk/c" }), b.pathJoin(&.{ src_zig, "common/include" }));
