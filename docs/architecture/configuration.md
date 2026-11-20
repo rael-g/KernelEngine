@@ -33,10 +33,11 @@ does not know, a value of another type or out of range refuses the creation with
 the key. A value that changes while the part lives is a slot of its contract, not a setting, and the
 store calls no one when it is written.
 
-**The file is read once, when the engine is built.** `DefaultCore.AddDefaultCore` loads the project file
-into one store before it makes any part that reads it. The job and async systems and the io are made before the
-store, the io because loading it reads the file through it: the C# SDK hands them sections of a separate
-"bootstrap" store the host may fill in code, and the C SDK an empty `ke_settings`.
+**The file is read once, before the engine is assembled.** The SDK makes a file system rooted at the project
+directory and loads the project file through it into one store (`ke_sdk_host_open`,
+`src/sdk/c/kernel_engine/sdk/defaults.h`; `DefaultProject`, `src/csharp/sdk/KernelEngine.Sdk.Defaults/`); the
+assembly then makes every part, each with the section its instance names. The job and async systems and the io
+are parts like the others, so their sections are in the file too.
 
 ## What the parts agree on without a contract
 

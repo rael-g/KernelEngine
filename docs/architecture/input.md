@@ -57,4 +57,4 @@ slots a program calls; with no configuration the maps are whatever the program a
   a code outside them is ignored. The capacity of the event queue is private to the plugin.
 - The system name "input.actions" is a literal of `src/zig/framework/src/input_actions.zig`.
 - The window is created with the settings `KE_WINDOW_SETTING_TITLE`, `KE_WINDOW_SETTING_WIDTH`,
-  `KE_WINDOW_SETTING_HEIGHT` and `KE_WINDOW_SETTING_FULLSCREEN`; the SDKs hand it the "runtime.window" section of the project file.
+  `KE_WINDOW_SETTING_HEIGHT` and `KE_WINDOW_SETTING_FULLSCREEN`; the default composition hands it the "window" section of the project file.

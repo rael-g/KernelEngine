@@ -34,6 +34,7 @@ public sealed unsafe class DefaultProject : IDisposable
         Render.Webgpu.Native.NativeMethods.render_tonemap_parts, Render.Webgpu.Native.NativeMethods.render_ui_parts,
         Text.StbTrueType.Native.NativeMethods.text_stb_truetype_parts, Audio.MiniAudio.Native.NativeMethods.audio_miniaudio_parts,
         Audio.Native.NativeMethods.audio_module_parts, Runner.Window.Native.NativeMethods.runner_window_parts,
+        Runner.Headless.Native.NativeMethods.runner_headless_parts,
     ];
 
     /// <summary>Opens the project in <paramref name="projectDir"/>.</summary>
@@ -57,10 +58,12 @@ public sealed unsafe class DefaultProject : IDisposable
 
     /// <summary>
     /// Makes an assembly over <see cref="Configuration"/> with <see cref="Files"/> as the external
-    /// <c>file_system</c>, the parts of every default library, and the default composition over them, the file
-    /// <c>defaults.composition</c> beside the executable. The assembly keeps the project's objects alive.
+    /// <c>file_system</c>, the parts of every default library, and the composition over them the file
+    /// <paramref name="composition"/> beside the executable holds. The assembly keeps the project's objects alive.
     /// </summary>
-    public KernelEngine.Assembly.Assembly Open()
+    /// <param name="composition">The file name: <c>defaults.composition</c> runs in a window,
+    /// <c>headless.composition</c> without one, rendering nothing.</param>
+    public KernelEngine.Assembly.Assembly Open(string composition)
     {
         var assembly = new DefaultAssembly(Configuration);
         try
@@ -74,8 +77,8 @@ public sealed unsafe class DefaultProject : IDisposable
                 var parts = library(&count);
                 for (nuint i = 0; i < count; i++) assembly.AddPart((nint)(parts + i));
             }
-            using var composition = new AssemblyTomlCompositionSource(Files);
-            composition.Load(assembly, Path.Combine(AppContext.BaseDirectory, "defaults.composition"));
+            using var source = new AssemblyTomlCompositionSource(Files);
+            source.Load(assembly, Path.Combine(AppContext.BaseDirectory, composition));
             return assembly;
         }
         catch

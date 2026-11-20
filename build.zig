@@ -860,7 +860,8 @@ pub fn build(b: *std.Build) void {
     };
     for (all_examples) |e| b.getInstallStep().dependOn(&e.step);
     installSdk(&ctx, src_c, b.pathJoin(&.{ root, "src/sdk/c" }), b.pathJoin(&.{ src_zig, "common/include" }));
-    b.getInstallStep().dependOn(&b.addInstallFile(.{ .cwd_relative = b.pathJoin(&.{ root, "src/sdk/defaults.composition" }) }, "bin/defaults.composition").step);
+    for ([_][]const u8{ "defaults.composition", "headless.composition" }) |composition|
+        b.getInstallStep().dependOn(&b.addInstallFile(.{ .cwd_relative = b.pathJoin(&.{ root, "src/sdk", composition }) }, b.fmt("bin/{s}", .{composition})).step);
 }
 
 /// Makes the install prefix a C SDK: every contract, factory and SDK header under `include/`, and

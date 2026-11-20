@@ -11,14 +11,6 @@ namespace KernelEngine;
 /// <summary>Registration of an engine in a container.</summary>
 public static class ServiceCollectionExtensions
 {
-    /// <summary>Registers the engine of <see cref="DefaultEngine"/> and its node types as C# registers them.</summary>
-    public static IServiceCollection AddKernelEngine(this IServiceCollection services)
-    {
-        services.AddSingleton(sp => new Engine(sp));
-        services.AddSingleton(sp => sp.GetRequiredService<Engine>().Nodes);
-        return services;
-    }
-
     /// <summary>
     /// Registers a <see cref="KernelEngineHost"/>, as itself and as <see cref="IHost"/>, that opens its assembly
     /// with <paramref name="open"/> and writes <paramref name="compose"/> into it, in order, when it starts; the

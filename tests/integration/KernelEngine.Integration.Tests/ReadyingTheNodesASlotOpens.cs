@@ -1,14 +1,10 @@
-using KernelEngine.Async.Enki;
-using KernelEngine.Configuration;
-using KernelEngine.Ecs.Flecs;
-using KernelEngine.FileSystem.Std;
 using KernelEngine.Framework;
 using KernelEngine.Framework.Nodes;
 using KernelEngine.Framework.Nodes.Native;
-using KernelEngine.Io.Std;
-using KernelEngine.Job.Enki;
-using KernelEngine.Schedule;
-using KernelEngine.Scheduler;
+using KernelEngine.Schedule.Native;
+using KernelEngine.Scheduler.Native;
+
+using Microsoft.Extensions.DependencyInjection;
 
 using Xunit;
 
@@ -27,60 +23,45 @@ partial class Probe : Node
 
 public class ReadyingTheNodesASlotOpens
 {
-    sealed class Loop : IDisposable
+    sealed unsafe class Headless : IDisposable
     {
-        public readonly EngineSchedules Schedules;
-        public readonly EngineSets Sets;
-        public readonly DefaultScheduler Scheduler;
+        readonly ServiceProvider _services;
+        public readonly INodeTypes Types;
+        public readonly NodeWorld Nodes;
+        public readonly Scheduler.Scheduler Scheduler;
+        public readonly Schedule.Schedule PreUpdate;
 
-        public Loop(FlecsEcsRegistry ecs, EnkiJobSystem jobs, EnkiAsync asyncs, DefaultConfiguration config)
+        public Headless()
         {
-            DefaultSchedule Make() => new(ecs, jobs, config.Section("schedule"));
-            Schedules = new EngineSchedules { Startup = Make(), PreUpdate = Make(), Fixed = Make(), Update = Make(), Shutdown = Make() };
-            Sets = EngineSets.Register(Schedules);
-            Scheduler = new DefaultScheduler(jobs, asyncs, config.Section("scheduler"));
-            Schedules.AddTo(Scheduler);
+            _services = new ServiceCollection().AddDefaultKernelEngine(AppContext.BaseDirectory, "headless.composition").BuildServiceProvider();
+            var host = _services.GetRequiredService<KernelEngineHost>();
+            host.Start();
+            Types = _services.GetRequiredKeyedService<INodeTypes>("node_types");
+            Nodes = _services.GetRequiredService<NodeWorld>();
+            Scheduler = KernelEngine.Scheduler.Scheduler.Borrow((ke_scheduler*)host.Instance("scheduler", "ke_scheduler"));
+            PreUpdate = KernelEngine.Schedule.Schedule.Borrow((ke_schedule*)host.Instance("pre_update", "ke_schedule"));
         }
 
-        public void Dispose()
+        public void OpenAndTick(string scene)
         {
-            Scheduler.Dispose();
-            Schedules.Shutdown.Dispose();
-            Schedules.Update.Dispose();
-            Schedules.Fixed.Dispose();
-            Schedules.PreUpdate.Dispose();
-            Schedules.Startup.Dispose();
+            var slot = new SceneSlotComponent { Path = scene };
+            Types.Spawn(PreUpdate.Commands(), Nodes.Type("scene_slot"), "Scene", default, [NodeComponent.Of(Nodes.Component("scene_slot"), slot)]);
+            for (var i = 0; i < 10 && Probe.Readied.Count == 0; i++) Scheduler.Tick(1.0f / 60.0f);
+            Scheduler.Tick(1.0f / 60.0f);
+            Scheduler.Shutdown();
         }
+
+        public void Dispose() => _services.Dispose();
     }
 
     [Fact]
     public void ANodeOfTheOpenedSceneAndOneOfASceneItInstantiatesAreBothReadied()
     {
-        using var config = new DefaultConfiguration();
-        using var jobs = new EnkiJobSystem(config.Section("job"));
-        using var asyncs = new EnkiAsync(config.Section("async"));
-        using var files = new StdFileSystem(AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar));
-        using var io = new StdIo(files, config.Section("io"));
-        using var input = new Input.DefaultInput();
-        using var ecs = new FlecsEcsRegistry(config.Section("ecs"));
-        using var loop = new Loop(ecs, jobs, asyncs, config);
-        var scheduler = loop.Scheduler;
-        using var assets = new DefaultAssetResolver(null, null, io);
-        using var tree = new DefaultSceneTree(ecs);
-        using var actions = new DefaultInputActions(config.Section("input"));
-        using var types = new DefaultNodeTypes(scheduler, ecs, tree, actions);
-        using var nodeSystems = new NodeTypesSystems(types, loop.Schedules.PreUpdate, loop.Sets.PreUpdate, loop.Schedules.Fixed, loop.Sets.FixedUpdate,
-            loop.Schedules.Update, loop.Sets.Update, loop.Schedules.Update, loop.Sets.PostUpdate);
-        using var scenes = new DefaultSceneFiles(ecs, types, assets, io, loop.Schedules.Startup, loop.Sets.Startup, config.Section("scene_files"));
-        var nodes = new NodeWorld(types);
-        nodes.Register(new Probe());
+        using var engine = new Headless();
+        engine.Nodes.Register(new Probe());
         Probe.Readied.Clear();
 
-        var slot = new SceneSlotComponent { Path = "res://scenes/Opened.scene.toml" };
-        types.Spawn(loop.Schedules.PreUpdate.Commands(), nodes.Type("scene_slot"), "Scene", default, [NodeComponent.Of(nodes.Component("scene_slot"), slot)]);
-        for (var i = 0; i < 10 && Probe.Readied.Count == 0; i++) scheduler.Tick(1.0f / 60.0f);
-        scheduler.Tick(1.0f / 60.0f);
-        scheduler.Shutdown();
+        engine.OpenAndTick("res://scenes/Opened.scene.toml");
 
         Assert.Equal([1, 2], Probe.Readied.Order());
     }
@@ -88,32 +69,12 @@ public class ReadyingTheNodesASlotOpens
     [Fact]
     public void A_scene_places_nodes_under_a_bare_node_that_carries_no_component()
     {
-        using var config = new DefaultConfiguration();
-        using var jobs = new EnkiJobSystem(config.Section("job"));
-        using var asyncs = new EnkiAsync(config.Section("async"));
-        using var files = new StdFileSystem(AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar));
-        using var io = new StdIo(files, config.Section("io"));
-        using var input = new Input.DefaultInput();
-        using var ecs = new FlecsEcsRegistry(config.Section("ecs"));
-        using var loop = new Loop(ecs, jobs, asyncs, config);
-        var scheduler = loop.Scheduler;
-        using var assets = new DefaultAssetResolver(null, null, io);
-        using var tree = new DefaultSceneTree(ecs);
-        using var actions = new DefaultInputActions(config.Section("input"));
-        using var types = new DefaultNodeTypes(scheduler, ecs, tree, actions);
-        using var nodeSystems = new NodeTypesSystems(types, loop.Schedules.PreUpdate, loop.Sets.PreUpdate, loop.Schedules.Fixed, loop.Sets.FixedUpdate,
-            loop.Schedules.Update, loop.Sets.Update, loop.Schedules.Update, loop.Sets.PostUpdate);
-        using var scenes = new DefaultSceneFiles(ecs, types, assets, io, loop.Schedules.Startup, loop.Sets.Startup, config.Section("scene_files"));
-        types.RegisterType(name: "node");
-        var nodes = new NodeWorld(types);
-        nodes.Register(new Probe());
+        using var engine = new Headless();
+        engine.Types.RegisterType(name: "node");
+        engine.Nodes.Register(new Probe());
         Probe.Readied.Clear();
 
-        var slot = new SceneSlotComponent { Path = "res://scenes/Grouped.scene.toml" };
-        types.Spawn(loop.Schedules.PreUpdate.Commands(), nodes.Type("scene_slot"), "Scene", default, [NodeComponent.Of(nodes.Component("scene_slot"), slot)]);
-        for (var i = 0; i < 10 && Probe.Readied.Count == 0; i++) scheduler.Tick(1.0f / 60.0f);
-        scheduler.Tick(1.0f / 60.0f);
-        scheduler.Shutdown();
+        engine.OpenAndTick("res://scenes/Grouped.scene.toml");
 
         Assert.Equal([3], Probe.Readied);
     }

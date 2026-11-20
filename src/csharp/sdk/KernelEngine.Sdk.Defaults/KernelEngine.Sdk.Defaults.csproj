@@ -30,6 +30,7 @@
     <ProjectReference Include="..\..\audio\KernelEngine.Audio\KernelEngine.Audio.csproj" />
     <ProjectReference Include="..\..\view\KernelEngine.View\KernelEngine.View.csproj" />
     <ProjectReference Include="..\..\runner\KernelEngine.Runner.Window\KernelEngine.Runner.Window.csproj" />
+    <ProjectReference Include="..\..\runner\KernelEngine.Runner.Headless\KernelEngine.Runner.Headless.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -41,7 +42,7 @@
     <Content Include="../../../../build/native/bin/pong/assets/fonts/*" Link="assets/fonts/%(Filename)%(Extension)">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
-    <Content Include="../../../../build/native/bin/defaults.composition" Link="defaults.composition">
+    <Content Include="../../../../build/native/bin/*.composition" Link="%(Filename)%(Extension)">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <Content Include="../../../../build/native/bin/shaders/**" Link="shaders/%(RecursiveDir)%(Filename)%(Extension)">

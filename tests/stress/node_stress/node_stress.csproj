@@ -5,7 +5,7 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <RootNamespace>NodeStress</RootNamespace>
     <AssemblyName>19_node_stress</AssemblyName>
   </PropertyGroup>
@@ -15,7 +15,7 @@
     <ProjectReference Include="..\..\..\src\csharp\scheduler\KernelEngine.Scheduler\KernelEngine.Scheduler.csproj" />
     <ProjectReference Include="..\..\..\src\csharp\job\KernelEngine.Job.Enki\KernelEngine.Job.Enki.csproj" />
     <ProjectReference Include="..\..\..\src\csharp\async\KernelEngine.Async.Enki\KernelEngine.Async.Enki.csproj" />
-    <ProjectReference Include="..\..\..\src\csharp\sdk\KernelEngine.Sdk\KernelEngine.Sdk.csproj" />
+    <ProjectReference Include="..\..\..\src\csharp\sdk\KernelEngine.Sdk.Defaults\KernelEngine.Sdk.Defaults.csproj" />
     <ProjectReference Include="..\..\..\src\csharp\framework\KernelEngine.Framework.Nodes\KernelEngine.Framework.Nodes.csproj" />
     <ProjectReference Include="..\..\..\src\csharp\generators\KernelEngine.Framework.Nodes.Generator\KernelEngine.Framework.Nodes.Generator.csproj"
                       OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
