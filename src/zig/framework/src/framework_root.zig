@@ -17,4 +17,5 @@ comptime {
     _ = @import("scene_files.zig");
     _ = @import("scene_values.zig");
     _ = @import("scene_names.zig");
+    _ = @import("framework_parts.zig");
 }

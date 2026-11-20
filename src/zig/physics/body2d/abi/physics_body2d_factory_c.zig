@@ -47,3 +47,8 @@ pub extern fn ke_physics_body2d_create(ecs: ?*abi_ecs.c.ke_ecs, physics: ?*abi_p
 /// Sends every line ke_physics_body2d logs to callback, with ctx; a NULL callback sends them
 /// back to stderr, where they go until this is called. Called once, before the library logs.
 pub extern fn ke_physics_body2d_set_log_callback(callback: ke_log_callback, ctx: ?*anyopaque) void;
+
+/// Gives the parts ke_physics_body2d contains: `physics_body2d`, providing nothing, with the
+/// slots `ecs`, `physics` and `scene_tree` and the hook `fixed_post_update`, in the set
+/// `fixed_post_update` by default.
+pub extern fn ke_physics_body2d_parts(out_count: ?*usize) ?*const abi_part.c.ke_part;

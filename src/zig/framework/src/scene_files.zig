@@ -10,6 +10,8 @@ const abi_ecs_variant = @import("abi_ecs_variant");
 const abi_framework = @import("abi_framework");
 const abi_io = @import("abi_io");
 const abi_result = @import("abi_result");
+const part = @import("part");
+const abi_part = @import("abi_part");
 const abi_schedule = @import("abi_schedule");
 const abi_settings = @import("abi_settings");
 const heap = @import("heap");
@@ -495,6 +497,10 @@ export fn ke_scene_files_create(
     out.* = .{ .ref = &s.api, .destroy = vtDestroy };
     return R.ok;
 }
+
+pub const parts = [_]abi_part.c.ke_part{
+    part.of(ke_scene_files_create, .{ .name = "scene_files", .slots = &.{ "ecs", "node_types", "assets", "io" }, .hooks = &.{.{ .name = "first_scene", .default_set = "startup" }} }),
+};
 
 const testing = std.testing;
 const zsub = @import("zsub");

@@ -12,6 +12,8 @@ const abi_framework = @import("abi_framework");
 const abi_framework_factory = @import("abi_framework_factory");
 const abi_math = @import("abi_math");
 const abi_result = @import("abi_result");
+const part = @import("part");
+const abi_part = @import("abi_part");
 const abi_schedule = @import("abi_schedule");
 const abi_spatial = @import("abi_spatial");
 const heap = @import("heap");
@@ -595,6 +597,10 @@ fn create(ecs: *abi_ecs.c.ke_ecs) R.Error!abi_scene_tree.c.ke_scene_tree_handle 
 
     return .{ .ref = &s.api, .destroy = vtDestroy };
 }
+
+pub const parts = [_]abi_part.c.ke_part{
+    part.of(ke_scene_tree_create, .{ .name = "scene_tree", .slots = &.{"ecs"} }),
+};
 
 const testing = std.testing;
 

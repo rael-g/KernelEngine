@@ -12,6 +12,8 @@ pub const _DllMainCRTStartup = @import("dll_entry")._DllMainCRTStartup;
 const c = @import("c");
 const abi_ecs = @import("abi_ecs");
 const abi_ecs_flecs_factory = @import("abi_ecs_flecs_factory");
+const abi_part = @import("abi_part");
+const part = @import("part");
 const abi_result = @import("abi_result");
 const abi_settings = @import("abi_settings");
 const settings_schema = @import("settings_schema");
@@ -1469,6 +1471,16 @@ fn create(settings: ?*abi_settings.c.ke_settings) R.Error!abi_ecs.c.ke_ecs_handl
     return .{ .ref = &s.api, .destroy = destroy };
 }
 
+pub const parts = [_]abi_part.c.ke_part{
+    part.of(ke_ecs_flecs_create, .{ .name = "ecs_flecs", .slots = &.{}, .set_log = @ptrCast(&@import("log").Destination("ke_ecs_flecs").setLogCallback) }),
+};
+
+/// The library's parts.
+export fn ke_ecs_flecs_parts(out_count: ?*usize) callconv(.c) ?*const abi_part.c.ke_part {
+    if (out_count) |n| n.* = parts.len;
+    return &parts[0];
+}
+
 const testing = std.testing;
 
 test {
@@ -2436,6 +2448,16 @@ test "a different size with no field table is still refused" {
     _ = try sized(h, "bare");
     var cid: abi_asset_resolver.c.ke_component_id = 0;
     try testing.expectEqual(abi_result.c.KE_RESULT_INVALID_ARGUMENT, h.ref.?.component_register.?(h.ref, &.{ .name = "bare", .size = 8, .alignment = 4, .fields = null, .field_count = 0 }, &cid));
+}
+
+test "the library's part is ecs_flecs, built from its factory" {
+    var count: usize = 0;
+    const p = ke_ecs_flecs_parts(&count).?;
+    try std.testing.expectEqual(@as(usize, 1), count);
+    try std.testing.expectEqualStrings("ecs_flecs", std.mem.span(p.name.?));
+    try std.testing.expectEqual(@as(usize, 1), p.provides_count);
+    try std.testing.expectEqual(@as(usize, 0), p.slot_count);
+    try std.testing.expectEqual(@as(usize, 0), p.hook_count);
 }
 
 test "creating, filling and destroying an ecs leaves no block allocated" {

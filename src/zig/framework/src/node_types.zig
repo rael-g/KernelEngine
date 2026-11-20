@@ -11,6 +11,8 @@ const abi_input_actions = @import("abi_input_actions");
 const abi_part = @import("abi_part");
 const abi_ecs_variant = @import("abi_ecs_variant");
 const abi_result = @import("abi_result");
+const abi_engine_node_types = @import("abi_engine_node_types");
+const part = @import("part");
 const abi_schedule = @import("abi_schedule");
 const abi_scheduler = @import("abi_scheduler");
 const abi_scene_tree = @import("abi_scene_tree");
@@ -1030,6 +1032,42 @@ export fn ke_node_types_create(
     return R.ok;
 }
 
+var engine_node_types_owner: u8 = 0;
+
+/// The owner's destroy of the engine node types part: releases nothing, the types stay with the
+/// node types they were registered in.
+fn engineNodeTypesDestroy(_: ?*anyopaque) callconv(.c) void {}
+
+/// Factory of the engine node types part: registers every type of `ke_engine_node_types` through
+/// `types`. A null argument fails as an invalid argument, and a refused type with the node types'
+/// code, the types registered before it staying.
+fn createEngineNodeTypes(types_in: ?*abi_framework.c.ke_node_types, out_owner: ?*abi_part.c.ke_owner) callconv(.c) abi_result.c.ke_result {
+    const out = out_owner orelse return R.code(error.InvalidArgument);
+    out.* = std.mem.zeroes(abi_part.c.ke_owner);
+    const types = types_in orelse return R.code(error.InvalidArgument);
+    for (&abi_engine_node_types.c.ke_engine_node_types) |*desc| {
+        var cid: Cid = 0;
+        const made = types.register_type.?(types, @ptrCast(desc), &cid);
+        if (made != R.ok) {
+            log.warn("engine node types: registering {s} failed", .{std.mem.span(desc.name.?)});
+            return made;
+        }
+    }
+    out.* = .{ .ref = &engine_node_types_owner, .destroy = engineNodeTypesDestroy };
+    return R.ok;
+}
+
+pub const parts = [_]abi_part.c.ke_part{
+    part.of(ke_node_types_create, .{ .name = "node_types", .slots = &.{ "scheduler", "ecs", "scene_tree", "input_actions" }, .optional = &.{"input_actions"} }),
+    part.of(ke_node_types_systems_create, .{ .name = "node_types_systems", .slots = &.{"types"}, .hooks = &.{
+        .{ .name = "pre_update", .default_set = "pre_update" },
+        .{ .name = "fixed_update", .default_set = "fixed_update" },
+        .{ .name = "update", .default_set = "update" },
+        .{ .name = "post_update", .default_set = "post_update" },
+    } }),
+    part.of(createEngineNodeTypes, .{ .name = "engine_node_types", .slots = &.{"node_types"} }),
+};
+
 const testing = std.testing;
 const zsub = @import("zsub");
 
@@ -1947,6 +1985,21 @@ test "initial bytes without fields are refused" {
     d.initial_size = @sizeOf(Paddle);
     var cid: Cid = 0;
     try testing.expectEqual(R.code(error.InvalidArgument), f.types.ref.?.register_type.?(f.types.ref, &d, &cid));
+}
+
+test "the engine node types part registers every engine node type through the node types it is bound to" {
+    var types: zsub.For(abi_framework.c.ke_node_types) = undefined;
+    try types.init();
+    defer types.deinit();
+    _ = types.when(.register_type).writesFresh(2);
+    const p = &parts[2];
+    const bound_types = [_]?*anyopaque{types.api()};
+    const bound = [_]abi_part.c.ke_part_bound{.{ .instances = @ptrCast(&bound_types), .count = 1 }};
+    var owner: abi_part.c.ke_owner = undefined;
+    try R.check(p.create.?(p, &bound[0], null, null, &owner));
+    try types.received(.register_type).times(abi_engine_node_types.c.KE_ENGINE_NODE_TYPE_COUNT);
+    try testing.expectEqual(@as(usize, 0), p.provides_count);
+    owner.destroy.?(owner.ref);
 }
 
 test "the node types leak nothing" {

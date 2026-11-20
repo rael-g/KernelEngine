@@ -16,6 +16,7 @@ pub fn build(b: *std.Build) void {
     const headers = b.addWriteFiles().add("layout.h",
         \\#include <kernel_engine/physics/body2d/body2d_module.h>
         \\#include <kernel_engine/physics/body2d/physics_body2d_log.h>
+        \\#include <kernel_engine/physics/body2d/physics_body2d_parts.h>
     );
     const translated = b.addTranslateC(.{ .root_source_file = headers, .target = target, .optimize = optimize });
     translated.addIncludePath(b.path("../../../../c/completion"));

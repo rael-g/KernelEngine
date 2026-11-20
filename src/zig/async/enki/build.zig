@@ -5,9 +5,9 @@ pub fn build(b: *std.Build) void {
     _ = ke_build.plugin(b, .{
         .name = "ke_async_enki",
         .root = "src/async_enki.zig",
-        .abi = &.{ "abi_completion", "abi_async", "abi_async_enki_factory", "abi_result", "abi_settings" },
+        .abi = &.{ "abi_part", "abi_completion", "abi_async", "abi_async_enki_factory", "abi_result", "abi_settings" },
         .common = &.{"heap"},
-        .packages = &.{ .{ .name = "settings_schema", .dependency = "ke_settings_schema", .module = "settings_schema" },  .{ .name = "completion_graph", .dependency = "ke_completion_graph", .module = "completion_graph" }, .{ .name = "async_suite", .dependency = "ke_async_suite", .module = "async_suite" } },
+        .packages = &.{ .{ .name = "part", .dependency = "ke_part", .module = "part" }, .{ .name = "settings_schema", .dependency = "ke_settings_schema", .module = "settings_schema" },  .{ .name = "completion_graph", .dependency = "ke_completion_graph", .module = "completion_graph" }, .{ .name = "async_suite", .dependency = "ke_async_suite", .module = "async_suite" } },
         .translations = &.{.{ .name = "c", .header = "src/c.h" }},
         .third_party = thirdParty,
         .tests = "Run the enkiTS async system unit tests",

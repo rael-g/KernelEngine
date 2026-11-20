@@ -10,6 +10,7 @@ const abi_ecs = @import("abi_ecs");
 const abi_part = @import("abi_part");
 const abi_math = @import("abi_math");
 const abi_result = @import("abi_result");
+const part = @import("part");
 const abi_schedule = @import("abi_schedule");
 const abi_spatial = @import("abi_spatial");
 const R = @import("result").Result(.{});
@@ -202,6 +203,10 @@ fn create(ecs: *abi_ecs.c.ke_ecs, post_update: *abi_schedule.c.ke_schedule, post
     }
     return .{ .ref = s, .destroy = ownerDestroy };
 }
+
+pub const parts = [_]abi_part.c.ke_part{
+    part.of(ke_scene_hierarchy_create, .{ .name = "scene_hierarchy", .slots = &.{"ecs"}, .hooks = &.{.{ .name = "post_update", .default_set = "post_update" }} }),
+};
 
 const testing = std.testing;
 const zsub = @import("zsub");

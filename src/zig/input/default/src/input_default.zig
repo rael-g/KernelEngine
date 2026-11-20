@@ -9,6 +9,8 @@ const heap = @import("heap");
 const gpa = heap.gpa;
 
 const abi_input = @import("abi_input");
+const abi_part = @import("abi_part");
+const part = @import("part");
 const abi_result = @import("abi_result");
 
 const R = @import("result").Result(.{});
@@ -304,6 +306,16 @@ fn create() R.Error!abi_input.c.ke_input_handle {
     return .{ .ref = api, .destroy = &inputDestroy };
 }
 
+pub const parts = [_]abi_part.c.ke_part{
+    part.of(ke_input_create, .{ .name = "input_default", .slots = &.{}, .set_log = @ptrCast(&@import("log").Destination("ke_input_default").setLogCallback) }),
+};
+
+/// The library's parts.
+export fn ke_input_default_parts(out_count: ?*usize) callconv(.c) ?*const abi_part.c.ke_part {
+    if (out_count) |n| n.* = parts.len;
+    return &parts[0];
+}
+
 const testing = std.testing;
 
 fn created() !abi_input.c.ke_input_handle {
@@ -593,6 +605,16 @@ test "snapshot accessors read out-of-range codes and a null snapshot as false" {
     try testing.expectEqual(false, api.snapshot_is_mouse_button_down.?(h.ref, &snapshot, abi_input.c.KE_INPUT_MAX_MOUSE_BUTTONS));
     try testing.expectEqual(false, api.snapshot_is_key_down.?(h.ref, null, 65));
     try testing.expectEqual(false, api.snapshot_is_mouse_button_down.?(h.ref, null, 0));
+}
+
+test "the library's part is input_default, built from its factory" {
+    var count: usize = 0;
+    const p = ke_input_default_parts(&count).?;
+    try std.testing.expectEqual(@as(usize, 1), count);
+    try std.testing.expectEqualStrings("input_default", std.mem.span(p.name.?));
+    try std.testing.expectEqual(@as(usize, 1), p.provides_count);
+    try std.testing.expectEqual(@as(usize, 0), p.slot_count);
+    try std.testing.expectEqual(@as(usize, 0), p.hook_count);
 }
 
 test "creating and destroying the input leaves no block allocated" {

@@ -10,6 +10,7 @@ const std = @import("std");
 
 const abi_input = @import("abi_input");
 const abi_result = @import("abi_result");
+const part = @import("part");
 const abi_part = @import("abi_part");
 const abi_schedule = @import("abi_schedule");
 const zsub = @import("zsub");
@@ -719,6 +720,11 @@ export fn ke_input_actions_create(
     out.* = .{ .ref = &s.api, .destroy = vtDestroy };
     return R.ok;
 }
+
+pub const parts = [_]abi_part.c.ke_part{
+    part.of(ke_input_actions_create, .{ .name = "input_actions", .slots = &.{} }),
+    part.of(ke_input_actions_evaluation_create, .{ .name = "input_actions_evaluation", .slots = &.{ "actions", "input" }, .hooks = &.{.{ .name = "pre_update", .default_set = "pre_update" }} }),
+};
 
 const testing = std.testing;
 

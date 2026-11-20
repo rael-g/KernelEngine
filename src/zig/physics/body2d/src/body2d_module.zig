@@ -17,6 +17,7 @@ const abi_physics = @import("abi_physics");
 const abi_physics_body2d_factory = @import("abi_physics_body2d_factory");
 const abi_result = @import("abi_result");
 const abi_part = @import("abi_part");
+const part = @import("part");
 const abi_schedule = @import("abi_schedule");
 const abi_spatial = @import("abi_spatial");
 
@@ -375,6 +376,16 @@ fn create(ecs_in: ?*abi_ecs.c.ke_ecs, physics_in: ?*abi_physics.c.ke_physics_2d,
     return .{ .ref = m, .destroy = destroyHandle };
 }
 
+pub const parts = [_]abi_part.c.ke_part{
+    part.of(ke_physics_body2d_create, .{ .name = "physics_body2d", .slots = &.{"ecs", "physics", "scene_tree"}, .hooks = &.{.{ .name = "fixed_post_update", .default_set = "fixed_post_update" }}, .set_log = @ptrCast(&@import("log").Destination("ke_physics_body2d").setLogCallback) }),
+};
+
+/// The library's parts.
+export fn ke_physics_body2d_parts(out_count: ?*usize) callconv(.c) ?*const abi_part.c.ke_part {
+    if (out_count) |n| n.* = parts.len;
+    return &parts[0];
+}
+
 const testing = std.testing;
 
 const Deps = struct {
@@ -696,6 +707,16 @@ test "a collider with no body above it is retried only once the hierarchy has mo
 
     destroyHandle(m);
     try heap.expectNoLeaks();
+}
+
+test "the library's part is physics_body2d, built from its factory" {
+    var count: usize = 0;
+    const p = ke_physics_body2d_parts(&count).?;
+    try std.testing.expectEqual(@as(usize, 1), count);
+    try std.testing.expectEqualStrings("physics_body2d", std.mem.span(p.name.?));
+    try std.testing.expectEqual(@as(usize, 0), p.provides_count);
+    try std.testing.expectEqual(@as(usize, 3), p.slot_count);
+    try std.testing.expectEqual(@as(usize, 1), p.hook_count);
 }
 
 test "destroying the module destroys the bodies it created" {

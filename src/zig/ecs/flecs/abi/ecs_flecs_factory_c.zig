@@ -2,13 +2,17 @@
 
 const abi_ecs = @import("ecs");
 const abi_logger = @import("logger");
+const abi_part = @import("part");
 const abi_result = @import("result");
+const abi_schedule = @import("schedule");
 const abi_settings = @import("settings");
 
 pub const ke_component_id = u32;
 pub const ke_entity = u64;
 pub const ke_query_id = u64;
 pub const ke_removal_tracker = u64;
+pub const ke_schedule_set_id = u32;
+pub const ke_schedule_system_id = u64;
 
 /// Receives one line a plugin library logged. Each plugin library exports ` <library
 /// >_set_log_callback(ke_log_callback callback, void *ctx)`, declared in its ` <library
@@ -20,6 +24,20 @@ pub const ke_log_callback = ?*const fn (?*anyopaque, abi_logger.c.ke_log_level, 
 /// Receives one key the settings hold.
 pub const ke_settings_key_func = ?*const fn (?[*:0]const u8, ?*anyopaque) callconv(.c) void;
 
+/// A structural operation applied when the queue holding it is drained. `user` points at the
+/// copy of the payload passed to defer; `ecs` is the live world. A failure is returned, and the
+/// queue stops there: the operations recorded after it are dropped.
+pub const ke_defer_fn = ?*const fn (?*abi_ecs.c.ke_ecs, ?*anyopaque) callconv(.c) abi_result.c.ke_result;
+
+/// One call of a system body, once per run of the schedule, or once per slice when the system is
+/// per_entity. A failure is carried to the caller of run, which fails with it; the rest of the
+/// wave still runs, and no later wave starts.
+pub const ke_schedule_execute_fn = ?*const fn (?*abi_schedule.c.ke_schedule_ctx, ?*anyopaque, f32) callconv(.c) abi_result.c.ke_result;
+
+/// Whether a system runs in this run of its schedule; asked once per run, before the first wave,
+/// on the thread that called run. A failure fails the run before any wave starts.
+pub const ke_schedule_condition_fn = ?*const fn (?*anyopaque, ?*bool) callconv(.c) abi_result.c.ke_result;
+
 /// Sends every line ke_ecs_flecs logs to callback, with ctx; a NULL callback sends them back to
 /// stderr, where they go until this is called. Called once, before the library logs.
 pub extern fn ke_ecs_flecs_set_log_callback(callback: ke_log_callback, ctx: ?*anyopaque) void;
@@ -29,3 +47,6 @@ pub extern fn ke_ecs_flecs_set_log_callback(callback: ke_log_callback, ctx: ?*an
 /// KE_RESULT_INVALID_ARGUMENT, and an internal failure of flecs logs flecs's message and the
 /// stack before flecs ends the process.
 pub extern fn ke_ecs_flecs_create(settings: ?*abi_settings.c.ke_settings, out_ecs: ?*abi_ecs.c.ke_ecs_handle) abi_result.c.ke_result;
+
+/// Gives the parts ke_ecs_flecs contains: `ecs_flecs`, providing ke_ecs.
+pub extern fn ke_ecs_flecs_parts(out_count: ?*usize) ?*const abi_part.c.ke_part;

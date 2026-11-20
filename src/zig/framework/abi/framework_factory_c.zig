@@ -139,3 +139,17 @@ pub extern fn ke_node_types_systems_create(types: ?*abi_framework.c.ke_node_type
 /// exclusive system that, on its first run, does what `open` does with that path, and nothing on
 /// any later run; without it, no system. Destroying the scene files unregisters that system.
 pub extern fn ke_scene_files_create(ecs: ?*abi_ecs.c.ke_ecs, node_types: ?*abi_framework.c.ke_node_types, assets: ?*abi_asset_resolver.c.ke_asset_resolver, io: ?*abi_io.c.ke_io, first_scene: ?*abi_schedule.c.ke_schedule, first_scene_set: ke_schedule_set_id, settings: ?*abi_settings.c.ke_settings, out_files: ?*abi_framework.c.ke_scene_files_handle) abi_result.c.ke_result;
+
+/// Gives the parts ke_framework contains, each named after its factory and with its slots named
+/// after the factory's parameters: `scene_tree` (ke_scene_tree; `ecs`); `asset_resolver`
+/// (ke_asset_resolver; `image_loader` and `font_loader`, optional, and `io`); `input_actions`
+/// (ke_input_actions); `input_actions_evaluation` (nothing; `actions`, `input`, hook
+/// `pre_update` in the set `pre_update`); `scene_hierarchy` (nothing; `ecs`, hook `post_update`
+/// in `post_update`); `node_types` (ke_node_types; `scheduler`, `ecs`, `scene_tree` and
+/// `input_actions`, optional); `node_types_systems` (nothing; `types`, hooks `pre_update`,
+/// `fixed_update`, `update` and `post_update`, each in the set of its name); `engine_node_types`
+/// (nothing; `node_types`), which registers every type of ke_engine_node_types through them, the
+/// types staying when it is destroyed; and `scene_files` (ke_scene_files; `ecs`, `node_types`,
+/// `assets`, `io`, hook `first_scene` in `startup`). The sets named are the defaults a
+/// composition may rebind.
+pub extern fn ke_framework_parts(out_count: ?*usize) ?*const abi_part.c.ke_part;
