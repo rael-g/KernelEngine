@@ -10,8 +10,8 @@
   <ItemGroup>
     <ProjectReference Include="..\..\common\KernelEngine.Common\KernelEngine.Common.csproj" />
     <ProjectReference Include="..\..\result\KernelEngine.Result\KernelEngine.Result.csproj" />
-    <ProjectReference Include="..\..\schedule\KernelEngine.Schedule\KernelEngine.Schedule.csproj" />
     <ProjectReference Include="..\..\completion\KernelEngine.Completion\KernelEngine.Completion.csproj" />
+    <ProjectReference Include="..\..\logger\KernelEngine.Logger.Abstractions\KernelEngine.Logger.Abstractions.csproj" />
     <ProjectReference Include="..\..\settings\KernelEngine.Settings\KernelEngine.Settings.csproj" />
   </ItemGroup>
 

@@ -1,7 +1,6 @@
 using System.Numerics;
 using System.Runtime.InteropServices;
 
-using global::KernelEngine.Ecs;
 using global::KernelEngine.Logger;
 
 using KernelEngine.Input.Native;

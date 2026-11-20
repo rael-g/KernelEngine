@@ -1,7 +1,8 @@
 //! The part of an implementation, built from its typed factory: each parameter before the handle is a slot,
 //! in order, named by the caller and named after its contract's vtable type, except that a `ke_schedule`
-//! followed by a `ke_schedule_set_id` is a hook; a `ke_settings` parameter takes the instance's section; the
-//! handle the factory fills is the instance, and a `ke_owner` is one that provides nothing.
+//! followed by a `ke_schedule_set_id` is one slot of `ke_schedule_set`, a hook; a `ke_settings` parameter takes
+//! the instance's section; the handle the factory fills is the instance, and a `ke_owner` is one that provides
+//! nothing.
 
 const std = @import("std");
 const abi_part = @import("abi_part");
@@ -10,20 +11,14 @@ const abi_settings = @import("abi_settings");
 
 const c = abi_part.c;
 
-/// A hook of the factory: its name and the set it joins when the composition names none.
-pub const Hook = struct {
-    name: [:0]const u8,
-    default_set: [:0]const u8,
-};
-
 /// What a factory cannot say about itself: the implementation's name, one name per dependency parameter and one
-/// hook per schedule and set pair, each in the factory's order, which dependencies take none or one instance, the
+/// per schedule and set pair, each in the factory's order, which dependencies take none or one instance, the
 /// contracts the instance provides besides its handle's, with `provided` giving the vtable of each, and the
 /// part's optional functions.
 pub const Options = struct {
     name: [:0]const u8,
     slots: []const [:0]const u8,
-    hooks: []const Hook = &.{},
+    hooks: []const [:0]const u8 = &.{},
     optional: []const [:0]const u8 = &.{},
     also: []const [:0]const u8 = &.{},
     provided: @FieldType(c.ke_part, "provided") = null,
@@ -48,8 +43,6 @@ pub fn of(comptime factory: anytype, comptime options: Options) c.ke_part {
         .provides_count = Built.provides.len,
         .slots = if (Built.slots.len > 0) &Built.slots[0] else null,
         .slot_count = Built.slots.len,
-        .hooks = if (Built.hooks.len > 0) &Built.hooks[0] else null,
-        .hook_count = Built.hooks.len,
         .create = Built.create,
         .provided = options.provided,
         .ready = options.ready,
@@ -78,35 +71,34 @@ fn Of(comptime factory: anytype, comptime options: Options) type {
             break :blk final;
         };
 
-        const hooks = blk: {
-            var made: [options.hooks.len]c.ke_part_hook = undefined;
-            var at = 0;
-            for (kinds) |k| {
-                if (k != .hook) continue;
-                if (at == options.hooks.len) @compileError(options.name ++ ": the factory has more hooks than hook names");
-                made[at] = .{ .name = options.hooks[at].name.ptr, .default_set = options.hooks[at].default_set.ptr };
-                at += 1;
-            }
-            if (at != options.hooks.len) @compileError(options.name ++ ": the factory has fewer hooks than hook names");
-            const final = made;
-            break :blk final;
-        };
-
         const slots = blk: {
-            var made: [options.slots.len]c.ke_part_slot = undefined;
-            var at = 0;
-            for (params[0 .. params.len - 1], kinds) |p, k| {
-                if (k != .slot) continue;
-                if (at == options.slots.len) @compileError(options.name ++ ": the factory has more dependencies than slot names");
-                const name = options.slots[at];
-                made[at] = .{
-                    .name = name.ptr,
-                    .contract = contractName(@typeInfo(@typeInfo(p.type.?).optional.child).pointer.child).ptr,
-                    .cardinality = if (isOptional(name)) c.KE_PART_CARDINALITY_OPTIONAL else c.KE_PART_CARDINALITY_ONE,
-                };
-                at += 1;
-            }
-            if (at != options.slots.len) @compileError(options.name ++ ": the factory has fewer dependencies than slot names");
+            var made: [options.slots.len + options.hooks.len]c.ke_part_slot = undefined;
+            var named = 0;
+            var hooked = 0;
+            for (params[0 .. params.len - 1], kinds, 0..) |p, k, i| switch (k) {
+                .slot => {
+                    if (named == options.slots.len) @compileError(options.name ++ ": the factory has more dependencies than slot names");
+                    const name = options.slots[named];
+                    made[named + hooked] = .{
+                        .name = name.ptr,
+                        .contract = contractName(@typeInfo(@typeInfo(p.type.?).optional.child).pointer.child).ptr,
+                        .cardinality = if (isOptional(name)) c.KE_PART_CARDINALITY_OPTIONAL else c.KE_PART_CARDINALITY_ONE,
+                    };
+                    named += 1;
+                },
+                .hook => {
+                    if (hooked == options.hooks.len) @compileError(options.name ++ ": the factory has more hooks than hook names");
+                    made[named + hooked] = .{
+                        .name = options.hooks[hooked].ptr,
+                        .contract = (contractName(@typeInfo(@typeInfo(params[i].type.?).optional.child).pointer.child) ++ "_set").ptr,
+                        .cardinality = c.KE_PART_CARDINALITY_ONE,
+                    };
+                    hooked += 1;
+                },
+                else => {},
+            };
+            if (named != options.slots.len) @compileError(options.name ++ ": the factory has fewer dependencies than slot names");
+            if (hooked != options.hooks.len) @compileError(options.name ++ ": the factory has fewer hooks than hook names");
             const final = made;
             break :blk final;
         };
@@ -123,30 +115,30 @@ fn Of(comptime factory: anytype, comptime options: Options) type {
             destroy_of.?(@ptrCast(@alignCast(ref)));
         }
 
-        /// Slot `create`. A slot bound to nothing passes null, and each hook its schedule and set; the instance is
-        /// left zeroed when the factory fails.
-        fn create(self: ?*const c.ke_part, bound: ?*const c.ke_part_bound, hooked: ?*const c.ke_part_hooked, settings: ?*abi_settings.c.ke_settings, out_instance: ?*c.ke_owner) callconv(.c) abi_result.c.ke_result {
+        /// Slot `create`. A slot bound to nothing passes null, and each hook the schedule and set of the set bound
+        /// to it; the instance is left zeroed when the factory fails.
+        fn create(self: ?*const c.ke_part, bound: ?*const c.ke_part_bound, settings: ?*abi_settings.c.ke_settings, out_instance: ?*c.ke_owner) callconv(.c) abi_result.c.ke_result {
             const out = out_instance orelse return abi_result.c.KE_RESULT_INVALID_ARGUMENT;
             out.* = std.mem.zeroes(c.ke_owner);
-            if (self == null or (slots.len > 0 and bound == null) or (hooks.len > 0 and hooked == null)) return abi_result.c.KE_RESULT_INVALID_ARGUMENT;
+            if (self == null or (slots.len > 0 and bound == null)) return abi_result.c.KE_RESULT_INVALID_ARGUMENT;
             const each: [*]const c.ke_part_bound = if (bound) |b| @ptrCast(b) else undefined;
-            const where: [*]const c.ke_part_hooked = if (hooked) |h| @ptrCast(h) else undefined;
             var handle = std.mem.zeroes(@typeInfo(Handle).pointer.child);
             var args: std.meta.ArgsTuple(@TypeOf(factory)) = undefined;
             comptime var at = 0;
-            comptime var hook_at = 0;
             inline for (kinds, 0..) |k, i| switch (k) {
                 .settings => args[i] = settings,
                 .slot => {
-                    const slot = each[at];
-                    args[i] = if (slot.count > 0) @ptrCast(@alignCast(@as([*]const ?*anyopaque, @ptrCast(slot.instances))[0])) else null;
+                    args[i] = @ptrCast(@alignCast(first(each[at])));
                     at += 1;
                 },
-                .hook => args[i] = @ptrCast(@alignCast(where[hook_at].schedule)),
-                .set => {
-                    args[i] = where[hook_at].set;
-                    hook_at += 1;
+                .hook => {
+                    const Set = extern struct { schedule: @TypeOf(args[i]), id: @TypeOf(args[i + 1]) };
+                    const set: *const Set = @ptrCast(@alignCast(first(each[at]) orelse return abi_result.c.KE_RESULT_INVALID_ARGUMENT));
+                    args[i] = set.schedule;
+                    args[i + 1] = set.id;
+                    at += 1;
                 },
+                .set => {},
             };
             args[params.len - 1] = &handle;
             const result = @call(.auto, factory, args);
@@ -163,6 +155,10 @@ fn Of(comptime factory: anytype, comptime options: Options) type {
     };
 }
 
+fn first(slot: c.ke_part_bound) ?*anyopaque {
+    return if (slot.count > 0) @as([*]const ?*anyopaque, @ptrCast(slot.instances))[0] else null;
+}
+
 const Kind = enum { settings, slot, hook, set };
 
 fn isSchedule(comptime T: type) bool {
@@ -173,7 +169,7 @@ fn isSchedule(comptime T: type) bool {
 }
 
 fn kindsOf(comptime params: []const std.builtin.Type.Fn.Param, comptime Settings: type) [params.len]Kind {
-    const SetId = @FieldType(c.ke_part_hooked, "set");
+    const SetId = u32;
     var kinds: [params.len]Kind = undefined;
     var i = 0;
     while (i < params.len) : (i += 1) {
@@ -246,7 +242,7 @@ test "creating through the part hands the factory the bound instances and the se
     var settings = std.mem.zeroes(abi_settings.c.ke_settings);
     settings.get_int = sizeIs;
     var instance: c.ke_owner = undefined;
-    try testing.expectEqual(abi_result.c.KE_OK, wheel_part.create.?(&wheel_part, &bound[0], null, &settings, &instance));
+    try testing.expectEqual(abi_result.c.KE_OK, wheel_part.create.?(&wheel_part, &bound[0], &settings, &instance));
     const wheel: *ke_wheel = @ptrCast(@alignCast(instance.ref.?));
     try testing.expectEqual(&gear, wheel.gear.?);
     try testing.expect(wheel.spare == null);
@@ -285,14 +281,14 @@ test "a factory with no dependency and no settings is a part with no slot" {
     try testing.expectEqual(@as(usize, 0), gear_part.slot_count);
     try testing.expect(gear_part.slots == null);
     var instance: c.ke_owner = undefined;
-    try testing.expectEqual(abi_result.c.KE_OK, gear_part.create.?(&gear_part, null, null, null, &instance));
+    try testing.expectEqual(abi_result.c.KE_OK, gear_part.create.?(&gear_part, null, null, &instance));
     try testing.expectEqual(@as(?*anyopaque, &made_gear), instance.ref);
 }
 
 test "a factory that fails leaves the instance zeroed and returns its code" {
     const bound = [_]c.ke_part_bound{ .{ .instances = null, .count = 0 }, .{ .instances = null, .count = 0 } };
     var instance: c.ke_owner = undefined;
-    try testing.expectEqual(abi_result.c.KE_RESULT_INVALID_ARGUMENT, wheel_part.create.?(&wheel_part, &bound[0], null, null, &instance));
+    try testing.expectEqual(abi_result.c.KE_RESULT_INVALID_ARGUMENT, wheel_part.create.?(&wheel_part, &bound[0], null, &instance));
     try testing.expect(instance.ref == null and instance.destroy == null);
 }
 
@@ -316,26 +312,29 @@ fn moduleCreate(gear: ?*ke_gear, tick: ?*ke_schedule, tick_set: u32, out: ?*ke_o
     return abi_result.c.KE_OK;
 }
 
-const module_part = of(moduleCreate, .{ .name = "gear_module", .slots = &.{"gear"}, .hooks = &.{.{ .name = "tick", .default_set = "update" }} });
+const module_part = of(moduleCreate, .{ .name = "gear_module", .slots = &.{"gear"}, .hooks = &.{"tick"} });
 
-test "a schedule followed by a set id is a hook, and a factory filling an owner provides nothing" {
+const ke_schedule_set = extern struct { schedule: ?*ke_schedule, id: u32 };
+
+test "a schedule followed by a set id is a slot of the schedule's set, and a factory filling an owner provides nothing" {
     try testing.expectEqual(@as(usize, 0), module_part.provides_count);
     try testing.expect(module_part.provides == null);
-    try testing.expectEqual(@as(usize, 1), module_part.slot_count);
+    try testing.expectEqual(@as(usize, 2), module_part.slot_count);
     try testing.expectEqualStrings("ke_gear", std.mem.span(slotOf(module_part, 0).contract.?));
-    try testing.expectEqual(@as(usize, 1), module_part.hook_count);
-    try testing.expectEqualStrings("tick", std.mem.span(module_part.hooks.?.*.name.?));
-    try testing.expectEqualStrings("update", std.mem.span(module_part.hooks.?.*.default_set.?));
+    try testing.expectEqualStrings("tick", std.mem.span(slotOf(module_part, 1).name.?));
+    try testing.expectEqualStrings("ke_schedule_set", std.mem.span(slotOf(module_part, 1).contract.?));
+    try testing.expectEqual(c.KE_PART_CARDINALITY_ONE, slotOf(module_part, 1).cardinality);
 }
 
-test "creating a module hands each hook its schedule and set, and the owner is the module's" {
+test "creating a module hands each hook the schedule and set of the set bound to it, and the owner is the module's" {
     var gear = ke_gear{ .teeth = 5 };
     var schedule = ke_schedule{ .runs = 0 };
+    var set = ke_schedule_set{ .schedule = &schedule, .id = 4 };
     const gears = [_]?*anyopaque{&gear};
-    const bound = [_]c.ke_part_bound{.{ .instances = @ptrCast(&gears), .count = 1 }};
-    const hooked = [_]c.ke_part_hooked{.{ .schedule = @ptrCast(&schedule), .set = 4 }};
+    const sets = [_]?*anyopaque{&set};
+    const bound = [_]c.ke_part_bound{ .{ .instances = @ptrCast(&gears), .count = 1 }, .{ .instances = @ptrCast(&sets), .count = 1 } };
     var instance: c.ke_owner = undefined;
-    try testing.expectEqual(abi_result.c.KE_OK, module_part.create.?(&module_part, &bound[0], &hooked[0], null, &instance));
+    try testing.expectEqual(abi_result.c.KE_OK, module_part.create.?(&module_part, &bound[0], null, &instance));
     try testing.expectEqual(&gear, hooked_gear.?);
     try testing.expectEqual(&schedule, hooked_to.?);
     try testing.expectEqual(@as(u32, 4), hooked_set);
@@ -343,11 +342,11 @@ test "creating a module hands each hook its schedule and set, and the owner is t
     try testing.expectEqual(@as(?*anyopaque, &made_gear), released);
 }
 
-test "a part with hooks refuses to create without where they were bound" {
+test "a part with hooks refuses to create without a set bound to each" {
     var gear = ke_gear{ .teeth = 5 };
     const gears = [_]?*anyopaque{&gear};
-    const bound = [_]c.ke_part_bound{.{ .instances = @ptrCast(&gears), .count = 1 }};
+    const bound = [_]c.ke_part_bound{ .{ .instances = @ptrCast(&gears), .count = 1 }, .{ .instances = null, .count = 0 } };
     var instance: c.ke_owner = undefined;
-    try testing.expectEqual(abi_result.c.KE_RESULT_INVALID_ARGUMENT, module_part.create.?(&module_part, &bound[0], null, null, &instance));
+    try testing.expectEqual(abi_result.c.KE_RESULT_INVALID_ARGUMENT, module_part.create.?(&module_part, &bound[0], null, &instance));
     try testing.expect(instance.ref == null);
 }

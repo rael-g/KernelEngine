@@ -1,7 +1,6 @@
 using System.Numerics;
 
 using global::KernelEngine.Assembly;
-using global::KernelEngine.Ecs;
 using global::KernelEngine.Logger;
 
 using KernelEngine.Part.Native;

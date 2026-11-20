@@ -14,8 +14,8 @@ namespace KernelEngine.Assembly;
 /// <summary>Receives one reason a composition cannot be assembled.</summary>
 /// <param name="failure">The reason.</param>
 /// <param name="instance">The instance it concerns; valid only during the call.</param>
-/// <param name="name">The slot, hook, part or set it concerns; valid only during the call.</param>
-/// <param name="detail">A line naming what was found, as the candidates; valid only during the call.</param>
+/// <param name="name">The slot, part or instance name it concerns; valid only during the call.</param>
+/// <param name="detail">A line naming what was found: for a name nothing declares, the names of that kind that exist; for a slot with no candidate, the instances that provide its contract; for an ambiguous one, the candidates. Valid only during the call.</param>
 public delegate void AssemblyReport(AssemblyFailure failure, string instance, string name, string detail);
 
 /// <summary>The assembly contract game code depends on, so a caller names a capability rather than the <see cref="Assembly"/> that carries it.</summary>
@@ -46,21 +46,10 @@ public interface IAssembly : IDisposable
     /// <param name="target">An instance's name.</param>
     /// <exception cref="Exception">The native call failed.</exception>
     void Bind(string instance, string slot, string target);
-    /// <summary>Binds the hook hook of instance to the set set of the schedule instance schedule. A hook nothing binds joins the only schedule that has its default set.</summary>
-    /// <param name="schedule">An instance providing ke_schedule.</param>
-    /// <param name="set">NULL takes the hook's default set.</param>
-    /// <exception cref="Exception">The native call failed.</exception>
-    void Hook(string instance, string hook, string schedule, string set);
     /// <summary>Orders two instances bound to the slot slot of instance: first comes before then. Instances of a slot with no order between them come in no guaranteed order. With no slot, orders two instances bound to slots of instance, the same or different ones, by the positions the part receives.</summary>
     /// <param name="slot">NULL orders across the slots of instance.</param>
     /// <exception cref="Exception">The native call failed.</exception>
     void Order(string instance, string slot, string first, string then);
-    /// <summary>Introduces the set name in the schedule instance schedule.</summary>
-    /// <exception cref="Exception">The native call failed.</exception>
-    void AddSet(string schedule, string name);
-    /// <summary>Orders two sets of the schedule instance schedule: first runs before then.</summary>
-    /// <exception cref="Exception">The native call failed.</exception>
-    void OrderSet(string schedule, string first, string then);
     /// <summary>Names the instance every slot of contract the composition binds nothing to takes.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
     void SetDefault(string contract, string instance);

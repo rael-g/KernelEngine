@@ -723,7 +723,7 @@ export fn ke_input_actions_create(
 
 pub const parts = [_]abi_part.c.ke_part{
     part.of(ke_input_actions_create, .{ .name = "input_actions", .slots = &.{} }),
-    part.of(ke_input_actions_evaluation_create, .{ .name = "input_actions_evaluation", .slots = &.{ "actions", "input" }, .hooks = &.{.{ .name = "pre_update", .default_set = "pre_update" }} }),
+    part.of(ke_input_actions_evaluation_create, .{ .name = "input_actions_evaluation", .slots = &.{ "actions", "input" }, .hooks = &.{"pre_update"} }),
 };
 
 const testing = std.testing;

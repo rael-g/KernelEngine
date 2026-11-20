@@ -738,7 +738,6 @@ test "the library's part is physics_2d_box2d, built from its factory" {
     try std.testing.expectEqualStrings("physics_2d_box2d", std.mem.span(p.name.?));
     try std.testing.expectEqual(@as(usize, 1), p.provides_count);
     try std.testing.expectEqual(@as(usize, 1), p.slot_count);
-    try std.testing.expectEqual(@as(usize, 0), p.hook_count);
 }
 
 test "creating and destroying a physics world leaves no block allocated" {

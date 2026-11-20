@@ -4,7 +4,6 @@ const abi_ecs = @import("ecs");
 const abi_logger = @import("logger");
 const abi_part = @import("part");
 const abi_result = @import("result");
-const abi_schedule = @import("schedule");
 const abi_settings = @import("settings");
 
 /// The ABI as the headers declare it.

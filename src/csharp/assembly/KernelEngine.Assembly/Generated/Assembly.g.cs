@@ -24,7 +24,7 @@ public unsafe interface INativeAssembly
     global::System.Runtime.InteropServices.SafeHandle? Owner { get; }
 }
 
-/// <summary>Assembles instances of parts from a composition: which instances exist, of which part, with which section of settings, and which instance each slot and hook is bound to. Nothing is created before the whole composition resolves. Every name is copied. Gathering records what it is given and checks nothing: every mistake in it, as a name taken twice or one nothing declares, is reported by resolve, with the others.</summary>
+/// <summary>Assembles instances of parts from a composition: which instances exist, of which part, with which section of settings, and which instance each slot is bound to. Nothing is created before the whole composition resolves. Every name is copied. Gathering records what it is given and checks nothing: every mistake in it, as a name taken twice or one nothing declares, is reported by resolve, with the others.</summary>
 public unsafe partial class Assembly : IDisposable, INativeAssembly, IAssembly
 {
 
@@ -233,43 +233,6 @@ public unsafe partial class Assembly : IDisposable, INativeAssembly, IAssembly
         }
     }
 
-    /// <summary>Binds the hook hook of instance to the set set of the schedule instance schedule. A hook nothing binds joins the only schedule that has its default set.</summary>
-    /// <param name="schedule">An instance providing ke_schedule.</param>
-    /// <param name="set">NULL takes the hook's default set.</param>
-    /// <exception cref="Exception">The native call failed.</exception>
-    public void Hook(string instance, string hook, string schedule, string set)
-    {
-        var instanceText = instance ?? "";
-        var instanceSize = System.Text.Encoding.UTF8.GetMaxByteCount(instanceText.Length) + 1;
-        Span<byte> instanceBytes = instanceSize <= 512 ? stackalloc byte[512] : new byte[instanceSize];
-        instanceBytes[System.Text.Encoding.UTF8.GetBytes(instanceText, instanceBytes)] = 0;
-        fixed (byte* instancePtr = instanceBytes)
-        {
-            var hookText = hook ?? "";
-            var hookSize = System.Text.Encoding.UTF8.GetMaxByteCount(hookText.Length) + 1;
-            Span<byte> hookBytes = hookSize <= 512 ? stackalloc byte[512] : new byte[hookSize];
-            hookBytes[System.Text.Encoding.UTF8.GetBytes(hookText, hookBytes)] = 0;
-            fixed (byte* hookPtr = hookBytes)
-            {
-                var scheduleText = schedule ?? "";
-                var scheduleSize = System.Text.Encoding.UTF8.GetMaxByteCount(scheduleText.Length) + 1;
-                Span<byte> scheduleBytes = scheduleSize <= 512 ? stackalloc byte[512] : new byte[scheduleSize];
-                scheduleBytes[System.Text.Encoding.UTF8.GetBytes(scheduleText, scheduleBytes)] = 0;
-                fixed (byte* schedulePtr = scheduleBytes)
-                {
-                    var setText = set ?? "";
-                    var setSize = System.Text.Encoding.UTF8.GetMaxByteCount(setText.Length) + 1;
-                    Span<byte> setBytes = setSize <= 512 ? stackalloc byte[512] : new byte[setSize];
-                    setBytes[System.Text.Encoding.UTF8.GetBytes(setText, setBytes)] = 0;
-                    fixed (byte* setPtr = setBytes)
-                    {
-                        NativeResult.ThrowIfFailed(Handle->hook(Handle, (sbyte*)instancePtr, (sbyte*)hookPtr, (sbyte*)schedulePtr, (sbyte*)setPtr), "hook");
-                    }
-                }
-            }
-        }
-    }
-
     /// <summary>Orders two instances bound to the slot slot of instance: first comes before then. Instances of a slot with no order between them come in no guaranteed order. With no slot, orders two instances bound to slots of instance, the same or different ones, by the positions the part receives.</summary>
     /// <param name="slot">NULL orders across the slots of instance.</param>
     /// <exception cref="Exception">The native call failed.</exception>
@@ -301,55 +264,6 @@ public unsafe partial class Assembly : IDisposable, INativeAssembly, IAssembly
                     {
                         NativeResult.ThrowIfFailed(Handle->order(Handle, (sbyte*)instancePtr, (sbyte*)slotPtr, (sbyte*)firstPtr, (sbyte*)thenPtr), "order");
                     }
-                }
-            }
-        }
-    }
-
-    /// <summary>Introduces the set name in the schedule instance schedule.</summary>
-    /// <exception cref="Exception">The native call failed.</exception>
-    public void AddSet(string schedule, string name)
-    {
-        var scheduleText = schedule ?? "";
-        var scheduleSize = System.Text.Encoding.UTF8.GetMaxByteCount(scheduleText.Length) + 1;
-        Span<byte> scheduleBytes = scheduleSize <= 512 ? stackalloc byte[512] : new byte[scheduleSize];
-        scheduleBytes[System.Text.Encoding.UTF8.GetBytes(scheduleText, scheduleBytes)] = 0;
-        fixed (byte* schedulePtr = scheduleBytes)
-        {
-            var nameText = name ?? "";
-            var nameSize = System.Text.Encoding.UTF8.GetMaxByteCount(nameText.Length) + 1;
-            Span<byte> nameBytes = nameSize <= 512 ? stackalloc byte[512] : new byte[nameSize];
-            nameBytes[System.Text.Encoding.UTF8.GetBytes(nameText, nameBytes)] = 0;
-            fixed (byte* namePtr = nameBytes)
-            {
-                NativeResult.ThrowIfFailed(Handle->add_set(Handle, (sbyte*)schedulePtr, (sbyte*)namePtr), "add_set");
-            }
-        }
-    }
-
-    /// <summary>Orders two sets of the schedule instance schedule: first runs before then.</summary>
-    /// <exception cref="Exception">The native call failed.</exception>
-    public void OrderSet(string schedule, string first, string then)
-    {
-        var scheduleText = schedule ?? "";
-        var scheduleSize = System.Text.Encoding.UTF8.GetMaxByteCount(scheduleText.Length) + 1;
-        Span<byte> scheduleBytes = scheduleSize <= 512 ? stackalloc byte[512] : new byte[scheduleSize];
-        scheduleBytes[System.Text.Encoding.UTF8.GetBytes(scheduleText, scheduleBytes)] = 0;
-        fixed (byte* schedulePtr = scheduleBytes)
-        {
-            var firstText = first ?? "";
-            var firstSize = System.Text.Encoding.UTF8.GetMaxByteCount(firstText.Length) + 1;
-            Span<byte> firstBytes = firstSize <= 512 ? stackalloc byte[512] : new byte[firstSize];
-            firstBytes[System.Text.Encoding.UTF8.GetBytes(firstText, firstBytes)] = 0;
-            fixed (byte* firstPtr = firstBytes)
-            {
-                var thenText = then ?? "";
-                var thenSize = System.Text.Encoding.UTF8.GetMaxByteCount(thenText.Length) + 1;
-                Span<byte> thenBytes = thenSize <= 512 ? stackalloc byte[512] : new byte[thenSize];
-                thenBytes[System.Text.Encoding.UTF8.GetBytes(thenText, thenBytes)] = 0;
-                fixed (byte* thenPtr = thenBytes)
-                {
-                    NativeResult.ThrowIfFailed(Handle->order_set(Handle, (sbyte*)schedulePtr, (sbyte*)firstPtr, (sbyte*)thenPtr), "order_set");
                 }
             }
         }

@@ -20,7 +20,7 @@ extern "C"
 #endif
 
 /**
- * Gives the parts ke_schedule contains: `schedule`, providing ke_schedule and ke_scheduler_executable, with the slots `ecs` and `job`.
+ * Gives the parts ke_schedule contains: `schedule`, providing ke_schedule, ke_scheduler_executable and ke_schedule_set, with the slots `ecs` and `job`.
  * @param out_count [out] Receives how many parts the returned array holds.
  * @return [borrowed] The parts, valid while the library is loaded.
  */

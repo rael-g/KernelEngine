@@ -113,6 +113,7 @@ threadlocal var inside_body: bool = false;
 const State = struct {
     api: c.ke_schedule,
     executable: abi_scheduler.c.ke_scheduler_executable = .{ .run = &runAsExecutable },
+    own_set: c.ke_schedule_set = .{},
     ecs: *abi_ecs.c.ke_ecs,
     jobs: *abi_job.c.ke_job_system,
     refuse_ambiguity: bool,
@@ -142,14 +143,18 @@ fn runAsExecutable(user: ?*anyopaque, dt: f32, out_completion: ?*?*abi_completio
     return run(@ptrCast(@alignCast(user orelse return R.code(error.InvalidArgument))), dt, out_completion);
 }
 
-/// The vtable of each contract the schedule's part provides: the schedule, then the executable.
+/// The vtable of each contract the schedule's part provides: the schedule, the executable, then its own set.
 fn provided(instance: ?*anyopaque, index: usize) callconv(.c) ?*anyopaque {
     const s = stateOf(@ptrCast(@alignCast(instance))) orelse return null;
-    return if (index == 0) &s.api else &s.executable;
+    return switch (index) {
+        0 => &s.api,
+        1 => &s.executable,
+        else => &s.own_set,
+    };
 }
 
 const parts = [_]abi_part.c.ke_part{
-    part.of(ke_schedule_create, .{ .name = "schedule", .slots = &.{ "ecs", "job" }, .also = &.{"ke_scheduler_executable"}, .provided = provided, .set_log = @ptrCast(&@import("log").Destination("ke_schedule").setLogCallback) }),
+    part.of(ke_schedule_create, .{ .name = "schedule", .slots = &.{ "ecs", "job" }, .also = &.{ "ke_scheduler_executable", "ke_schedule_set" }, .provided = provided, .set_log = @ptrCast(&@import("log").Destination("ke_schedule").setLogCallback) }),
 };
 
 /// The library's parts.
@@ -671,6 +676,11 @@ export fn ke_schedule_create(ecs: ?*abi_ecs.c.ke_ecs, job_system: ?*abi_job.c.ke
     };
     s.api.handle = s;
     s.executable.user = &s.api;
+    const own = addSet(s, &.{ .name = "schedule" }) catch |err| {
+        destroy(&s.api);
+        return failed("ke_schedule_create", err);
+    };
+    s.own_set = .{ .schedule = &s.api, .id = own };
     s.host.queue = &s.host_queue;
     s.host.bind();
     out.* = .{ .ref = &s.api, .destroy = &destroy };
@@ -1376,10 +1386,10 @@ test "a slot given no schedule refuses" {
     try testing.expectEqual(null, rig.sched.commands.?(null));
 }
 
-test "the schedule's part provides the schedule and, after it, the executable a scheduler runs, named by the schedule" {
+test "the schedule's part provides the schedule, the executable a scheduler runs, named by the schedule, and a set a module joins" {
     var count: usize = 0;
     const p = ke_schedule_parts(&count).?;
-    try testing.expectEqual(@as(usize, 2), p.provides_count);
+    try testing.expectEqual(@as(usize, 3), p.provides_count);
     var ecs: zsub.For(abi_ecs.c.ke_ecs) = undefined;
     try ecs.init();
     defer ecs.deinit();
@@ -1393,6 +1403,11 @@ test "the schedule's part provides the schedule and, after it, the executable a 
     const exec: *abi_scheduler.c.ke_scheduler_executable = @ptrCast(@alignCast(p.provided.?(h.ref, 1).?));
     try testing.expectEqual(@as(?*anyopaque, h.ref), exec.user);
     try testing.expectEqual(@as(abi_scheduler.c.ke_scheduler_run_fn, &runAsExecutable), exec.run);
+    const own: *c.ke_schedule_set = @ptrCast(@alignCast(p.provided.?(h.ref, 2).?));
+    try testing.expectEqual(h.ref, own.schedule);
+    var probe = Probe{};
+    var system: SystemId = undefined;
+    try R.check(h.ref.?.register_system.?(h.ref, &.{ .name = "joins", .user_data = &probe, .execute = &counting, .sets = @ptrCast(&own.id), .set_count = 1 }, &system));
 }
 
 test "nothing the schedule allocated is left behind" {

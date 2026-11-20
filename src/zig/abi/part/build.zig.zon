@@ -5,10 +5,8 @@
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
         .abi_completion = .{ .path = "../completion" },
-        .abi_ecs = .{ .path = "../ecs" },
         .abi_logger = .{ .path = "../logger" },
         .abi_result = .{ .path = "../result" },
-        .abi_schedule = .{ .path = "../schedule" },
         .abi_settings = .{ .path = "../settings" },
     },
     .paths = .{"."},

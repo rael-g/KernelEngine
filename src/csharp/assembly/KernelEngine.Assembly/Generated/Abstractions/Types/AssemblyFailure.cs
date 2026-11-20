@@ -1,7 +1,5 @@
 using System.Numerics;
 
-using global::KernelEngine.Ecs;
-
 namespace KernelEngine.Assembly;
 
 public enum AssemblyFailure : uint
@@ -12,7 +10,6 @@ public enum AssemblyFailure : uint
     Ambiguous = 4,
     WrongContract = 5,
     Cycle = 6,
-    Unhooked = 7,
     Duplicate = 8,
     SharedSection = 9,
 }

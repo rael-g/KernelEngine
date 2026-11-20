@@ -377,7 +377,7 @@ fn create(ecs_in: ?*abi_ecs.c.ke_ecs, physics_in: ?*abi_physics.c.ke_physics_2d,
 }
 
 pub const parts = [_]abi_part.c.ke_part{
-    part.of(ke_physics_body2d_create, .{ .name = "physics_body2d", .slots = &.{"ecs", "physics", "scene_tree"}, .hooks = &.{.{ .name = "fixed_post_update", .default_set = "fixed_post_update" }}, .set_log = @ptrCast(&@import("log").Destination("ke_physics_body2d").setLogCallback) }),
+    part.of(ke_physics_body2d_create, .{ .name = "physics_body2d", .slots = &.{"ecs", "physics", "scene_tree"}, .hooks = &.{"fixed_post_update"}, .set_log = @ptrCast(&@import("log").Destination("ke_physics_body2d").setLogCallback) }),
 };
 
 /// The library's parts.
@@ -715,8 +715,10 @@ test "the library's part is physics_body2d, built from its factory" {
     try std.testing.expectEqual(@as(usize, 1), count);
     try std.testing.expectEqualStrings("physics_body2d", std.mem.span(p.name.?));
     try std.testing.expectEqual(@as(usize, 0), p.provides_count);
-    try std.testing.expectEqual(@as(usize, 3), p.slot_count);
-    try std.testing.expectEqual(@as(usize, 1), p.hook_count);
+    try std.testing.expectEqual(@as(usize, 4), p.slot_count);
+    const hook = @as([*]const abi_part.c.ke_part_slot, @ptrCast(p.slots.?))[3];
+    try std.testing.expectEqualStrings("fixed_post_update", std.mem.span(hook.name.?));
+    try std.testing.expectEqualStrings("ke_schedule_set", std.mem.span(hook.contract.?));
 }
 
 test "destroying the module destroys the bodies it created" {

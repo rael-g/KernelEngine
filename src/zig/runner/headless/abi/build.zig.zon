@@ -5,13 +5,11 @@
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
         .abi_completion = .{ .path = "../../../abi/completion" },
-        .abi_ecs = .{ .path = "../../../abi/ecs" },
         .abi_input = .{ .path = "../../../abi/input" },
         .abi_logger = .{ .path = "../../../abi/logger" },
         .abi_part = .{ .path = "../../../abi/part" },
         .abi_result = .{ .path = "../../../abi/result" },
         .abi_runner = .{ .path = "../../../abi/runner" },
-        .abi_schedule = .{ .path = "../../../abi/schedule" },
         .abi_scheduler = .{ .path = "../../../abi/scheduler" },
         .abi_settings = .{ .path = "../../../abi/settings" },
     },

@@ -15,7 +15,6 @@ const abi_configuration = @import("abi_configuration");
 const abi_logger = @import("abi_logger");
 const abi_part = @import("abi_part");
 const abi_result = @import("abi_result");
-const abi_schedule = @import("abi_schedule");
 const abi_settings = @import("abi_settings");
 const heap = @import("heap");
 
@@ -26,17 +25,14 @@ const gpa = heap.gpa;
 const P = abi_part.c;
 const A = abi_assembly.c;
 const Name = [:0]const u8;
-const schedule_contract = "ke_schedule";
 
 const Binding = struct { slot: Name, target: Name };
-const Hooking = struct { hook: Name, schedule: Name, set: ?Name };
 const Order = struct { slot: ?Name, first: Name, then: Name };
-const SetOrder = struct { first: Name, then: Name };
 const External = struct { contract: Name, ref: *anyopaque };
 const Problem = struct { failure: A.ke_assembly_failure, instance: ?Name, name: ?Name, detail: Name };
 
 /// One instance of the composition: of a part, or made outside as one vtable per contract. After resolve, `slots`
-/// holds the instances each slot takes and `hooked` where each hook runs; `made` is set once created, and an
+/// holds the instances each slot takes; `made` is set once created, and an
 /// external one never is.
 const Instance = struct {
     name: Name,
@@ -45,11 +41,9 @@ const Instance = struct {
     externals: std.ArrayListUnmanaged(External) = .empty,
     part: ?*const P.ke_part = null,
     bindings: std.ArrayListUnmanaged(Binding) = .empty,
-    hookings: std.ArrayListUnmanaged(Hooking) = .empty,
     orders: std.ArrayListUnmanaged(Order) = .empty,
     slots: [][]usize = &.{},
     positions: [][]usize = &.{},
-    hooked: []Hooked = &.{},
     made: ?P.ke_owner = null,
 
     fn isExternal(self: *const Instance) bool {
@@ -84,16 +78,6 @@ fn providesOf(part: *const P.ke_part) []const ?[*:0]const u8 {
     return @as([*]const ?[*:0]const u8, @ptrCast(part.provides.?))[0..part.provides_count];
 }
 
-const Hooked = struct { schedule: usize, set: Name };
-
-/// The sets one schedule instance gets: those the composition and the parts hooked to it introduce, their orders,
-/// and, once the schedule is made, their ids.
-const Sets = struct {
-    names: std.ArrayListUnmanaged(Name) = .empty,
-    orders: std.ArrayListUnmanaged(SetOrder) = .empty,
-    ids: std.StringHashMapUnmanaged(abi_schedule.c.ke_schedule_set_id) = .empty,
-};
-
 /// The state behind the handle: the composition as gathered, then, once resolved, the order instances are made in,
 /// how far making has come, and the completion the next instance waits on.
 const State = struct {
@@ -106,7 +90,6 @@ const State = struct {
     instances: std.ArrayListUnmanaged(Instance) = .empty,
     by_name: std.StringHashMapUnmanaged(usize) = .empty,
     defaults: std.StringHashMapUnmanaged(Name) = .empty,
-    sets: std.StringHashMapUnmanaged(Sets) = .empty,
     problems: std.ArrayListUnmanaged(Problem) = .empty,
     resolved: bool = false,
     plan: []usize = &.{},
@@ -130,11 +113,6 @@ const State = struct {
         try s.problems.append(s.names(), .{ .failure = failure, .instance = instance, .name = name, .detail = try std.fmt.allocPrintSentinel(s.names(), fmt, args, 0) });
     }
 
-    fn setsOf(s: *State, schedule: Name) R.Error!*Sets {
-        const entry = try s.sets.getOrPut(s.names(), schedule);
-        if (!entry.found_existing) entry.value_ptr.* = .{};
-        return entry.value_ptr;
-    }
 };
 
 fn stateOf(self: ?*A.ke_assembly) ?*State {
@@ -174,7 +152,7 @@ fn addPart(self: ?*A.ke_assembly, part_in: ?*const P.ke_part) callconv(.c) abi_r
     });
 }
 
-/// The instance named `name`, declared now when nothing named it yet; one only bound, hooked or ordered so far has
+/// The instance named `name`, declared now when nothing named it yet; one only bound or ordered so far has
 /// no part and no external.
 fn declared(s: *State, name: ?[*:0]const u8) R.Error!*Instance {
     const n = std.mem.span(name orelse return error.InvalidArgument);
@@ -224,20 +202,6 @@ fn bind(self: ?*A.ke_assembly, instance: ?[*:0]const u8, slot: ?[*:0]const u8, t
     });
 }
 
-/// Slot `hook`.
-fn hook(self: ?*A.ke_assembly, instance: ?[*:0]const u8, hook_name: ?[*:0]const u8, schedule: ?[*:0]const u8, set: ?[*:0]const u8) callconv(.c) abi_result.c.ke_result {
-    return code(blk: {
-        const s = gathering(self) catch |err| break :blk err;
-        const hooking = Hooking{
-            .hook = s.copy(hook_name) catch |err| break :blk err,
-            .schedule = s.copy(schedule) catch |err| break :blk err,
-            .set = if (set != null) s.copy(set) catch |err| break :blk err else null,
-        };
-        const at = declared(s, instance) catch |err| break :blk err;
-        break :blk at.hookings.append(s.names(), hooking);
-    });
-}
-
 /// Slot `order`.
 fn order(self: ?*A.ke_assembly, instance: ?[*:0]const u8, slot: ?[*:0]const u8, first: ?[*:0]const u8, then: ?[*:0]const u8) callconv(.c) abi_result.c.ke_result {
     return code(blk: {
@@ -245,26 +209,6 @@ fn order(self: ?*A.ke_assembly, instance: ?[*:0]const u8, slot: ?[*:0]const u8, 
         const o = Order{ .slot = if (slot != null) s.copy(slot) catch |err| break :blk err else null, .first = s.copy(first) catch |err| break :blk err, .then = s.copy(then) catch |err| break :blk err };
         const at = declared(s, instance) catch |err| break :blk err;
         break :blk at.orders.append(s.names(), o);
-    });
-}
-
-/// Slot `add_set`.
-fn addSet(self: ?*A.ke_assembly, schedule: ?[*:0]const u8, name: ?[*:0]const u8) callconv(.c) abi_result.c.ke_result {
-    return code(blk: {
-        const s = gathering(self) catch |err| break :blk err;
-        const set = s.copy(name) catch |err| break :blk err;
-        const sets = s.setsOf(s.copy(schedule) catch |err| break :blk err) catch |err| break :blk err;
-        break :blk sets.names.append(s.names(), set);
-    });
-}
-
-/// Slot `order_set`.
-fn orderSet(self: ?*A.ke_assembly, schedule: ?[*:0]const u8, first: ?[*:0]const u8, then: ?[*:0]const u8) callconv(.c) abi_result.c.ke_result {
-    return code(blk: {
-        const s = gathering(self) catch |err| break :blk err;
-        const o = SetOrder{ .first = s.copy(first) catch |err| break :blk err, .then = s.copy(then) catch |err| break :blk err };
-        const sets = s.setsOf(s.copy(schedule) catch |err| break :blk err) catch |err| break :blk err;
-        break :blk sets.orders.append(s.names(), o);
     });
 }
 
@@ -299,16 +243,6 @@ const Report = struct {
 fn slotsOf(part: *const P.ke_part) []const P.ke_part_slot {
     if (part.slot_count == 0) return &.{};
     return @as([*]const P.ke_part_slot, @ptrCast(part.slots.?))[0..part.slot_count];
-}
-
-fn hooksOf(part: *const P.ke_part) []const P.ke_part_hook {
-    if (part.hook_count == 0) return &.{};
-    return @as([*]const P.ke_part_hook, @ptrCast(part.hooks.?))[0..part.hook_count];
-}
-
-fn partSetsOf(part: *const P.ke_part) []const P.ke_part_set {
-    if (part.set_count == 0) return &.{};
-    return @as([*]const P.ke_part_set, @ptrCast(part.sets.?))[0..part.set_count];
 }
 
 fn providing(s: *State, contract: []const u8, except: usize, into: *std.ArrayListUnmanaged(usize)) R.Error!void {
@@ -356,7 +290,7 @@ fn resolveSlots(s: *State, report: *Report, at: usize) R.Error!void {
     for (self.bindings.items) |b| {
         for (slots) |slot| {
             if (std.mem.eql(u8, std.mem.span(slot.name.?), b.slot)) break;
-        } else report.add(A.KE_ASSEMBLY_FAILURE_UNKNOWN_NAME, self.name, b.slot, "{s} binds {s}, a slot its part {s} does not have", .{ self.name, b.slot, self.part_name.? });
+        } else report.add(A.KE_ASSEMBLY_FAILURE_UNKNOWN_NAME, self.name, b.slot, "{s} binds {s}, a slot its part {s} does not have; it has {s}", .{ self.name, b.slot, self.part_name.?, try slotNames(s, slots) });
     }
     for (slots, 0..) |slot, k| {
         const slot_name = std.mem.span(slot.name.?);
@@ -365,7 +299,7 @@ fn resolveSlots(s: *State, report: *Report, at: usize) R.Error!void {
         for (self.bindings.items) |b| {
             if (!std.mem.eql(u8, b.slot, slot_name)) continue;
             const j = s.by_name.get(b.target) orelse {
-                report.add(A.KE_ASSEMBLY_FAILURE_UNKNOWN_NAME, self.name, slot_name, "{s}.{s} is bound to {s}, which is no instance", .{ self.name, slot_name, b.target });
+                report.add(A.KE_ASSEMBLY_FAILURE_UNKNOWN_NAME, self.name, slot_name, "{s}.{s} is bound to {s}, which is no instance; {s} is provided by {s}", .{ self.name, slot_name, b.target, contract, try providerNames(s, contract, at) });
                 continue;
             };
             if (!s.instances.items[j].provides(contract)) {
@@ -382,7 +316,7 @@ fn resolveSlots(s: *State, report: *Report, at: usize) R.Error!void {
             } else try providing(s, contract, at, &chosen);
         }
         if (!many and chosen.items.len > 1) {
-            report.add(A.KE_ASSEMBLY_FAILURE_AMBIGUOUS, self.name, slot_name, "{s}.{s} takes one {s} and {d} provide it; bind one or name the default", .{ self.name, slot_name, contract, chosen.items.len });
+            report.add(A.KE_ASSEMBLY_FAILURE_AMBIGUOUS, self.name, slot_name, "{s}.{s} takes one {s} and {s} provide it; bind one or name the default", .{ self.name, slot_name, contract, try instanceNames(s, chosen.items) });
         } else if (slot.cardinality == P.KE_PART_CARDINALITY_ONE and chosen.items.len == 0 and !explicit) {
             report.add(A.KE_ASSEMBLY_FAILURE_UNSATISFIED, self.name, slot_name, "{s}.{s} takes one {s} and no instance provides it", .{ self.name, slot_name, contract });
         }
@@ -430,6 +364,30 @@ fn positionSlots(s: *State, report: *Report, at: usize) R.Error!void {
     for (self.slots, 0..) |targets, k| self.positions[k] = position[offsets[k] .. offsets[k] + targets.len];
 }
 
+fn slotNames(s: *State, slots: []const P.ke_part_slot) R.Error![]const u8 {
+    var out: std.ArrayListUnmanaged(u8) = .empty;
+    for (slots, 0..) |slot, i| {
+        if (i > 0) try out.appendSlice(s.names(), ", ");
+        try out.appendSlice(s.names(), std.mem.span(slot.name.?));
+    }
+    return if (out.items.len > 0) out.items else "none";
+}
+
+fn instanceNames(s: *State, at: []const usize) R.Error![]const u8 {
+    var out: std.ArrayListUnmanaged(u8) = .empty;
+    for (at, 0..) |j, i| {
+        if (i > 0) try out.appendSlice(s.names(), ", ");
+        try out.appendSlice(s.names(), s.instances.items[j].name);
+    }
+    return if (out.items.len > 0) out.items else "no instance";
+}
+
+fn providerNames(s: *State, contract: []const u8, except: usize) R.Error![]const u8 {
+    var found: std.ArrayListUnmanaged(usize) = .empty;
+    try providing(s, contract, except, &found);
+    return instanceNames(s, found.items);
+}
+
 fn anyBinding(self: *const Instance, slot: []const u8) bool {
     for (self.bindings.items) |b| if (std.mem.eql(u8, b.slot, slot)) return true;
     return false;
@@ -457,81 +415,6 @@ fn orderSlot(s: *State, report: *Report, self: *const Instance, slot: []const u8
     return sorted;
 }
 
-const unhooked = std.math.maxInt(usize);
-
-/// The hooks the composition binds: each to its schedule, at the set it names or the hook's default.
-fn resolveHooks(s: *State, report: *Report, at: usize) R.Error!void {
-    const self = &s.instances.items[at];
-    const hooks = hooksOf(self.part.?);
-    self.hooked = try s.names().alloc(Hooked, hooks.len);
-    for (self.hookings.items) |h| {
-        for (hooks) |declared_hook| {
-            if (std.mem.eql(u8, std.mem.span(declared_hook.name.?), h.hook)) break;
-        } else report.add(A.KE_ASSEMBLY_FAILURE_UNKNOWN_NAME, self.name, h.hook, "{s} hooks {s}, a hook its part {s} does not have", .{ self.name, h.hook, self.part_name.? });
-    }
-    for (hooks, 0..) |declared_hook, k| {
-        const hook_name = std.mem.span(declared_hook.name.?);
-        self.hooked[k] = .{ .schedule = unhooked, .set = "" };
-        const h = for (self.hookings.items) |x| {
-            if (std.mem.eql(u8, x.hook, hook_name)) break x;
-        } else continue;
-        const j = s.by_name.get(h.schedule) orelse {
-            report.add(A.KE_ASSEMBLY_FAILURE_UNKNOWN_NAME, self.name, hook_name, "{s}.{s} is hooked to {s}, which is no instance", .{ self.name, hook_name, h.schedule });
-            continue;
-        };
-        if (!s.instances.items[j].provides(schedule_contract)) {
-            report.add(A.KE_ASSEMBLY_FAILURE_WRONG_CONTRACT, self.name, hook_name, "{s}.{s} is hooked to {s}, which is not a schedule", .{ self.name, hook_name, h.schedule });
-            continue;
-        }
-        self.hooked[k] = .{ .schedule = j, .set = h.set orelse try s.names().dupeZ(u8, std.mem.span(declared_hook.default_set.?)) };
-        try introduceSets(s, self, hook_name, s.instances.items[j].name);
-    }
-}
-
-/// The hooks nothing binds: each joins the only schedule that has its default set.
-fn resolveDefaultHooks(s: *State, report: *Report, at: usize) R.Error!void {
-    const self = &s.instances.items[at];
-    for (hooksOf(self.part.?), 0..) |declared_hook, k| {
-        const hook_name = std.mem.span(declared_hook.name.?);
-        if (self.hooked[k].schedule != unhooked or anyHooking(self, hook_name)) continue;
-        const set = std.mem.span(declared_hook.default_set.?);
-        var found: ?usize = null;
-        var count: usize = 0;
-        for (s.instances.items, 0..) |*other, j| {
-            if (!other.provides(schedule_contract)) continue;
-            const sets = s.sets.getPtr(other.name) orelse continue;
-            if (!hasSet(sets, set)) continue;
-            found = j;
-            count += 1;
-        }
-        if (count > 1) {
-            report.add(A.KE_ASSEMBLY_FAILURE_AMBIGUOUS, self.name, hook_name, "{s}.{s} joins {s}, and {d} schedules have it; hook it to one", .{ self.name, hook_name, set, count });
-            continue;
-        }
-        const j = found orelse {
-            report.add(A.KE_ASSEMBLY_FAILURE_UNHOOKED, self.name, hook_name, "{s}.{s} joins {s}, and no schedule has it", .{ self.name, hook_name, set });
-            continue;
-        };
-        self.hooked[k] = .{ .schedule = j, .set = try s.names().dupeZ(u8, set) };
-        try introduceSets(s, self, hook_name, s.instances.items[j].name);
-    }
-}
-
-fn anyHooking(self: *const Instance, hook_name: []const u8) bool {
-    for (self.hookings.items) |h| if (std.mem.eql(u8, h.hook, hook_name)) return true;
-    return false;
-}
-
-fn introduceSets(s: *State, self: *const Instance, hook_name: []const u8, schedule: Name) R.Error!void {
-    for (partSetsOf(self.part.?)) |introduced| {
-        if (!std.mem.eql(u8, std.mem.span(introduced.hook.?), hook_name)) continue;
-        const sets = try s.setsOf(schedule);
-        const name = try s.names().dupeZ(u8, std.mem.span(introduced.name.?));
-        try sets.names.append(s.names(), name);
-        if (introduced.after) |after| try sets.orders.append(s.names(), .{ .first = try s.names().dupeZ(u8, std.mem.span(after)), .then = name });
-    }
-}
-
 /// Two instances of different parts created with one section: the keys one reads, the other refuses.
 fn checkSections(s: *State, report: *Report) void {
     for (s.instances.items, 0..) |*a, i| {
@@ -544,55 +427,10 @@ fn checkSections(s: *State, report: *Report) void {
     }
 }
 
-fn hasSet(sets: *const Sets, name: []const u8) bool {
-    for (sets.names.items) |n| if (std.mem.eql(u8, n, name)) return true;
-    return false;
-}
-
-fn checkSets(s: *State, report: *Report) R.Error!void {
-    var it = s.sets.iterator();
-    while (it.next()) |entry| {
-        const sets = entry.value_ptr;
-        if (s.by_name.get(entry.key_ptr.*) == null) report.add(A.KE_ASSEMBLY_FAILURE_UNKNOWN_NAME, entry.key_ptr.*, null, "sets are introduced in {s}, which is no instance", .{entry.key_ptr.*});
-        var edges: std.ArrayListUnmanaged([2]usize) = .empty;
-        for (sets.orders.items) |o| {
-            const a = setIndex(sets, o.first);
-            const b = setIndex(sets, o.then);
-            if (a == null or b == null) {
-                report.add(A.KE_ASSEMBLY_FAILURE_UNHOOKED, entry.key_ptr.*, if (a == null) o.first else o.then, "{s} orders {s} before {s}, and both must be sets of it", .{ entry.key_ptr.*, o.first, o.then });
-                continue;
-            }
-            try edges.append(s.names(), .{ a.?, b.? });
-        }
-        const sorted = try s.names().alloc(usize, sets.names.items.len);
-        if (!try topological(s.names(), sets.names.items.len, edges.items, sorted)) {
-            report.add(A.KE_ASSEMBLY_FAILURE_CYCLE, entry.key_ptr.*, null, "the orders of the sets of {s} contradict each other", .{entry.key_ptr.*});
-            continue;
-        }
-        var ordered = try s.names().alloc(Name, sorted.len);
-        for (sorted, 0..) |v, i| ordered[i] = sets.names.items[v];
-        sets.names = .fromOwnedSlice(ordered);
-    }
-    for (s.instances.items) |*self| {
-        for (self.hooked, 0..) |h, k| {
-            if (h.schedule == unhooked) continue;
-            const schedule = s.instances.items[h.schedule].name;
-            const known = if (s.sets.getPtr(schedule)) |sets| hasSet(sets, h.set) else false;
-            if (!known) report.add(A.KE_ASSEMBLY_FAILURE_UNHOOKED, self.name, std.mem.span(hooksOf(self.part.?)[k].name.?), "{s} joins the set {s} of {s}, which it does not have", .{ self.name, h.set, schedule });
-        }
-    }
-}
-
-fn setIndex(sets: *const Sets, name: []const u8) ?usize {
-    for (sets.names.items, 0..) |n, i| if (std.mem.eql(u8, n, name)) return i;
-    return null;
-}
-
 fn plan(s: *State, report: *Report) R.Error!void {
     var edges: std.ArrayListUnmanaged([2]usize) = .empty;
     for (s.instances.items, 0..) |*self, at| {
         for (self.slots) |targets| for (targets) |t| try edges.append(s.names(), .{ t, at });
-        for (self.hooked) |h| if (h.schedule != unhooked) try edges.append(s.names(), .{ h.schedule, at });
     }
     const sorted = try s.names().alloc(usize, s.instances.items.len);
     if (!try topological(s.names(), s.instances.items.len, edges.items, sorted)) {
@@ -629,7 +467,7 @@ fn resolveAll(s: *State, report: *Report) R.Error!void {
     for (s.instances.items) |*self| {
         if (self.isExternal()) continue;
         const part_name = self.part_name orelse {
-            report.add(A.KE_ASSEMBLY_FAILURE_UNKNOWN_NAME, self.name, null, "{s} is bound, hooked or ordered but never declared", .{self.name});
+            report.add(A.KE_ASSEMBLY_FAILURE_UNKNOWN_NAME, self.name, null, "{s} is bound or ordered but never declared", .{self.name});
             continue;
         };
         self.part = s.parts.get(part_name) orelse blk: {
@@ -640,31 +478,15 @@ fn resolveAll(s: *State, report: *Report) R.Error!void {
     for (s.instances.items, 0..) |*self, at| {
         if (self.part == null) continue;
         try resolveSlots(s, report, at);
-        try resolveHooks(s, report, at);
     }
-    for (s.instances.items, 0..) |*self, at| if (self.part != null) try resolveDefaultHooks(s, report, at);
     checkSections(s, report);
     var defaults = s.defaults.iterator();
     while (defaults.next()) |d| if (s.by_name.get(d.value_ptr.*) == null)
         report.add(A.KE_ASSEMBLY_FAILURE_UNKNOWN_NAME, null, d.key_ptr.*, "the default of {s} is {s}, which is no instance", .{ d.key_ptr.*, d.value_ptr.* });
-    try checkSets(s, report);
     if (report.count == 0) try plan(s, report);
     if (report.count > 0) return error.Unresolved;
     setLogs(s);
     s.resolved = true;
-}
-
-fn registerSets(s: *State, at: usize) R.Error!void {
-    const self = &s.instances.items[at];
-    const sets = s.sets.getPtr(self.name) orelse return;
-    const schedule: *abi_schedule.c.ke_schedule = @ptrCast(@alignCast(self.refFor(schedule_contract) orelse return));
-    for (sets.names.items) |name| {
-        var after: std.ArrayListUnmanaged(abi_schedule.c.ke_schedule_set_id) = .empty;
-        for (sets.orders.items) |o| if (std.mem.eql(u8, o.then, name)) try after.append(s.names(), sets.ids.get(o.first).?);
-        var id: abi_schedule.c.ke_schedule_set_id = 0;
-        try R.check(schedule.register_set.?(schedule, &.{ .name = name.ptr, .after = if (after.items.len > 0) after.items.ptr else null, .after_count = @intCast(after.items.len) }, &id));
-        try sets.ids.put(s.names(), name, id);
-    }
 }
 
 fn make(s: *State, at: usize) R.Error!void {
@@ -677,20 +499,14 @@ fn make(s: *State, at: usize) R.Error!void {
         for (targets, 0..) |t, i| refs[i] = s.instances.items[t].refFor(std.mem.span(slots[k].contract.?));
         bound[k] = .{ .instances = if (refs.len > 0) @ptrCast(refs.ptr) else null, .positions = if (refs.len > 0) &self.positions[k][0] else null, .count = refs.len };
     }
-    const hooked = try s.names().alloc(P.ke_part_hooked, self.hooked.len);
-    for (self.hooked, 0..) |h, k| {
-        const schedule = &s.instances.items[h.schedule];
-        hooked[k] = .{ .schedule = @ptrCast(@alignCast(schedule.refFor(schedule_contract))), .set = s.sets.getPtr(schedule.name).?.ids.get(h.set).? };
-    }
     var settings: ?*abi_settings.c.ke_settings = &empty_settings;
     if (self.section) |section| try R.check(s.configuration.section.?(s.configuration, section.ptr, &settings));
     var made: P.ke_owner = undefined;
-    R.check(part.create.?(part, if (bound.len > 0) &bound[0] else null, if (hooked.len > 0) &hooked[0] else null, settings, &made)) catch |err| {
+    R.check(part.create.?(part, if (bound.len > 0) &bound[0] else null, settings, &made)) catch |err| {
         log.warn("creating {s}, an instance of {s}, failed: {t}", .{ self.name, self.part_name.?, err });
         return err;
     };
     self.made = made;
-    try registerSets(s, at);
     if (part.ready) |ready| {
         var completion: ?*abi_completion.c.ke_completion = null;
         try R.check(ready(made.ref, &completion));
@@ -746,10 +562,7 @@ fn advanceAll(s: *State) R.Error!void {
     while (s.next < s.plan.len) {
         const at = s.plan[s.next];
         s.next += 1;
-        if (s.instances.items[at].isExternal()) {
-            try registerSets(s, at);
-            continue;
-        }
+        if (s.instances.items[at].isExternal()) continue;
         try make(s, at);
         if (s.waiting != null) {
             pumpAll(s);
@@ -810,7 +623,7 @@ export fn ke_assembly_default_create(configuration: ?*abi_configuration.c.ke_con
     const cfg = configuration orelse return R.code(error.InvalidArgument);
     const s = gpa.create(State) catch |err| return R.code(err);
     s.* = .{
-        .api = .{ .handle = null, .route_log = routeLog, .add_part = addPart, .add_instance = addInstance, .add_external = addExternal, .bind = bind, .hook = hook, .order = order, .add_set = addSet, .order_set = orderSet, .set_default = setDefault, .resolve = resolve, .advance = advance, .get = get },
+        .api = .{ .handle = null, .route_log = routeLog, .add_part = addPart, .add_instance = addInstance, .add_external = addExternal, .bind = bind, .order = order, .set_default = setDefault, .resolve = resolve, .advance = advance, .get = get },
         .configuration = cfg,
         .arena = std.heap.ArenaAllocator.init(gpa),
     };
@@ -830,7 +643,6 @@ const Probe = struct {
     var fail_on: ?[]const u8 = null;
     var seen_slots: [4]?*anyopaque = .{ null, null, null, null };
     var seen_count: usize = 0;
-    var seen_hook: P.ke_part_hooked = undefined;
     var pumps: usize = 0;
     var logs_set: usize = 0;
     var ready_done = true;
@@ -851,7 +663,7 @@ const Probe = struct {
 const Thing = struct { name: []const u8, first: ?*anyopaque = null };
 var things: [8]Thing = undefined;
 
-fn thingCreate(self: ?*const P.ke_part, bound: ?*const P.ke_part_bound, hooked: ?*const P.ke_part_hooked, settings: ?*abi_settings.c.ke_settings, out: ?*P.ke_owner) callconv(.c) abi_result.c.ke_result {
+fn thingCreate(self: ?*const P.ke_part, bound: ?*const P.ke_part_bound, settings: ?*abi_settings.c.ke_settings, out: ?*P.ke_owner) callconv(.c) abi_result.c.ke_result {
     const part = self.?;
     const name = std.mem.span(part.name.?);
     if (Probe.fail_on) |f| if (std.mem.eql(u8, f, name)) return R.code(error.Io);
@@ -866,7 +678,6 @@ fn thingCreate(self: ?*const P.ke_part, bound: ?*const P.ke_part_bound, hooked: 
             Probe.seen_slots[i] = r;
         };
     }
-    if (hooked) |h| Probe.seen_hook = h.*;
     Probe.seen_settings = settings;
     const at = Probe.created_count;
     Probe.created[at] = name;
@@ -911,7 +722,6 @@ const front_and_back = [_]P.ke_part_slot{
 const gearbox = P.ke_part{ .name = "gearbox", .slots = &front_and_back[0], .slot_count = 2, .create = thingCreate };
 const one_gear = [_]P.ke_part_slot{.{ .name = "gear", .contract = "ke_gear", .cardinality = P.KE_PART_CARDINALITY_ONE }};
 const many_gears = [_]P.ke_part_slot{.{ .name = "gears", .contract = "ke_gear", .cardinality = P.KE_PART_CARDINALITY_MANY }};
-const tick_hook = [_]P.ke_part_hook{.{ .name = "tick", .default_set = "update" }};
 
 const gear_contract = [_]?[*:0]const u8{"ke_gear"};
 const wheel_contract = [_]?[*:0]const u8{"ke_wheel"};
@@ -921,7 +731,6 @@ const gear_b = P.ke_part{ .name = "gear_b", .provides = &gear_contract[0], .prov
 const gear_slow = P.ke_part{ .name = "gear_slow", .provides = &gear_contract[0], .provides_count = 1, .create = thingCreate, .ready = readyProbe, .pump = pumpProbe };
 const wheel = P.ke_part{ .name = "wheel", .provides = &wheel_contract[0], .provides_count = 1, .slots = &one_gear[0], .slot_count = 1, .create = thingCreate };
 const axle = P.ke_part{ .name = "axle", .provides = &axle_contract[0], .provides_count = 1, .slots = &many_gears[0], .slot_count = 1, .create = thingCreate };
-const ticker = P.ke_part{ .name = "ticker", .hooks = &tick_hook[0], .hook_count = 1, .create = thingCreate };
 const loop_wheel = P.ke_part{ .name = "loop_wheel", .provides = &gear_contract[0], .provides_count = 1, .slots = &one_gear[0], .slot_count = 1, .create = thingCreate };
 
 const Rig = struct {
@@ -930,6 +739,8 @@ const Rig = struct {
     handle: A.ke_assembly_handle,
     failures: [16]A.ke_assembly_failure = undefined,
     failure_count: usize = 0,
+    details: [16][256]u8 = undefined,
+    detail_lengths: [16]usize = undefined,
 
     fn init(rig: *Rig) !void {
         Probe.reset();
@@ -972,10 +783,19 @@ const Rig = struct {
         rig.cfg.deinit();
     }
 
-    fn record(ctx: ?*anyopaque, failure: A.ke_assembly_failure, _: ?[*:0]const u8, _: ?[*:0]const u8, _: ?[*:0]const u8) callconv(.c) void {
+    fn record(ctx: ?*anyopaque, failure: A.ke_assembly_failure, _: ?[*:0]const u8, _: ?[*:0]const u8, detail: ?[*:0]const u8) callconv(.c) void {
         const rig: *Rig = @ptrCast(@alignCast(ctx.?));
         rig.failures[rig.failure_count] = failure;
+        const text = std.mem.span(detail.?);
+        const kept = @min(text.len, rig.details[rig.failure_count].len);
+        @memcpy(rig.details[rig.failure_count][0..kept], text[0..kept]);
+        rig.detail_lengths[rig.failure_count] = kept;
         rig.failure_count += 1;
+    }
+
+    fn told(rig: *const Rig, needle: []const u8) bool {
+        for (0..rig.failure_count) |i| if (std.mem.indexOf(u8, rig.details[i][0..rig.detail_lengths[i]], needle) != null) return true;
+        return false;
     }
 
     fn reported(rig: *const Rig, failure: A.ke_assembly_failure) bool {
@@ -1036,18 +856,15 @@ test "every reason a composition cannot be assembled is reported together, and n
     try rig.part(&wheel);
     try rig.part(&gear_a);
     try rig.part(&gear_b);
-    try rig.part(&ticker);
     try rig.instance("lonely", "wheel");
     try rig.instance("a", "gear_a");
     try rig.instance("b", "gear_b");
     try rig.instance("ghost", "no_such_part");
-    try rig.instance("idle", "ticker");
     try R.check(rig.a().bind.?(rig.a(), "a", "gear", "b"));
     try testing.expectEqual(abi_assembly.c.KE_RESULT_ASSEMBLY_UNRESOLVED, rig.resolve());
     try testing.expect(rig.reported(A.KE_ASSEMBLY_FAILURE_AMBIGUOUS));
     try testing.expect(rig.reported(A.KE_ASSEMBLY_FAILURE_UNKNOWN_PART));
     try testing.expect(rig.reported(A.KE_ASSEMBLY_FAILURE_UNKNOWN_NAME));
-    try testing.expect(rig.reported(A.KE_ASSEMBLY_FAILURE_UNHOOKED));
     try testing.expectEqual(R.code(error.NotSupported), rig.a().advance.?(rig.a()));
     try testing.expectEqual(@as(usize, 0), Probe.created_count);
 }
@@ -1111,38 +928,6 @@ test "a slot that takes many receives its instances in the order the composition
     try R.check(other.a().order.?(other.a(), "shaft", "gears", "first", "second"));
     try testing.expectEqual(abi_assembly.c.KE_RESULT_ASSEMBLY_UNRESOLVED, other.resolve());
     try testing.expect(other.reported(A.KE_ASSEMBLY_FAILURE_CYCLE));
-}
-
-var schedule_sub: zsub.For(abi_schedule.c.ke_schedule) = undefined;
-
-fn scheduleCreate(_: ?*const P.ke_part, _: ?*const P.ke_part_bound, _: ?*const P.ke_part_hooked, _: ?*abi_settings.c.ke_settings, out: ?*P.ke_owner) callconv(.c) abi_result.c.ke_result {
-    out.?.* = .{ .ref = schedule_sub.api(), .destroy = null };
-    return R.ok;
-}
-
-const schedule_contract_list = [_]?[*:0]const u8{"ke_schedule"};
-const fake_schedule = P.ke_part{ .name = "fake_schedule", .provides = &schedule_contract_list[0], .provides_count = 1, .create = scheduleCreate };
-
-test "a hook receives its schedule and the id of the set it joins, registered in the order the composition gave" {
-    try schedule_sub.init();
-    defer schedule_sub.deinit();
-    _ = schedule_sub.when(.register_set).writesFresh(2);
-    var rig: Rig = undefined;
-    try rig.init();
-    defer rig.deinit();
-    try rig.part(&fake_schedule);
-    try rig.part(&ticker);
-    try rig.instance("frame", "fake_schedule");
-    try rig.instance("clock", "ticker");
-    try R.check(rig.a().add_set.?(rig.a(), "frame", "post_update"));
-    try R.check(rig.a().add_set.?(rig.a(), "frame", "update"));
-    try R.check(rig.a().order_set.?(rig.a(), "frame", "update", "post_update"));
-    try R.check(rig.a().hook.?(rig.a(), "clock", "tick", "frame", null));
-    try R.check(rig.resolve());
-    try R.check(rig.a().advance.?(rig.a()));
-    try schedule_sub.received(.register_set).times(2);
-    try testing.expectEqual(@as(?*abi_schedule.c.ke_schedule, schedule_sub.api()), Probe.seen_hook.schedule);
-    try testing.expect(Probe.seen_hook.set != 0);
 }
 
 test "an instance that becomes usable later holds back the rest, pumping the instances made, until its completion finishes" {
@@ -1250,36 +1035,23 @@ test "a slot that takes many takes only what the composition binds, none when no
     try testing.expectEqual(@as(usize, 0), Probe.seen_count);
 }
 
-test "a hook nothing binds joins the only schedule with its default set, and two such schedules are ambiguous" {
-    try schedule_sub.init();
-    defer schedule_sub.deinit();
-    _ = schedule_sub.when(.register_set).writesFresh(2);
+test "a reason names what exists: the instances providing a slot's contract, a part's slots, the ambiguous candidates" {
     var rig: Rig = undefined;
     try rig.init();
     defer rig.deinit();
-    try rig.part(&fake_schedule);
-    try rig.part(&ticker);
-    try rig.instance("startup", "fake_schedule");
-    try rig.instance("frame", "fake_schedule");
-    try rig.instance("clock", "ticker");
-    try R.check(rig.a().add_set.?(rig.a(), "startup", "startup"));
-    try R.check(rig.a().add_set.?(rig.a(), "frame", "update"));
-    try R.check(rig.resolve());
-    try R.check(rig.a().advance.?(rig.a()));
-    try testing.expect(Probe.seen_hook.set != 0);
-
-    var two: Rig = undefined;
-    try two.init();
-    defer two.deinit();
-    try two.part(&fake_schedule);
-    try two.part(&ticker);
-    try two.instance("left", "fake_schedule");
-    try two.instance("right", "fake_schedule");
-    try two.instance("clock", "ticker");
-    try R.check(two.a().add_set.?(two.a(), "left", "update"));
-    try R.check(two.a().add_set.?(two.a(), "right", "update"));
-    try testing.expectEqual(abi_assembly.c.KE_RESULT_ASSEMBLY_UNRESOLVED, two.resolve());
-    try testing.expect(two.reported(A.KE_ASSEMBLY_FAILURE_AMBIGUOUS));
+    try rig.part(&wheel);
+    try rig.part(&gear_a);
+    try rig.part(&gear_b);
+    try rig.instance("front", "wheel");
+    try rig.instance("rear", "wheel");
+    try rig.instance("a", "gear_a");
+    try rig.instance("b", "gear_b");
+    try R.check(rig.a().bind.?(rig.a(), "front", "gear", "c"));
+    try R.check(rig.a().bind.?(rig.a(), "front", "tyre", "a"));
+    try testing.expectEqual(abi_assembly.c.KE_RESULT_ASSEMBLY_UNRESOLVED, rig.resolve());
+    try testing.expect(rig.told("ke_gear is provided by a, b"));
+    try testing.expect(rig.told("it has gear"));
+    try testing.expect(rig.told("ke_gear and a, b provide it"));
 }
 
 test "an instance declared with no section is created with empty settings, and parts sharing a section are reported" {
@@ -1311,7 +1083,7 @@ test "an instance declared with no section is created with empty settings, and p
 const Pair = struct { gear: Thing = .{ .name = "pair-gear" }, wheel: Thing = .{ .name = "pair-wheel" } };
 var pair: Pair = .{};
 
-fn pairCreate(_: ?*const P.ke_part, _: ?*const P.ke_part_bound, _: ?*const P.ke_part_hooked, _: ?*abi_settings.c.ke_settings, out: ?*P.ke_owner) callconv(.c) abi_result.c.ke_result {
+fn pairCreate(_: ?*const P.ke_part, _: ?*const P.ke_part_bound, _: ?*abi_settings.c.ke_settings, out: ?*P.ke_owner) callconv(.c) abi_result.c.ke_result {
     out.?.* = .{ .ref = &pair, .destroy = null };
     return R.ok;
 }

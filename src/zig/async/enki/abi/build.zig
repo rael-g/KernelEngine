@@ -6,11 +6,9 @@ pub fn build(b: *std.Build) void {
 
     const abi = b.addModule("abi", .{ .root_source_file = b.path("async_enki_factory.zig") });
     abi.addImport("async", b.dependency("abi_async", .{}).module("abi"));
-    abi.addImport("ecs", b.dependency("abi_ecs", .{}).module("abi"));
     abi.addImport("logger", b.dependency("abi_logger", .{}).module("abi"));
     abi.addImport("part", b.dependency("abi_part", .{}).module("abi"));
     abi.addImport("result", b.dependency("abi_result", .{}).module("abi"));
-    abi.addImport("schedule", b.dependency("abi_schedule", .{}).module("abi"));
     abi.addImport("settings", b.dependency("abi_settings", .{}).module("abi"));
 
     const headers = b.addWriteFiles().add("layout.h",
@@ -23,14 +21,9 @@ pub fn build(b: *std.Build) void {
     translated.addIncludePath(b.path("../include"));
     translated.addIncludePath(b.path("../../../common/include"));
     translated.addIncludePath(b.path("../../../../c/completion"));
-    translated.addIncludePath(b.path("../../../../c/ecs"));
-    translated.addIncludePath(b.path("../../../../c/job"));
     translated.addIncludePath(b.path("../../../../c/logger"));
-    translated.addIncludePath(b.path("../../../../c/math"));
     translated.addIncludePath(b.path("../../../../c/part"));
     translated.addIncludePath(b.path("../../../../c/result"));
-    translated.addIncludePath(b.path("../../../../c/schedule"));
-    translated.addIncludePath(b.path("../../../schedule/include"));
     translated.addIncludePath(b.path("../../../../c/settings"));
     const tests = b.addTest(.{ .root_module = b.createModule(.{
         .root_source_file = b.path("layout_test.zig"),
@@ -47,14 +40,9 @@ pub fn build(b: *std.Build) void {
     tests.root_module.addIncludePath(b.path("../include"));
     tests.root_module.addIncludePath(b.path("../../../common/include"));
     tests.root_module.addIncludePath(b.path("../../../../c/completion"));
-    tests.root_module.addIncludePath(b.path("../../../../c/ecs"));
-    tests.root_module.addIncludePath(b.path("../../../../c/job"));
     tests.root_module.addIncludePath(b.path("../../../../c/logger"));
-    tests.root_module.addIncludePath(b.path("../../../../c/math"));
     tests.root_module.addIncludePath(b.path("../../../../c/part"));
     tests.root_module.addIncludePath(b.path("../../../../c/result"));
-    tests.root_module.addIncludePath(b.path("../../../../c/schedule"));
-    tests.root_module.addIncludePath(b.path("../../../schedule/include"));
     tests.root_module.addIncludePath(b.path("../../../../c/settings"));
     b.step("test", "Check the async_enki_factory ABI against its headers").dependOn(&b.addRunArtifact(tests).step);
 }

@@ -6,10 +6,8 @@
     .dependencies = .{
         .abi_assembly = .{ .path = "../../../abi/assembly" },
         .abi_configuration = .{ .path = "../../../abi/configuration" },
-        .abi_ecs = .{ .path = "../../../abi/ecs" },
         .abi_logger = .{ .path = "../../../abi/logger" },
         .abi_result = .{ .path = "../../../abi/result" },
-        .abi_schedule = .{ .path = "../../../abi/schedule" },
     },
     .paths = .{"."},
 }

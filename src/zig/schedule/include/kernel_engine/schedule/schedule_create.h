@@ -21,7 +21,8 @@ extern "C" {
 #endif
 
 /**
- * Creates a schedule over @p ecs whose runs go to @p job_system, both borrowed for its lifetime.
+ * Creates a schedule over @p ecs whose runs go to @p job_system, both borrowed for its lifetime. It starts with one
+ * set, `schedule`, which its part provides as the ke_schedule_set a module joins.
  * @param settings [borrowed] Read once. `refuse_ambiguity`, a boolean, default false: an ambiguity
  *        between two writers fails the run instead of being logged.
  * @param out_schedule [out] Receives the schedule; left zeroed on failure.

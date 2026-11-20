@@ -5,7 +5,7 @@ pub fn build(b: *std.Build) void {
     _ = ke_build.plugin(b, .{
         .name = "ke_assembly_default",
         .root = "src/assembly_default.zig",
-        .abi = &.{ "abi_assembly", "abi_assembly_default_factory", "abi_completion", "abi_configuration", "abi_logger", "abi_part", "abi_result", "abi_schedule", "abi_settings" },
+        .abi = &.{ "abi_assembly", "abi_assembly_default_factory", "abi_completion", "abi_configuration", "abi_logger", "abi_part", "abi_result", "abi_settings" },
         .common = &.{"heap"},
         .packages = &.{.{ .name = "zsub", .dependency = "zsub", .module = "zsub" }},
         .tests = "Run the default assembly unit tests",

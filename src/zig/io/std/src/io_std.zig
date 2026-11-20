@@ -670,7 +670,6 @@ test "the library's part is io_std, built from its factory" {
     try std.testing.expectEqualStrings("io_std", std.mem.span(p.name.?));
     try std.testing.expectEqual(@as(usize, 1), p.provides_count);
     try std.testing.expectEqual(@as(usize, 1), p.slot_count);
-    try std.testing.expectEqual(@as(usize, 0), p.hook_count);
 }
 
 test "reading, waiting, freeing and destroying leaves no block allocated" {

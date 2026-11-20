@@ -15,7 +15,9 @@ pub const Error = abi_result.Error;
 const checkResult = abi_result.checkResult;
 const resultOf = abi_result.resultOf;
 
-/// Creates a schedule over ecs whose runs go to job_system, both borrowed for its lifetime.
+/// Creates a schedule over ecs whose runs go to job_system, both borrowed for its lifetime. It
+/// starts with one set, `schedule`, which its part provides as the ke_schedule_set a module
+/// joins.
 pub fn scheduleCreate(ecs: ?*abi_ecs.c.ke_ecs, job_system: ?*abi_job.c.ke_job_system, settings: ?*abi_settings.c.ke_settings) Error!abi_schedule.c.ke_schedule_handle {
     var written: abi_schedule.c.ke_schedule_handle = undefined;
     try checkResult(c.ke_schedule_create(ecs, job_system, settings, &written));
@@ -28,8 +30,8 @@ pub fn scheduleSetLogCallback(callback: c.ke_log_callback, ctx: ?*anyopaque) voi
     return c.ke_schedule_set_log_callback(callback, ctx);
 }
 
-/// Gives the parts ke_schedule contains: `schedule`, providing ke_schedule and
-/// ke_scheduler_executable, with the slots `ecs` and `job`.
+/// Gives the parts ke_schedule contains: `schedule`, providing ke_schedule,
+/// ke_scheduler_executable and ke_schedule_set, with the slots `ecs` and `job`.
 pub fn scheduleParts(out_count: ?*usize) ?*const abi_part.c.ke_part {
     return c.ke_schedule_parts(out_count);
 }

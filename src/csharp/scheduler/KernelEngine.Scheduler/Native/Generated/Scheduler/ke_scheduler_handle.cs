@@ -6,6 +6,7 @@ using global::KernelEngine.Scheduler;
 using KernelEngine.Async.Native;
 using KernelEngine.Completion.Native;
 using KernelEngine.Job.Native;
+using KernelEngine.Part.Native;
 using KernelEngine.Result.Native;
 using KernelEngine.Settings.Native;
 

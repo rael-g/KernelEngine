@@ -1060,10 +1060,10 @@ fn createEngineNodeTypes(types_in: ?*abi_framework.c.ke_node_types, out_owner: ?
 pub const parts = [_]abi_part.c.ke_part{
     part.of(ke_node_types_create, .{ .name = "node_types", .slots = &.{ "scheduler", "ecs", "scene_tree", "input_actions" }, .optional = &.{"input_actions"} }),
     part.of(ke_node_types_systems_create, .{ .name = "node_types_systems", .slots = &.{"types"}, .hooks = &.{
-        .{ .name = "pre_update", .default_set = "pre_update" },
-        .{ .name = "fixed_update", .default_set = "fixed_update" },
-        .{ .name = "update", .default_set = "update" },
-        .{ .name = "post_update", .default_set = "post_update" },
+        "pre_update",
+        "fixed_update",
+        "update",
+        "post_update",
     } }),
     part.of(createEngineNodeTypes, .{ .name = "engine_node_types", .slots = &.{"node_types"} }),
 };
@@ -1996,7 +1996,7 @@ test "the engine node types part registers every engine node type through the no
     const bound_types = [_]?*anyopaque{types.api()};
     const bound = [_]abi_part.c.ke_part_bound{.{ .instances = @ptrCast(&bound_types), .count = 1 }};
     var owner: abi_part.c.ke_owner = undefined;
-    try R.check(p.create.?(p, &bound[0], null, null, &owner));
+    try R.check(p.create.?(p, &bound[0], null, &owner));
     try types.received(.register_type).times(abi_engine_node_types.c.KE_ENGINE_NODE_TYPE_COUNT);
     try testing.expectEqual(@as(usize, 0), p.provides_count);
     owner.destroy.?(owner.ref);

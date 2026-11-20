@@ -46,13 +46,15 @@ pub const ke_schedule_condition_fn = ?*const fn (?*anyopaque, ?*bool) callconv(.
 /// thread logged.
 pub const ke_log_callback = ?*const fn (?*anyopaque, abi_logger.c.ke_log_level, ?[*:0]const u8, ?[*:0]const u8) callconv(.c) void;
 
-/// Creates a schedule over ecs whose runs go to job_system, both borrowed for its lifetime.
+/// Creates a schedule over ecs whose runs go to job_system, both borrowed for its lifetime. It
+/// starts with one set, `schedule`, which its part provides as the ke_schedule_set a module
+/// joins.
 pub extern fn ke_schedule_create(ecs: ?*abi_ecs.c.ke_ecs, job_system: ?*abi_job.c.ke_job_system, settings: ?*abi_settings.c.ke_settings, out_schedule: ?*abi_schedule.c.ke_schedule_handle) abi_result.c.ke_result;
 
 /// Sends every line ke_schedule logs to callback, with ctx; a NULL callback sends them back to
 /// stderr, where they go until this is called. Called once, before the library logs.
 pub extern fn ke_schedule_set_log_callback(callback: ke_log_callback, ctx: ?*anyopaque) void;
 
-/// Gives the parts ke_schedule contains: `schedule`, providing ke_schedule and
-/// ke_scheduler_executable, with the slots `ecs` and `job`.
+/// Gives the parts ke_schedule contains: `schedule`, providing ke_schedule,
+/// ke_scheduler_executable and ke_schedule_set, with the slots `ecs` and `job`.
 pub extern fn ke_schedule_parts(out_count: ?*usize) ?*const abi_part.c.ke_part;

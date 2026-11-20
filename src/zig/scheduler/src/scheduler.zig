@@ -264,7 +264,7 @@ const Placed = struct { position: usize, cadence: c.ke_scheduler_cadence, execut
 
 /// Slot `create` of the part: the scheduler, then every executable of the cadence slots added in the order of their
 /// positions, each with its slot's cadence, the one order a tick runs them in; nothing is left made on failure.
-fn createPart(self: ?*const P.ke_part, bound_in: ?*const P.ke_part_bound, _: ?*const P.ke_part_hooked, settings: ?*abi_settings.c.ke_settings, out_instance: ?*P.ke_owner) callconv(.c) abi_result.c.ke_result {
+fn createPart(self: ?*const P.ke_part, bound_in: ?*const P.ke_part_bound, settings: ?*abi_settings.c.ke_settings, out_instance: ?*P.ke_owner) callconv(.c) abi_result.c.ke_result {
     const out = out_instance orelse return R.code(error.InvalidArgument);
     out.* = .{};
     if (self == null) return R.code(error.InvalidArgument);
@@ -629,7 +629,7 @@ test "the scheduler's part adds every executable of its cadence slots in the ord
     const p = ke_scheduler_parts(&count).?;
     try testing.expectEqual(@as(usize, 6), p.slot_count);
     var owner: P.ke_owner = undefined;
-    try R.check(p.create.?(p, &bound[0], null, &test_settings.api, &owner));
+    try R.check(p.create.?(p, &bound[0], &test_settings.api, &owner));
     const sched: *c.ke_scheduler = @ptrCast(@alignCast(owner.ref.?));
     try R.check(sched.tick.?(sched, 0.25));
     try R.check(sched.shutdown.?(sched));

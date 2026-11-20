@@ -4,7 +4,6 @@
 #include <kernel_engine/completion/completion.h>
 #include <kernel_engine/logger/log_callback.h>
 #include <kernel_engine/result/result.h>
-#include <kernel_engine/schedule/schedule.h>
 #include <kernel_engine/settings/settings.h>
 
 #include <stddef.h>
@@ -33,25 +32,6 @@ typedef struct ke_part_slot {
     ke_part_cardinality cardinality;
 } ke_part_slot;
 
-/// [bag] A place in the frame where a part runs work: a set of a schedule.
-typedef struct ke_part_hook {
-    /// [utf8] Unique among the part's hooks.
-    const char *name;
-    /// [utf8] The set the hook joins when the composition names no set, in the schedule the composition names or,
-    /// when it names none, the only schedule that has a set of that name.
-    const char *default_set;
-} ke_part_hook;
-
-/// [bag] A set a part introduces in the schedule one of its hooks is bound to.
-typedef struct ke_part_set {
-    /// [utf8] The set's name in that schedule.
-    const char *name;
-    /// [utf8] The hook whose schedule the set is introduced in.
-    const char *hook;
-    /// [utf8,optional] A set of that schedule this one runs after; NULL for none.
-    const char *after;
-} ke_part_set;
-
 /// [bag] The instances bound to one slot. Two of them the composition ordered come in that order; any others in
 /// no guaranteed order.
 typedef struct ke_part_bound {
@@ -64,13 +44,6 @@ typedef struct ke_part_bound {
     size_t count;
 } ke_part_bound;
 
-/// [bag] Where one hook was bound.
-typedef struct ke_part_hooked {
-    /// [borrowed] Outlives the instance.
-    ke_schedule *schedule;
-    ke_schedule_set_id set;
-} ke_part_hooked;
-
 /// [owner] What has no contract of its own to be released through: an instance a part created, or the systems a
 /// module registered. @p destroy takes @p ref.
 typedef struct ke_owner {
@@ -78,8 +51,8 @@ typedef struct ke_owner {
     void (*destroy)(void *ref);
 } ke_owner;
 
-/// [interface] The description of an implementation: what it provides, what it needs and where it runs, and how it
-/// is created from that. A part states facts about its implementation, never a choice of the host.
+/// [interface] The description of an implementation: what it provides and what it needs, and how it is created
+/// from that. A part states facts about its implementation, never a choice of the host.
 typedef struct ke_part {
     /// [utf8] The implementation's name, unique among the parts given to one assembly.
     const char *name;
@@ -90,22 +63,15 @@ typedef struct ke_part {
     /// [borrowed] @p slot_count slots, in the order @p create receives them.
     const ke_part_slot *slots;
     size_t slot_count;
-    /// [borrowed] @p hook_count hooks, in the order @p create receives them.
-    const ke_part_hook *hooks;
-    size_t hook_count;
-    /// [borrowed] @p set_count sets the part introduces.
-    const ke_part_set *sets;
-    size_t set_count;
 
     /// Creates an instance.
     /// @param slots [borrowed] One per slot, in the part's order; valid during the call, the instances for the
     ///        instance's lifetime.
-    /// @param hooks [borrowed] One per hook, in the part's order.
     /// @param settings [borrowed] The instance's section; read during the call.
     /// @param out_instance [out] Receives the owner of the instance; left zeroed on failure.
     /// @return KE_OK, or the code the implementation's factory failed with.
-    ke_result (*create)(const struct ke_part *self, const ke_part_bound *slots, const ke_part_hooked *hooks,
-                        ke_settings *settings, ke_owner *out_instance);
+    ke_result (*create)(const struct ke_part *self, const ke_part_bound *slots, ke_settings *settings,
+                        ke_owner *out_instance);
 
     /// [optional] Gives the instance of the contract at @p index of @p provides; NULL for a part that provides one
     /// contract, whose instance is the owner's ref.

@@ -486,6 +486,9 @@ ke_schedule_system_desc size=80 align=8
   set_count 72
   per_entity 76
   exclusive 77
+ke_schedule_set size=16 align=8
+  schedule 0
+  id 8
 ke_schedule size=56 align=8
   handle 0
   register_set 8
@@ -1256,55 +1259,38 @@ ke_part_slot size=24 align=8
   name 0
   contract 8
   cardinality 16
-ke_part_hook size=16 align=8
-  name 0
-  default_set 8
-ke_part_set size=24 align=8
-  name 0
-  hook 8
-  after 16
 ke_part_bound size=24 align=8
   instances 0
   positions 8
   count 16
-ke_part_hooked size=16 align=8
-  schedule 0
-  set 8
 ke_owner size=16 align=8
   ref 0
   destroy 8
-ke_part size=112 align=8
+ke_part size=80 align=8
   name 0
   provides 8
   provides_count 16
   slots 24
   slot_count 32
-  hooks 40
-  hook_count 48
-  sets 56
-  set_count 64
-  create 72
-  provided 80
-  ready 88
-  pump 96
-  set_log 104
+  create 40
+  provided 48
+  ready 56
+  pump 64
+  set_log 72
 
 [assembly]
-ke_assembly size=112 align=8
+ke_assembly size=88 align=8
   handle 0
   route_log 8
   add_part 16
   add_instance 24
   add_external 32
   bind 40
-  hook 48
-  order 56
-  add_set 64
-  order_set 72
-  set_default 80
-  resolve 88
-  advance 96
-  get 104
+  order 48
+  set_default 56
+  resolve 64
+  advance 72
+  get 80
 ke_assembly_handle size=16 align=8
   ref 0
   destroy 8

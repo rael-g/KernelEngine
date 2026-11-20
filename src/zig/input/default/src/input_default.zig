@@ -614,7 +614,6 @@ test "the library's part is input_default, built from its factory" {
     try std.testing.expectEqualStrings("input_default", std.mem.span(p.name.?));
     try std.testing.expectEqual(@as(usize, 1), p.provides_count);
     try std.testing.expectEqual(@as(usize, 0), p.slot_count);
-    try std.testing.expectEqual(@as(usize, 0), p.hook_count);
 }
 
 test "creating and destroying the input leaves no block allocated" {

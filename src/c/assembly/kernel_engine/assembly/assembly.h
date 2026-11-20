@@ -16,7 +16,7 @@ extern "C" {
 typedef enum ke_assembly_failure {
     /// An instance names a part no one added.
     KE_ASSEMBLY_FAILURE_UNKNOWN_PART = 1,
-    /// A binding, an order or a default names an instance, a slot or a hook that does not exist.
+    /// A binding, an order or a default names an instance or a slot that does not exist.
     KE_ASSEMBLY_FAILURE_UNKNOWN_NAME = 2,
     /// A slot that takes one instance has no candidate.
     KE_ASSEMBLY_FAILURE_UNSATISFIED = 3,
@@ -24,10 +24,8 @@ typedef enum ke_assembly_failure {
     KE_ASSEMBLY_FAILURE_AMBIGUOUS = 4,
     /// A bound instance does not provide the slot's contract.
     KE_ASSEMBLY_FAILURE_WRONG_CONTRACT = 5,
-    /// The instances need each other, or the orders of a slot or of a schedule's sets contradict each other.
+    /// The instances need each other, or the orders of a slot contradict each other.
     KE_ASSEMBLY_FAILURE_CYCLE = 6,
-    /// A hook is bound to no schedule, or to a set its schedule does not have.
-    KE_ASSEMBLY_FAILURE_UNHOOKED = 7,
     /// A part, an instance or an external contract is given a name already taken.
     KE_ASSEMBLY_FAILURE_DUPLICATE = 8,
     /// Instances of different parts are created with the same section, whose keys one of them would refuse.
@@ -38,13 +36,15 @@ typedef enum ke_assembly_failure {
 /// @param ctx [context] Forwarded from resolve.
 /// @param failure The reason.
 /// @param instance [borrowed,utf8,optional] The instance it concerns; valid only during the call.
-/// @param name [borrowed,utf8,optional] The slot, hook, part or set it concerns; valid only during the call.
-/// @param detail [borrowed,utf8] A line naming what was found, as the candidates; valid only during the call.
+/// @param name [borrowed,utf8,optional] The slot, part or instance name it concerns; valid only during the call.
+/// @param detail [borrowed,utf8] A line naming what was found: for a name nothing declares, the names of that kind
+///        that exist; for a slot with no candidate, the instances that provide its contract; for an ambiguous one,
+///        the candidates. Valid only during the call.
 typedef void (*ke_assembly_report_fn)(void *ctx, ke_assembly_failure failure, const char *instance, const char *name,
                                       const char *detail);
 
 /// [interface] Assembles instances of parts from a composition: which instances exist, of which part, with which
-/// section of settings, and which instance each slot and hook is bound to. Nothing is created before the whole
+/// section of settings, and which instance each slot is bound to. Nothing is created before the whole
 /// composition resolves. Every name is copied. Gathering records what it is given and checks nothing: every
 /// mistake in it, as a name taken twice or one nothing declares, is reported by resolve, with the others.
 typedef struct ke_assembly {
@@ -88,17 +88,6 @@ typedef struct ke_assembly {
     ///         KE_RESULT_OUT_OF_MEMORY.
     ke_result (*bind)(struct ke_assembly *self, const char *instance, const char *slot, const char *target);
 
-    /// Binds the hook @p hook of @p instance to the set @p set of the schedule instance @p schedule. A hook nothing
-    /// binds joins the only schedule that has its default set.
-    /// @param instance [utf8]
-    /// @param hook [utf8]
-    /// @param schedule [utf8] An instance providing ke_schedule.
-    /// @param set [utf8,optional] NULL takes the hook's default set.
-    /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null argument other than @p set;
-    ///         KE_RESULT_NOT_SUPPORTED after resolve; KE_RESULT_OUT_OF_MEMORY.
-    ke_result (*hook)(struct ke_assembly *self, const char *instance, const char *hook, const char *schedule,
-                      const char *set);
-
     /// Orders two instances bound to the slot @p slot of @p instance: @p first comes before @p then. Instances of a
     /// slot with no order between them come in no guaranteed order. With no @p slot, orders two instances bound to
     /// slots of @p instance, the same or different ones, by the positions the part receives.
@@ -111,21 +100,6 @@ typedef struct ke_assembly {
     ///         KE_RESULT_OUT_OF_MEMORY.
     ke_result (*order)(struct ke_assembly *self, const char *instance, const char *slot, const char *first,
                        const char *then);
-
-    /// Introduces the set @p name in the schedule instance @p schedule.
-    /// @param schedule [utf8]
-    /// @param name [utf8]
-    /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null argument; KE_RESULT_NOT_SUPPORTED after resolve;
-    ///         KE_RESULT_OUT_OF_MEMORY.
-    ke_result (*add_set)(struct ke_assembly *self, const char *schedule, const char *name);
-
-    /// Orders two sets of the schedule instance @p schedule: @p first runs before @p then.
-    /// @param schedule [utf8]
-    /// @param first [utf8]
-    /// @param then [utf8]
-    /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null argument; KE_RESULT_NOT_SUPPORTED after resolve;
-    ///         KE_RESULT_OUT_OF_MEMORY.
-    ke_result (*order_set)(struct ke_assembly *self, const char *schedule, const char *first, const char *then);
 
     /// Names the instance every slot of @p contract the composition binds nothing to takes.
     /// @param contract [utf8]

@@ -205,7 +205,7 @@ fn create(ecs: *abi_ecs.c.ke_ecs, post_update: *abi_schedule.c.ke_schedule, post
 }
 
 pub const parts = [_]abi_part.c.ke_part{
-    part.of(ke_scene_hierarchy_create, .{ .name = "scene_hierarchy", .slots = &.{"ecs"}, .hooks = &.{.{ .name = "post_update", .default_set = "post_update" }} }),
+    part.of(ke_scene_hierarchy_create, .{ .name = "scene_hierarchy", .slots = &.{"ecs"}, .hooks = &.{"post_update"} }),
 };
 
 const testing = std.testing;

@@ -2,10 +2,8 @@
 
 const abi_assembly = @import("assembly");
 const abi_configuration = @import("configuration");
-const abi_ecs = @import("ecs");
 const abi_logger = @import("logger");
 const abi_result = @import("result");
-const abi_schedule = @import("schedule");
 
 /// The ABI as the headers declare it.
 pub const c = @import("assembly_default_factory_c.zig");

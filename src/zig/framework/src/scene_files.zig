@@ -499,7 +499,7 @@ export fn ke_scene_files_create(
 }
 
 pub const parts = [_]abi_part.c.ke_part{
-    part.of(ke_scene_files_create, .{ .name = "scene_files", .slots = &.{ "ecs", "node_types", "assets", "io" }, .hooks = &.{.{ .name = "first_scene", .default_set = "startup" }} }),
+    part.of(ke_scene_files_create, .{ .name = "scene_files", .slots = &.{ "ecs", "node_types", "assets", "io" }, .hooks = &.{"first_scene"} }),
 };
 
 const testing = std.testing;

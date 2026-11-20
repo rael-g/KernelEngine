@@ -27,6 +27,9 @@ pub const ke_defer_fn = ?*const fn (?*abi_ecs.c.ke_ecs, ?*anyopaque) callconv(.c
 /// thread logged.
 pub const ke_log_callback = ?*const fn (?*anyopaque, abi_logger.c.ke_log_level, ?[*:0]const u8, ?[*:0]const u8) callconv(.c) void;
 
+/// Receives one key the settings hold.
+pub const ke_settings_key_func = ?*const fn (?[*:0]const u8, ?*anyopaque) callconv(.c) void;
+
 /// One call of a system body, once per run of the schedule, or once per slice when the system is
 /// per_entity. A failure is carried to the caller of run, which fails with it; the rest of the
 /// wave still runs, and no later wave starts.
@@ -35,9 +38,6 @@ pub const ke_schedule_execute_fn = ?*const fn (?*abi_schedule.c.ke_schedule_ctx,
 /// Whether a system runs in this run of its schedule; asked once per run, before the first wave,
 /// on the thread that called run. A failure fails the run before any wave starts.
 pub const ke_schedule_condition_fn = ?*const fn (?*anyopaque, ?*bool) callconv(.c) abi_result.c.ke_result;
-
-/// Receives one key the settings hold.
-pub const ke_settings_key_func = ?*const fn (?[*:0]const u8, ?*anyopaque) callconv(.c) void;
 
 /// Creates the module that creates, steps and syncs 2D bodies: it registers its two systems in
 /// fixed_post_update_set of fixed_post_update. Destroying the module unregisters them and

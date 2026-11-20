@@ -275,7 +275,6 @@ test "the library's part is async_enki, built from its factory" {
     try std.testing.expectEqualStrings("async_enki", std.mem.span(p.name.?));
     try std.testing.expectEqual(@as(usize, 1), p.provides_count);
     try std.testing.expectEqual(@as(usize, 0), p.slot_count);
-    try std.testing.expectEqual(@as(usize, 0), p.hook_count);
 }
 
 test "creating and destroying async systems leaves no block allocated" {
