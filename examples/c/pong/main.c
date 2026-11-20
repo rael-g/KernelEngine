@@ -30,7 +30,7 @@ int main(void)
     ke_sdk_host host;
     ke_result made = ke_sdk_host_open("pong", &host);
     ke_assembly *a = host.assembly.ref;
-    if (made == KE_OK) made = ke_sdk_defaults_compose(a);
+    if (made == KE_OK) made = ke_sdk_defaults_compose(&host);
     if (made == KE_OK) made = a->add_part(a, &pong_part);
     if (made == KE_OK) made = a->add_instance(a, "pong_nodes", "pong_nodes", NULL);
     if (made == KE_OK) made = ke_sdk_host_run(&host);

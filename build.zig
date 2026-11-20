@@ -691,6 +691,7 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ src_c, "assembly" }),
             b.pathJoin(&.{ src_c, "runner" }),
             b.pathJoin(&.{ src_zig, "assembly/default/include" }),
+            b.pathJoin(&.{ src_zig, "assembly/toml/include" }),
             b.pathJoin(&.{ src_zig, "runner/window/include" }),
             b.pathJoin(&.{ src_zig, "engine_nodes/include" }),
             b.pathJoin(&.{ src_zig, "ecs/flecs/include" }),
@@ -756,6 +757,7 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_tonemap") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_ui") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_assembly_default") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_assembly_toml") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_runner_window") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_engine_nodes") }),
         }),
@@ -858,6 +860,7 @@ pub fn build(b: *std.Build) void {
     };
     for (all_examples) |e| b.getInstallStep().dependOn(&e.step);
     installSdk(&ctx, src_c, b.pathJoin(&.{ root, "src/sdk/c" }), b.pathJoin(&.{ src_zig, "common/include" }));
+    b.getInstallStep().dependOn(&b.addInstallFile(.{ .cwd_relative = b.pathJoin(&.{ root, "src/sdk/defaults.composition" }) }, "bin/defaults.composition").step);
 }
 
 /// Makes the install prefix a C SDK: every contract, factory and SDK header under `include/`, and

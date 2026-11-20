@@ -2,6 +2,7 @@
 #define KERNEL_ENGINE_SDK_DEFAULTS_H_
 
 #include <kernel_engine/assembly/default/assembly_default_create.h>
+#include <kernel_engine/assembly/toml/assembly_toml_create.h>
 #include <kernel_engine/async/enki/async_enki_parts.h>
 #include <kernel_engine/audio/miniaudio/audio_miniaudio_parts.h>
 #include <kernel_engine/audio/module/audio_module_parts.h>
@@ -76,129 +77,22 @@ static inline ke_result ke_sdk_default_parts(ke_assembly *a)
 }
 
 /**
- * Adds the default parts and their instances to @p a: the job and async systems, the main and the render world, one
+ * Adds the default parts to the assembly of @p host and loads the default composition over them, the file
+ * `defaults.composition` beside the executable: the job and async systems, the main and the render world, one
  * schedule per phase laid out on the scheduler, the extraction, the scene tree, physics, input actions, node types,
  * assets and scene files, a GLFW window with a WebGPU device, the deferred renderer with the UI and labels, audio,
  * and a runner over the window. The game adds its own parts and instances after it.
  */
-static inline ke_result ke_sdk_defaults_compose(ke_assembly *a)
+static inline ke_result ke_sdk_defaults_compose(ke_sdk_host *host)
 {
+    char path[4096];
+    ke_assembly *a = host->assembly.ref;
     ke_result made = ke_sdk_default_parts(a);
-    static const char *const instances[][3] = {
-        { "job", "job_system_enki", "job" },
-        { "async", "async_enki", "async" },
-        { "io", "io_std", "io" },
-        { "input", "input_default", NULL },
-        { "world", "ecs_flecs", "ecs" },
-        { "render_world", "ecs_flecs", "ecs" },
-        { "startup", "schedule", "schedule" },
-        { "pre_update", "schedule", "schedule" },
-        { "fixed_pre_update", "schedule", "schedule" },
-        { "fixed_update", "schedule", "schedule" },
-        { "fixed_post_update", "schedule", "schedule" },
-        { "update", "schedule", "schedule" },
-        { "post_update", "schedule", "schedule" },
-        { "render_begin", "schedule", "schedule" },
-        { "render_prepare", "schedule", "schedule" },
-        { "render_queue", "schedule", "schedule" },
-        { "render_submit", "schedule", "schedule" },
-        { "shutdown", "schedule", "schedule" },
-        { "scheduler", "scheduler", "scheduler" },
-        { "layout", "scheduler_layout", NULL },
-        { "extraction", "extraction", NULL },
-        { "extraction_history", "extraction_history", NULL },
-        { "scene_tree", "scene_tree", NULL },
-        { "hierarchy", "scene_hierarchy", NULL },
-        { "physics", "physics_2d_box2d", "physics" },
-        { "bodies", "physics_body2d", NULL },
-        { "actions", "input_actions", "actions" },
-        { "action_evaluation", "input_actions_evaluation", NULL },
-        { "node_types", "node_types", NULL },
-        { "node_systems", "node_types_systems", NULL },
-        { "engine_nodes", "engine_nodes", NULL },
-        { "fonts", "font_loader_stb", NULL },
-        { "assets", "asset_resolver", NULL },
-        { "scene_files", "scene_files", "scene_files" },
-        { "window", "window_glfw", "window" },
-        { "device", "gpu_device_webgpu", "device" },
-        { "target", "gpu_render_target_webgpu_window", "target" },
-        { "binder", "render_binder_grouped", "binder" },
-        { "service", "render_service", "service" },
-        { "graph", "render_graph_simple", NULL },
-        { "view_space", "view_space_rh", NULL },
-        { "camera", "render_camera", NULL },
-        { "scene", "render_scene_resolve", NULL },
-        { "scene_systems", "render_scene_resolve_systems", NULL },
-        { "frame", "render_frame", "frame" },
-        { "frame_systems", "render_frame_systems", NULL },
-        { "gbuffer", "render_gbuffer", NULL },
-        { "deferred_lighting", "render_deferred_lighting", "deferred_lighting" },
-        { "forward", "render_forward", "forward" },
-        { "tonemap", "render_tonemap", NULL },
-        { "ui", "render_ui", NULL },
-        { "ui_systems", "render_ui_systems", NULL },
-        { "labels", "render_label_resolve", "labels" },
-        { "audio", "audio_miniaudio", NULL },
-        { "sound", "sound", NULL },
-        { "runner", "runner_window", NULL },
-    };
-    for (size_t i = 0; made == KE_OK && i < sizeof instances / sizeof instances[0]; ++i)
-        made = a->add_instance(a, instances[i][0], instances[i][1], instances[i][2]);
-    if (made == KE_OK) made = a->set_default(a, "ke_ecs", "world");
-
-    static const char *const cadences[][2] = {
-        { "startup", "startup" },
-        { "every_tick", "pre_update" },
-        { "fixed", "fixed_pre_update" },
-        { "fixed", "fixed_update" },
-        { "fixed", "fixed_post_update" },
-        { "every_tick", "update" },
-        { "every_tick", "post_update" },
-        { "every_tick", "extraction" },
-        { "every_tick", "render_begin" },
-        { "every_tick", "render_prepare" },
-        { "every_tick", "render_queue" },
-        { "every_tick", "render_submit" },
-        { "shutdown", "shutdown" },
-    };
-    for (size_t i = 0; made == KE_OK && i < sizeof cadences / sizeof cadences[0]; ++i)
-        made = a->bind(a, "layout", cadences[i][0], cadences[i][1]);
-    for (size_t i = 1; made == KE_OK && i < sizeof cadences / sizeof cadences[0]; ++i)
-        made = a->order(a, "layout", NULL, cadences[i - 1][1], cadences[i][1]);
-
-    static const char *const binds[][3] = {
-        { "render_begin", "ecs", "render_world" },
-        { "render_prepare", "ecs", "render_world" },
-        { "render_queue", "ecs", "render_world" },
-        { "render_submit", "ecs", "render_world" },
-        { "extraction", "render", "render_world" },
-        { "scene", "render", "render_world" },
-        { "frame", "ecs", "render_world" },
-        { "ui", "render", "render_world" },
-        { "hierarchy", "post_update", "post_update" },
-        { "action_evaluation", "pre_update", "pre_update" },
-        { "node_systems", "pre_update", "pre_update" },
-        { "node_systems", "fixed_update", "fixed_update" },
-        { "node_systems", "update", "update" },
-        { "node_systems", "post_update", "post_update" },
-        { "bodies", "fixed_post_update", "fixed_post_update" },
-        { "extraction_history", "fixed_pre_update", "fixed_pre_update" },
-        { "scene_files", "first_scene", "startup" },
-        { "scene_systems", "update", "update" },
-        { "scene_systems", "post_update", "post_update" },
-        { "labels", "update", "update" },
-        { "sound", "post_update", "post_update" },
-        { "frame_systems", "render_begin", "render_begin" },
-        { "frame_systems", "render_submit", "render_submit" },
-        { "gbuffer", "render_prepare", "render_prepare" },
-        { "gbuffer", "render_queue", "render_queue" },
-        { "deferred_lighting", "render_queue", "render_queue" },
-        { "forward", "render_queue", "render_queue" },
-        { "tonemap", "render_queue", "render_queue" },
-        { "ui_systems", "render_prepare", "render_prepare" },
-        { "ui_systems", "render_queue", "render_queue" },
-    };
-    for (size_t i = 0; made == KE_OK && i < sizeof binds / sizeof binds[0]; ++i) made = a->bind(a, binds[i][0], binds[i][1], binds[i][2]);
+    if (made == KE_OK && !ke_sdk_beside_executable(path, sizeof path, "defaults.composition")) made = KE_RESULT_NOT_FOUND;
+    ke_composition_source_handle composition = { 0 };
+    if (made == KE_OK) made = ke_assembly_toml_create(host->files.ref, &composition);
+    if (made == KE_OK) made = composition.ref->load(composition.ref, a, path);
+    if (composition.destroy) composition.destroy(composition.ref);
     return made;
 }
 
