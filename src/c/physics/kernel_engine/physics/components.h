@@ -3,7 +3,7 @@
 
 #include <kernel_engine/math/math.h>
 #include <kernel_engine/physics/physics_2d.h>
-#include <kernel_engine/spatial/transform.h>
+#include <kernel_engine/ecs/transform.h>
 #include <stdbool.h>
 
 #ifdef __cplusplus

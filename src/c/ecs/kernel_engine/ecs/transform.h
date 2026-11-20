@@ -1,5 +1,5 @@
-#ifndef KERNEL_ENGINE_SPATIAL_TRANSFORM_H_
-#define KERNEL_ENGINE_SPATIAL_TRANSFORM_H_
+#ifndef KERNEL_ENGINE_ECS_TRANSFORM_H_
+#define KERNEL_ENGINE_ECS_TRANSFORM_H_
 
 #include <kernel_engine/math/math.h>
 

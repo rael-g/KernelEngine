@@ -2,7 +2,7 @@
 #define KERNEL_ENGINE_RENDER_UI_COMPONENTS_H_
 
 #include <kernel_engine/render/handles.h>
-#include <kernel_engine/spatial/transform.h>
+#include <kernel_engine/ecs/transform.h>
 #include <stdint.h>
 
 #ifdef __cplusplus

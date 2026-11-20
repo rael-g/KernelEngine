@@ -23,8 +23,8 @@
 #include <kernel_engine/render/tonemap/tonemap_create.h>
 #include <kernel_engine/render/components.h>
 #include <kernel_engine/render/component_fields.h>
-#include <kernel_engine/spatial/transform.h>
-#include <kernel_engine/spatial/component_fields.h>
+#include <kernel_engine/ecs/transform.h>
+#include <kernel_engine/ecs/component_fields.h>
 #include <kernel_engine/ecs/ke_ecs.h>
 #include <kernel_engine/ecs/ke_ecs_flecs.h>
 #include <kernel_engine/file_system/std/file_system_std_create.h>

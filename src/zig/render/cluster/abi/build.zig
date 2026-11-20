@@ -36,7 +36,6 @@ pub fn build(b: *std.Build) void {
     translated.addIncludePath(b.path("../../../../c/scheduling"));
     translated.addIncludePath(b.path("../../../scheduling/schedule/include"));
     translated.addIncludePath(b.path("../../../../c/configuration"));
-    translated.addIncludePath(b.path("../../../../c/spatial"));
     translated.addIncludePath(b.path("../../../../c/view"));
     const tests = b.addTest(.{ .root_module = b.createModule(.{
         .root_source_file = b.path("layout_test.zig"),
@@ -62,7 +61,6 @@ pub fn build(b: *std.Build) void {
     tests.root_module.addIncludePath(b.path("../../../../c/scheduling"));
     tests.root_module.addIncludePath(b.path("../../../scheduling/schedule/include"));
     tests.root_module.addIncludePath(b.path("../../../../c/configuration"));
-    tests.root_module.addIncludePath(b.path("../../../../c/spatial"));
     tests.root_module.addIncludePath(b.path("../../../../c/view"));
     b.step("test", "Check the render_cluster_factory ABI against its headers").dependOn(&b.addRunArtifact(tests).step);
 }

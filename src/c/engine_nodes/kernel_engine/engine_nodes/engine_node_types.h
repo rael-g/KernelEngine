@@ -6,7 +6,7 @@
 #include <kernel_engine/physics/component_fields.h>
 #include <kernel_engine/render/component_fields.h>
 #include <kernel_engine/render/ui/component_fields.h>
-#include <kernel_engine/spatial/component_fields.h>
+#include <kernel_engine/ecs/component_fields.h>
 
 /// How a 3D node is placed when it is born: at the origin, unrotated, at unit scale.
 static const ke_transform_component ke_transform_node_initial = { .rotation = { 0.0f, 0.0f, 0.0f, 1.0f }, .scale = { 1.0f, 1.0f, 1.0f } };

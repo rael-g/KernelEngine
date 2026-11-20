@@ -1,9 +1,9 @@
-#ifndef KERNEL_ENGINE_SPATIAL_COMPONENT_FIELDS_H_
-#define KERNEL_ENGINE_SPATIAL_COMPONENT_FIELDS_H_
+#ifndef KERNEL_ENGINE_ECS_COMPONENT_FIELDS_H_
+#define KERNEL_ENGINE_ECS_COMPONENT_FIELDS_H_
 
 #include <kernel_engine/ecs/component_field.h>
 #include <kernel_engine/ecs/ecs.h>
-#include <kernel_engine/spatial/transform.h>
+#include <kernel_engine/ecs/transform.h>
 #include <stdalign.h>
 #include <stddef.h>
 #include <stdint.h>

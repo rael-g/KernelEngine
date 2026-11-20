@@ -18,7 +18,6 @@ pub fn build(b: *std.Build) void {
     translated.addIncludePath(b.path("../../../c/math"));
     translated.addIncludePath(b.path("../../../c/render"));
     translated.addIncludePath(b.path("../../../c/result"));
-    translated.addIncludePath(b.path("../../../c/spatial"));
     translated.addIncludePath(b.path("../../../c/text"));
     const tests = b.addTest(.{ .root_module = b.createModule(.{
         .root_source_file = b.path("layout_test.zig"),
@@ -35,7 +34,6 @@ pub fn build(b: *std.Build) void {
     tests.root_module.addIncludePath(b.path("../../../c/math"));
     tests.root_module.addIncludePath(b.path("../../../c/render"));
     tests.root_module.addIncludePath(b.path("../../../c/result"));
-    tests.root_module.addIncludePath(b.path("../../../c/spatial"));
     tests.root_module.addIncludePath(b.path("../../../c/text"));
     b.step("test", "Check the render_ui ABI against its headers").dependOn(&b.addRunArtifact(tests).step);
 }
