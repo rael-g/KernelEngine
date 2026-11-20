@@ -1,28 +1,6 @@
 {
   "enums": [
     {
-      "name": "ke_alpha_mode",
-      "doc": null,
-      "values": [
-        {
-          "name": "KE_ALPHA_MODE_OPAQUE",
-          "value": 0,
-          "doc": null
-        },
-        {
-          "name": "KE_ALPHA_MODE_MASK",
-          "value": 1,
-          "doc": null
-        },
-        {
-          "name": "KE_ALPHA_MODE_BLEND",
-          "value": 2,
-          "doc": null
-        }
-      ],
-      "external": true
-    },
-    {
       "name": "ke_result_domain",
       "doc": "The domains that own a range of result codes. A domain\u0027s own codes are written \u0060KE_RESULT_CODE(KE_RESULT_DOMAIN_ \u003CDOMAIN \u003E, n)\u0060 in its header, with \u0060n\u0060 from 1 up.",
       "values": [

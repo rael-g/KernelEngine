@@ -6,6 +6,7 @@
 #include <kernel_engine/math/math.h>
 #include <kernel_engine/render/binding/resource_binder.h>
 #include <kernel_engine/render/gpu/gpu_device.h>
+#include <kernel_engine/asset/material.h>
 #include <kernel_engine/render/handles.h>
 #include <kernel_engine/render/mesh.h>
 #include <stdint.h>

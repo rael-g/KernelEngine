@@ -2,6 +2,7 @@
 
 const abi_render_components = @import("abi_render_components");
 const abi_render_handles = @import("abi_render_handles");
+const abi_render_material = @import("abi_render_material");
 const abi_mesh = @import("abi_mesh");
 const abi_math = @import("abi_math");
 const abi_render = @import("abi_render");
@@ -230,7 +231,7 @@ const Recorder = struct {
     var material_key_len: usize = 0;
     var material_calls: u32 = 0;
     var material_roughness: f32 = 0;
-    var material_alpha_mode: abi_render_handles.c.ke_alpha_mode = 0;
+    var material_alpha_mode: abi_render_material.c.ke_alpha_mode = 0;
 
     fn reset() void {
         mesh_key_len = 0;
@@ -279,7 +280,7 @@ fn recordCreateMaterial(
     roughness: f32,
     _: abi_render_handles.c.ke_texture_handle,
     _: abi_render_handles.c.ke_texture_handle,
-    alpha_mode: abi_render_handles.c.ke_alpha_mode,
+    alpha_mode: abi_render_material.c.ke_alpha_mode,
     _: f32,
     _: f32,
     _: f32,
@@ -401,11 +402,11 @@ test "a mesh without a material gets one built from the values authored on it" {
     var m = std.mem.zeroes(abi_render_components.c.ke_mesh_component);
     m.base_color = .{ .x = 1, .y = 0, .z = 0, .w = 1 };
     m.roughness = 0.25;
-    m.alpha_mode = abi_render_handles.c.KE_ALPHA_MODE_BLEND;
+    m.alpha_mode = abi_render_material.c.KE_ALPHA_MODE_BLEND;
     resolveMaterial(&svc, &m);
     try testing.expectEqual(@as(u32, 1), Recorder.material_calls);
     try testing.expectEqual(@as(f32, 0.25), Recorder.material_roughness);
-    try testing.expectEqual(@as(abi_render_handles.c.ke_alpha_mode, abi_render_handles.c.KE_ALPHA_MODE_BLEND), Recorder.material_alpha_mode);
+    try testing.expectEqual(@as(abi_render_material.c.ke_alpha_mode, abi_render_material.c.KE_ALPHA_MODE_BLEND), Recorder.material_alpha_mode);
     try testing.expectEqual(@as(u32, 43), m.material.bits);
 }
 

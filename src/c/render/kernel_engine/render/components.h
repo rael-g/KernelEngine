@@ -2,6 +2,7 @@
 #define KERNEL_ENGINE_RENDER_COMPONENTS_H_
 
 #include <kernel_engine/math/math.h>
+#include <kernel_engine/asset/material.h>
 #include <kernel_engine/render/handles.h>
 #include <kernel_engine/ecs/transform.h>
 #include <stdint.h>

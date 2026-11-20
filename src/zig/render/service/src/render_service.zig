@@ -2,9 +2,9 @@
 //! factory that builds it and fills the `ke_render_service` vtable.
 
 const abi_render_contract = @import("abi_render_contract");
-const abi_asset_resolver = @import("abi_asset_resolver");
 const abi_render_gpu = @import("abi_render_gpu");
 const abi_render_handles = @import("abi_render_handles");
+const abi_render_material = @import("abi_render_material");
 const std = @import("std");
 const abi_part = @import("abi_part");
 const part = @import("part");
@@ -42,7 +42,7 @@ const first_upload_arena = 8 * 1024 * 1024;
 /// One buffer write queued during a frame: where it goes on the GPU and the bytes it copies out
 /// of the upload arena.
 pub const UploadRecord = struct {
-    buffer: abi_asset_resolver.c.ke_gpu_buffer,
+    buffer: abi_render.c.ke_gpu_buffer,
     gpu_offset: u64,
     arena_offset: usize,
     size: usize,
@@ -52,29 +52,29 @@ pub const UploadRecord = struct {
 /// `upload_spill` by the thread that made it.
 pub const SpilledUpload = struct {
     next: ?*SpilledUpload,
-    buffer: abi_asset_resolver.c.ke_gpu_buffer,
+    buffer: abi_render.c.ke_gpu_buffer,
     gpu_offset: u64,
     data: []u8,
 };
 
 /// A mesh in `mesh_store`: the vertex and index buffers it owns and the number of indices.
 pub const Mesh = struct {
-    vbo: abi_asset_resolver.c.ke_gpu_buffer,
-    ibo: abi_asset_resolver.c.ke_gpu_buffer,
+    vbo: abi_render.c.ke_gpu_buffer,
+    ibo: abi_render.c.ke_gpu_buffer,
     index_count: u32,
 };
 
 /// A texture in `texture_store`: the GPU texture it owns and its default view.
 pub const Texture = struct {
-    tex: abi_asset_resolver.c.ke_gpu_texture,
-    view: abi_asset_resolver.c.ke_gpu_texture_view,
+    tex: abi_render.c.ke_gpu_texture,
+    view: abi_render.c.ke_gpu_texture_view,
 };
 
 /// A material in `material_store`: what the binder holds for it, its alpha mode and cutoff, the
 /// name of its shader, and the albedo and normal textures it samples.
 pub const Material = struct {
-    binding: abi_asset_resolver.c.ke_render_material_binding,
-    alpha_mode: abi_render_handles.c.ke_alpha_mode,
+    binding: abi_render.c.ke_render_material_binding,
+    alpha_mode: abi_render_material.c.ke_alpha_mode,
     alpha_cutoff: f32,
     shader: [MAX_SHADER_NAME]u8,
     albedo: abi_render_handles.c.ke_texture_handle,
@@ -88,7 +88,7 @@ pub const CoreState = struct {
     device: *abi_render_gpu.c.ke_gpu_device,
     target: *abi_render_gpu.c.ke_gpu_render_target,
     binder: *abi_render_gpu.c.ke_render_resource_binder,
-    queue: abi_asset_resolver.c.ke_gpu_queue,
+    queue: abi_render.c.ke_gpu_queue,
 
     backbuffer_w: u32,
     backbuffer_h: u32,
@@ -111,7 +111,7 @@ pub const CoreState = struct {
     texture_cache_destroy: *const fn (*abi_resource_cache.c.ke_resource_cache) callconv(.c) void,
     material_cache_destroy: *const fn (*abi_resource_cache.c.ke_resource_cache) callconv(.c) void,
 
-    shader_store: slot_map.SlotMap(abi_asset_resolver.c.ke_gpu_shader_module),
+    shader_store: slot_map.SlotMap(abi_render.c.ke_gpu_shader_module),
     shader_cache: *abi_resource_cache.c.ke_resource_cache,
     shader_cache_destroy: *const fn (*abi_resource_cache.c.ke_resource_cache) callconv(.c) void,
     shader_dir: []const u8,
@@ -228,7 +228,7 @@ fn assemble(dev: *abi_render_gpu.c.ke_gpu_device, tgt: *abi_render_gpu.c.ke_gpu_
         .mesh_cache_destroy = undefined,
         .texture_cache_destroy = undefined,
         .material_cache_destroy = undefined,
-        .shader_store = slot_map.SlotMap(abi_asset_resolver.c.ke_gpu_shader_module).init(gpa),
+        .shader_store = slot_map.SlotMap(abi_render.c.ke_gpu_shader_module).init(gpa),
         .shader_cache = undefined,
         .shader_cache_destroy = undefined,
         .shader_dir = shader_dir_owned,
@@ -355,7 +355,7 @@ fn prepare(core: *abi_render.c.ke_render_service) R.Error!void {
     const black_cube_px = [_]u8{0} ** (4 * 6);
     try R.check(asset_upload.uploadCubemap(core, "__ke_default_cubemap", 1, &black_cube_px, black_cube_px.len, &st.default_cubemap));
     const white_color = abi_math.c.ke_vec4{ .x = 1.0, .y = 1.0, .z = 1.0, .w = 1.0 };
-    try R.check(asset_upload.createMaterial(core, "__ke_white_material", white_color, 0.0, 0.5, .{ .bits = abi_render_handles.c.KE_HANDLE_NONE }, .{ .bits = abi_render_handles.c.KE_HANDLE_NONE }, abi_render_handles.c.KE_ALPHA_MODE_OPAQUE, 0.5, 1.5, 0.05, null, &st.white_material));
+    try R.check(asset_upload.createMaterial(core, "__ke_white_material", white_color, 0.0, 0.5, .{ .bits = abi_render_handles.c.KE_HANDLE_NONE }, .{ .bits = abi_render_handles.c.KE_HANDLE_NONE }, abi_render_material.c.KE_ALPHA_MODE_OPAQUE, 0.5, 1.5, 0.05, null, &st.white_material));
 
     st.api = core;
     try st.blit.prepare(core, st.binder);
@@ -558,7 +558,7 @@ const Target = struct {
     }
 
     /// Repeated acquires are not counted: `acquired` is a flag.
-    fn acquire(self: ?*abi_render_gpu.c.ke_gpu_render_target, out: [*c]abi_asset_resolver.c.ke_gpu_texture_view) callconv(.c) abi_result.c.ke_result {
+    fn acquire(self: ?*abi_render_gpu.c.ke_gpu_render_target, out: [*c]abi_render.c.ke_gpu_texture_view) callconv(.c) abi_result.c.ke_result {
         of(self).acquired = true;
         out.* = 1;
         return abi_result.c.KE_OK;
@@ -666,7 +666,7 @@ test "a shader read the calling thread may not wait for is pending until a later
     const h = serviceOf(gpu.dev.api(), target.api(), sd.api(), gpu.binder.api(), sd.settings());
     const svc = h.ref orelse return error.TestUnexpectedResult;
 
-    var module: abi_asset_resolver.c.ke_gpu_shader_module = undefined;
+    var module: abi_render.c.ke_gpu_shader_module = undefined;
     shader_wait_refused = true;
     try testing.expectError(error.Pending, R.check(svc.*.load_shader.?(svc, "standard.forward", abi_render_gpu.c.KE_GPU_SHADER_STAGE_VERTEX, &module)));
     try testing.expectError(error.Pending, R.check(svc.*.load_shader.?(svc, "standard.forward", abi_render_gpu.c.KE_GPU_SHADER_STAGE_VERTEX, &module)));
@@ -706,10 +706,10 @@ test "a frame acquires the render target, hands out its view and presents it onc
     const svc = h.ref orelse return error.TestUnexpectedResult;
     defer h.destroy.?(svc);
     try testing.expectEqual(@as(abi_render_gpu.c.ke_gpu_texture_format, abi_render_gpu.c.KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM), svc.*.backbuffer_format.?(svc));
-    var view: abi_asset_resolver.c.ke_gpu_texture_view = abi_render_gpu.c.KE_GPU_INVALID_HANDLE;
+    var view: abi_render.c.ke_gpu_texture_view = abi_render_gpu.c.KE_GPU_INVALID_HANDLE;
     try R.check(svc.*.begin_frame.?(svc, &view));
     try testing.expect(target.acquired);
-    try testing.expectEqual(@as(abi_asset_resolver.c.ke_gpu_texture_view, 1), view);
+    try testing.expectEqual(@as(abi_render.c.ke_gpu_texture_view, 1), view);
     try R.check(svc.*.end_frame.?(svc));
     try testing.expectEqual(@as(u32, 1), target.presented);
     try testing.expectEqual(R.ok, svc.*.end_frame.?(svc));
@@ -730,7 +730,7 @@ test "uploads beyond the first frame's records and arena are all written when su
 
     const upload_count = first_upload_records + 100;
     var word: u32 = 7;
-    var view: abi_asset_resolver.c.ke_gpu_texture_view = abi_render_gpu.c.KE_GPU_INVALID_HANDLE;
+    var view: abi_render.c.ke_gpu_texture_view = abi_render_gpu.c.KE_GPU_INVALID_HANDLE;
     try R.check(svc.*.begin_frame.?(svc, &view));
     for (0..upload_count) |_| svc.*.upload.?(svc, 1, 0, &word, @sizeOf(u32));
     const big = try heap.gpa.alloc(u8, first_upload_arena);
@@ -763,7 +763,7 @@ test "a blit draws its source over the whole of the render pass it is given, in 
     target.init();
     const h = serviceOf(gpu.dev.api(), target.api(), sd.api(), gpu.binder.api(), sd.settings());
     const svc = h.ref orelse return error.TestUnexpectedResult;
-    var view: abi_asset_resolver.c.ke_gpu_texture_view = abi_render_gpu.c.KE_GPU_INVALID_HANDLE;
+    var view: abi_render.c.ke_gpu_texture_view = abi_render_gpu.c.KE_GPU_INVALID_HANDLE;
     try R.check(svc.*.begin_frame.?(svc, &view));
     svc.*.blit.?(svc, gpu.render_pass.api(), 7, abi_render_gpu.c.KE_GPU_TEXTURE_FORMAT_BGRA8_UNORM);
     try gpu.render_pass.received(.draw).where(zsub.argIs(1, @as(u32, 3))).times(1);

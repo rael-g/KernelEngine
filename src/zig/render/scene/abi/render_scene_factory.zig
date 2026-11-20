@@ -36,9 +36,9 @@ pub fn renderSceneSetLogCallback(callback: c.ke_log_callback, ctx: ?*anyopaque) 
 
 /// Registers the scene's render components in the main world and in the render world, and a copy
 /// of each in the extraction. Its systems come from ke_render_scene_resolve_systems_create.
-pub fn renderSceneResolveCreate(main: ?*abi_ecs.c.ke_ecs, render: ?*abi_ecs.c.ke_ecs, extraction: ?*abi_extraction.c.ke_extraction, service: ?*abi_render.c.ke_render_service, resolver: ?*abi_asset_resolver.c.ke_asset_resolver) Error!abi_render.c.ke_render_scene_resolve_handle {
+pub fn renderSceneResolveCreate(main: ?*abi_ecs.c.ke_ecs, render: ?*abi_ecs.c.ke_ecs, extraction: ?*abi_extraction.c.ke_extraction, service: ?*abi_render.c.ke_render_service, assets: ?*abi_render.c.ke_render_assets) Error!abi_render.c.ke_render_scene_resolve_handle {
     var written: abi_render.c.ke_render_scene_resolve_handle = undefined;
-    try checkResult(c.ke_render_scene_resolve_create(main, render, extraction, service, resolver, &written));
+    try checkResult(c.ke_render_scene_resolve_create(main, render, extraction, service, assets, &written));
     return written;
 }
 

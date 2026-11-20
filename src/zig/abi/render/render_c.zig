@@ -6,6 +6,7 @@ const abi_mesh = @import("mesh");
 const abi_render_components = @import("render_components");
 const abi_render_gpu = @import("render_gpu");
 const abi_render_handles = @import("render_handles");
+const abi_render_material = @import("render_material");
 const abi_result = @import("result");
 
 pub const ke_component_id = u32;
@@ -152,12 +153,12 @@ pub const ke_render_service = extern struct {
     /// uploaded.
     mesh_buffers: ?*const fn (?*ke_render_service, abi_render_handles.c.ke_mesh_handle, ?*ke_gpu_buffer, ?*ke_gpu_buffer, ?*u32) callconv(.c) bool = null,
     upload_texture: ?*const fn (?*ke_render_service, ?[*:0]const u8, u32, u32, ?[*]const u8, usize, ?*abi_render_handles.c.ke_texture_handle) callconv(.c) abi_result.c.ke_result = null,
-    create_material: ?*const fn (?*ke_render_service, ?[*:0]const u8, abi_math.c.ke_vec4, f32, f32, abi_render_handles.c.ke_texture_handle, abi_render_handles.c.ke_texture_handle, abi_render_handles.c.ke_alpha_mode, f32, f32, f32, ?[*:0]const u8, ?*abi_render_handles.c.ke_material_handle) callconv(.c) abi_result.c.ke_result = null,
+    create_material: ?*const fn (?*ke_render_service, ?[*:0]const u8, abi_math.c.ke_vec4, f32, f32, abi_render_handles.c.ke_texture_handle, abi_render_handles.c.ke_texture_handle, abi_render_material.c.ke_alpha_mode, f32, f32, f32, ?[*:0]const u8, ?*abi_render_handles.c.ke_material_handle) callconv(.c) abi_result.c.ke_result = null,
     /// What the service's resource binder holds for a material handle, the argument a pass gives its
     /// bind_material; an unknown handle resolves to the built-in white material.
     material_binding: ?*const fn (?*ke_render_service, abi_render_handles.c.ke_material_handle) callconv(.c) ke_render_material_binding = null,
     /// The pass bucket for a material handle, resolved from CPU-side storage — no GPU state touched.
-    material_alpha_mode: ?*const fn (?*ke_render_service, abi_render_handles.c.ke_material_handle) callconv(.c) abi_render_handles.c.ke_alpha_mode = null,
+    material_alpha_mode: ?*const fn (?*ke_render_service, abi_render_handles.c.ke_material_handle) callconv(.c) abi_render_material.c.ke_alpha_mode = null,
     /// The MASK discard threshold for a material handle.
     material_alpha_cutoff: ?*const fn (?*ke_render_service, abi_render_handles.c.ke_material_handle) callconv(.c) f32 = null,
     upload_cubemap: ?*const fn (?*ke_render_service, ?[*:0]const u8, u32, ?[*]const u8, usize, ?*abi_render_handles.c.ke_texture_handle) callconv(.c) abi_result.c.ke_result = null,
@@ -217,6 +218,24 @@ pub const ke_render_service = extern struct {
 pub const ke_render_service_handle = extern struct {
     ref: ?*ke_render_service = std.mem.zeroes(?*ke_render_service),
     destroy: ?*const fn (?*ke_render_service) callconv(.c) void = null,
+};
+
+/// The resources a render service holds, each made once from the asset a path names and found by
+/// that path afterwards.
+pub const ke_render_assets = extern struct {
+    handle: ?*anyopaque = std.mem.zeroes(?*anyopaque),
+    /// The texture the image at `path` makes. On a path the service already holds, nothing is read.
+    resolve_texture: ?*const fn (?*ke_render_assets, ?[*:0]const u8, ?*abi_render_handles.c.ke_texture_handle) callconv(.c) abi_result.c.ke_result = null,
+    /// The mesh the asset at `path` makes. On a path the service already holds, nothing is baked.
+    resolve_mesh: ?*const fn (?*ke_render_assets, ?[*:0]const u8, ?*abi_render_handles.c.ke_mesh_handle) callconv(.c) abi_result.c.ke_result = null,
+    /// The material the `.material` file at `path` makes, its albedo and normal textures each found
+    /// by its own path as resolve_texture finds them.
+    resolve_material: ?*const fn (?*ke_render_assets, ?[*:0]const u8, ?*abi_render_handles.c.ke_material_handle) callconv(.c) abi_result.c.ke_result = null,
+};
+
+pub const ke_render_assets_handle = extern struct {
+    ref: ?*ke_render_assets = std.mem.zeroes(?*ke_render_assets),
+    destroy: ?*const fn (?*ke_render_assets) callconv(.c) void = null,
 };
 
 /// The matrices and projection that a camera component and its world transform describe. Every

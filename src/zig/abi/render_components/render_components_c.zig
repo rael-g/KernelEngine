@@ -5,6 +5,7 @@ const abi_ecs = @import("ecs");
 const abi_ecs_variant = @import("ecs_variant");
 const abi_math = @import("math");
 const abi_render_handles = @import("render_handles");
+const abi_render_material = @import("render_material");
 const abi_result = @import("result");
 
 pub const ke_component_id = u32;
@@ -92,7 +93,7 @@ pub const ke_mesh_component = extern struct {
     primitive: [32]u8 = std.mem.zeroes([32]u8),
     base_color: abi_math.c.ke_vec4 = @bitCast([_]std.meta.fields(abi_math.c.ke_vec4)[0].type{ 1, 1, 1, 1 }),
     roughness: f32 = 1,
-    alpha_mode: abi_render_handles.c.ke_alpha_mode = abi_render_handles.c.KE_ALPHA_MODE_OPAQUE,
+    alpha_mode: abi_render_material.c.ke_alpha_mode = abi_render_material.c.KE_ALPHA_MODE_OPAQUE,
     alpha_cutoff: f32 = 0.5,
     ior: f32 = 1.5,
     distortion_strength: f32 = 0.05,
@@ -115,7 +116,7 @@ pub const ke_sprite2d_component = extern struct {
     flip_v: u8 = std.mem.zeroes(u8),
     /// Multiplies the sampled image. Linear RGBA.
     color: abi_math.c.ke_vec4 = @bitCast([_]std.meta.fields(abi_math.c.ke_vec4)[0].type{ 1, 1, 1, 1 }),
-    alpha_mode: abi_render_handles.c.ke_alpha_mode = abi_render_handles.c.KE_ALPHA_MODE_OPAQUE,
+    alpha_mode: abi_render_material.c.ke_alpha_mode = abi_render_material.c.KE_ALPHA_MODE_OPAQUE,
     alpha_cutoff: f32 = 0.5,
     /// The image resolved from `texture`.
     texture_handle: abi_render_handles.c.ke_texture_handle = std.mem.zeroes(abi_render_handles.c.ke_texture_handle),

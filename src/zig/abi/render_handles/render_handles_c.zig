@@ -17,11 +17,6 @@ pub const KE_MATERIAL_NONE: ke_material_handle = .{ .bits = 0 };
 pub const KE_CUBEMAP_NONE: ke_cubemap_handle = .{ .bits = 0 };
 pub const KE_SHADOW_MAP_NONE: ke_shadow_map_handle = .{ .bits = 0 };
 
-pub const ke_alpha_mode = c_uint;
-pub const KE_ALPHA_MODE_OPAQUE: ke_alpha_mode = 0;
-pub const KE_ALPHA_MODE_MASK: ke_alpha_mode = 1;
-pub const KE_ALPHA_MODE_BLEND: ke_alpha_mode = 2;
-
 pub const ke_mesh_handle = extern struct {
     bits: u32 = std.mem.zeroes(u32),
 };

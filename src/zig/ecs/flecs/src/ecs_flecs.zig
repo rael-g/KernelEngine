@@ -1,7 +1,6 @@
 //! The `ke_ecs` contract implemented on a flecs world: entities, components registered by name,
 //! and multi-component queries resolved into segments of columns.
 
-const abi_asset_resolver = @import("abi_asset_resolver");
 const abi_ecs_variant = @import("abi_ecs_variant");
 const std = @import("std");
 
@@ -89,14 +88,14 @@ fn installFlecsOsApi() void {
 /// One slot of the per-component query cache in `State.queries`. The query is owned by the state
 /// and finalized by `destroy`.
 const QueryCacheEntry = struct {
-    cid: abi_asset_resolver.c.ke_component_id,
+    cid: abi_ecs.c.ke_component_id,
     query: ?*c.ecs_query_t,
 };
 
 /// One remembered field table, copied at registration with every name and string it reaches, so
 /// the caller's table only has to live for the call; freed with the state.
 const LayoutEntry = struct {
-    cid: abi_asset_resolver.c.ke_component_id,
+    cid: abi_ecs.c.ke_component_id,
     fields: [*]const abi_ecs.c.ke_component_field,
     field_count: u32,
 };
@@ -153,8 +152,8 @@ const RegisteredQuery = struct {
     query: ?*c.ecs_query_t,
     elem_sizes: []usize,
     terms: []abi_ecs.c.ke_ecs_query_term,
-    with: []abi_asset_resolver.c.ke_component_id,
-    without: []abi_asset_resolver.c.ke_component_id,
+    with: []abi_ecs.c.ke_component_id,
+    without: []abi_ecs.c.ke_component_id,
     track_changes: bool,
     term_count: usize,
 };
@@ -203,7 +202,7 @@ const State = struct {
     layout_capacity: usize,
 
     ids: std.ArrayListUnmanaged(c.ecs_id_t) = .empty,
-    cids: std.AutoHashMapUnmanaged(c.ecs_id_t, abi_asset_resolver.c.ke_component_id) = .empty,
+    cids: std.AutoHashMapUnmanaged(c.ecs_id_t, abi_ecs.c.ke_component_id) = .empty,
     trackers: std.ArrayListUnmanaged(*Tracker) = .empty,
     next_user: u32 = 0,
     user_start: u32 = 0,
@@ -225,24 +224,24 @@ const user_id_end: u32 = std.math.maxInt(u32);
 /// The entities that lost one component since the last `removals` call, filled by a flecs
 /// observer of `OnRemove` on the component's flecs id.
 const Tracker = struct {
-    cid: abi_asset_resolver.c.ke_component_id,
+    cid: abi_ecs.c.ke_component_id,
     singletons: c.ecs_entity_t,
     observer: c.ecs_entity_t = 0,
-    lost: std.ArrayListUnmanaged(abi_asset_resolver.c.ke_entity) = .empty,
+    lost: std.ArrayListUnmanaged(abi_ecs.c.ke_entity) = .empty,
 };
 
 /// The flecs id behind a component id, zero for an unknown one.
-fn idOf(s: *State, cid: abi_asset_resolver.c.ke_component_id) c.ecs_id_t {
+fn idOf(s: *State, cid: abi_ecs.c.ke_component_id) c.ecs_id_t {
     if (cid == 0 or cid > s.ids.items.len) return 0;
     return s.ids.items[cid - 1];
 }
 
 /// The component id of a flecs id, given the next free one the first time the id is seen.
-fn cidFor(s: *State, id: c.ecs_id_t) error{OutOfMemory}!abi_asset_resolver.c.ke_component_id {
+fn cidFor(s: *State, id: c.ecs_id_t) error{OutOfMemory}!abi_ecs.c.ke_component_id {
     if (s.cids.get(id)) |cid| return cid;
     try s.ids.append(heap.gpa, id);
     errdefer _ = s.ids.pop();
-    const cid: abi_asset_resolver.c.ke_component_id = @intCast(s.ids.items.len);
+    const cid: abi_ecs.c.ke_component_id = @intCast(s.ids.items.len);
     try s.cids.put(heap.gpa, id, cid);
     return cid;
 }
@@ -257,7 +256,7 @@ fn pairSecond(id: c.ecs_id_t) c.ecs_entity_t {
 
 /// The component whose storage and field table a component id uses: the relation of a pair, the
 /// component itself otherwise.
-fn storageOf(s: *State, cid: abi_asset_resolver.c.ke_component_id) abi_asset_resolver.c.ke_component_id {
+fn storageOf(s: *State, cid: abi_ecs.c.ke_component_id) abi_ecs.c.ke_component_id {
     const id = idOf(s, cid);
     if (id == 0 or !c.ecs_id_is_pair(id)) return cid;
     return s.cids.get(pairFirst(id)) orelse cid;
@@ -270,7 +269,7 @@ fn stateOf(self: *abi_ecs.c.ke_ecs) *State {
 /// Returns the cached query for `cid`, creating it on first request. Returns null when the cache
 /// cannot grow or flecs refuses the query, and the cached entries are left as they were. The
 /// returned pointer points into `queries` and is invalidated by the next growth of that array.
-fn findOrCreateQuery(s: *State, cid: abi_asset_resolver.c.ke_component_id) ?*QueryCacheEntry {
+fn findOrCreateQuery(s: *State, cid: abi_ecs.c.ke_component_id) ?*QueryCacheEntry {
     if (s.queries) |qs| {
         for (0..s.query_count) |i| {
             if (qs[i].cid == cid) return &qs[i];
@@ -324,13 +323,13 @@ fn layoutFitsSize(fields: []const abi_ecs.c.ke_component_field, element_size: us
 }
 
 /// The field table remembered for `cid`, or null when none was ever recorded.
-fn isRegistered(s: *State, cid: abi_asset_resolver.c.ke_component_id) bool {
+fn isRegistered(s: *State, cid: abi_ecs.c.ke_component_id) bool {
     const qs = s.queries orelse return false;
     for (qs[0..s.query_count]) |q| if (q.cid == cid) return true;
     return false;
 }
 
-fn layoutOf(s: *State, cid: abi_asset_resolver.c.ke_component_id) ?[]const abi_ecs.c.ke_component_field {
+fn layoutOf(s: *State, cid: abi_ecs.c.ke_component_id) ?[]const abi_ecs.c.ke_component_field {
     const ls = s.layouts orelse return null;
     for (0..s.layout_count) |i| {
         if (ls[i].cid == cid) return ls[i].fields[0..ls[i].field_count];
@@ -342,7 +341,7 @@ fn layoutOf(s: *State, cid: abi_asset_resolver.c.ke_component_id) ?[]const abi_e
 /// the registry as it was, when memory runs out.
 fn rememberLayout(
     s: *State,
-    cid: abi_asset_resolver.c.ke_component_id,
+    cid: abi_ecs.c.ke_component_id,
     fields: [*]const abi_ecs.c.ke_component_field,
     field_count: u32,
 ) bool {
@@ -369,7 +368,7 @@ fn rememberLayout(
 /// flecs never gives a component, and never reused, so a snapshot restores them by restoring the
 /// counter; flecs's own allocator serves its internal entities between `reserved_id_capacity` and
 /// `user_id_start`.
-fn entityCreate(self_in: ?*abi_ecs.c.ke_ecs, out_entity: ?*abi_asset_resolver.c.ke_entity) callconv(.c) abi_result.c.ke_result {
+fn entityCreate(self_in: ?*abi_ecs.c.ke_ecs, out_entity: ?*abi_ecs.c.ke_entity) callconv(.c) abi_result.c.ke_result {
     const out = out_entity orelse return R.code(error.InvalidArgument);
     out.* = 0;
     const self = self_in orelse return R.code(error.InvalidArgument);
@@ -392,7 +391,7 @@ fn entityCreate(self_in: ?*abi_ecs.c.ke_ecs, out_entity: ?*abi_asset_resolver.c.
 /// Slot `entity_reserve`. Hands out the next id of the reserve pool. The id is not alive in the
 /// world until `materializeReserved` runs for it. It takes no lock and calls nothing of flecs, so
 /// threads may call it concurrently.
-fn entityReserve(self_in: ?*abi_ecs.c.ke_ecs, out_entity: ?*abi_asset_resolver.c.ke_entity) callconv(.c) abi_result.c.ke_result {
+fn entityReserve(self_in: ?*abi_ecs.c.ke_ecs, out_entity: ?*abi_ecs.c.ke_entity) callconv(.c) abi_result.c.ke_result {
     const out = out_entity orelse return R.code(error.InvalidArgument);
     out.* = 0;
     const self = self_in orelse return R.code(error.InvalidArgument);
@@ -403,13 +402,13 @@ fn entityReserve(self_in: ?*abi_ecs.c.ke_ecs, out_entity: ?*abi_asset_resolver.c
         log.warn("every id below reserved_id_capacity {d} was reserved", .{s.reserve_end});
         return R.code(error.OutOfMemory);
     }
-    out.* = @as(abi_asset_resolver.c.ke_entity, s.reserve_low) + offset;
+    out.* = @as(abi_ecs.c.ke_entity, s.reserve_low) + offset;
     return R.ok;
 }
 
 /// Slot `entity_materialize`. Brings a reserved id alive in the world through
 /// `materializeReserved`. An id outside the pool is left alone.
-fn entityMaterialize(self_in: ?*abi_ecs.c.ke_ecs, entity: abi_asset_resolver.c.ke_entity) callconv(.c) abi_result.c.ke_result {
+fn entityMaterialize(self_in: ?*abi_ecs.c.ke_ecs, entity: abi_ecs.c.ke_entity) callconv(.c) abi_result.c.ke_result {
     const self = self_in orelse return R.code(error.InvalidArgument);
     if (self.handle == null or entity == 0) return R.code(error.InvalidArgument);
     begin();
@@ -420,7 +419,7 @@ fn entityMaterialize(self_in: ?*abi_ecs.c.ke_ecs, entity: abi_asset_resolver.c.k
 /// Makes a reserved id alive in flecs, and only the first call for its slot does. The bit recorded
 /// in `materialized` is the only memory of that call, so a reserved entity destroyed later is not
 /// revived. If the bitmap cannot be allocated, nothing is recorded and the id stays dead.
-fn materializeReserved(s: *State, entity: abi_asset_resolver.c.ke_entity) error{OutOfMemory}!void {
+fn materializeReserved(s: *State, entity: abi_ecs.c.ke_entity) error{OutOfMemory}!void {
     if (entity < s.reserve_low or entity >= s.reserve_end) return;
 
     const bits = s.materialized orelse blk: {
@@ -443,7 +442,7 @@ fn materializeReserved(s: *State, entity: abi_asset_resolver.c.ke_entity) error{
 
 /// Slot `entity_destroy`. Deletes a living entity; a dead id is left alone. A reserved id that is
 /// destroyed stays dead, because its slot in `materialized` is already set.
-fn entityDestroy(self_in: ?*abi_ecs.c.ke_ecs, entity: abi_asset_resolver.c.ke_entity) callconv(.c) abi_result.c.ke_result {
+fn entityDestroy(self_in: ?*abi_ecs.c.ke_ecs, entity: abi_ecs.c.ke_entity) callconv(.c) abi_result.c.ke_result {
     const self = self_in orelse return R.code(error.InvalidArgument);
     if (self.handle == null or entity == 0) return R.code(error.InvalidArgument);
     const s = stateOf(self);
@@ -461,7 +460,7 @@ fn entityDestroy(self_in: ?*abi_ecs.c.ke_ecs, entity: abi_asset_resolver.c.ke_en
 fn componentRegister(
     self_in: ?*abi_ecs.c.ke_ecs,
     params: [*c]const abi_ecs.c.ke_component_desc,
-    out_cid: ?*abi_asset_resolver.c.ke_component_id,
+    out_cid: ?*abi_ecs.c.ke_component_id,
 ) callconv(.c) abi_result.c.ke_result {
     const out = out_cid orelse return R.code(error.InvalidArgument);
     out.* = 0;
@@ -555,7 +554,7 @@ fn componentRegister(
 /// same name, type and size copied from the old one, which is then removed; the field table, the
 /// cached query, the registered queries and the removal observers that name the component are
 /// rebuilt on the new flecs id, and only then is the old component deleted.
-fn migrate(s: *State, cid: abi_asset_resolver.c.ke_component_id, name: [*:0]const u8, size: usize, alignment: usize, inc: []const abi_ecs.c.ke_component_field) error{ OutOfMemory, InvalidArgument }!void {
+fn migrate(s: *State, cid: abi_ecs.c.ke_component_id, name: [*:0]const u8, size: usize, alignment: usize, inc: []const abi_ecs.c.ke_component_field) error{ OutOfMemory, InvalidArgument }!void {
     const old_id = idOf(s, cid);
     const old_fields = try copyFields(layoutOf(s, cid).?);
     defer freeFields(old_fields);
@@ -639,14 +638,14 @@ fn migrate(s: *State, cid: abi_asset_resolver.c.ke_component_id, name: [*:0]cons
     c.ecs_delete(s.world, old_id);
 }
 
-fn namesComponent(rq: *const RegisteredQuery, cid: abi_asset_resolver.c.ke_component_id) bool {
+fn namesComponent(rq: *const RegisteredQuery, cid: abi_ecs.c.ke_component_id) bool {
     for (rq.terms) |t| if (t.component == cid) return true;
     for (rq.with) |w| if (w == cid) return true;
     for (rq.without) |w| if (w == cid) return true;
     return false;
 }
 
-fn buildQuery(s: *State, terms: []const abi_ecs.c.ke_ecs_query_term, with: []const abi_asset_resolver.c.ke_component_id, without: []const abi_asset_resolver.c.ke_component_id, track_changes: bool) ?*c.ecs_query_t {
+fn buildQuery(s: *State, terms: []const abi_ecs.c.ke_ecs_query_term, with: []const abi_ecs.c.ke_component_id, without: []const abi_ecs.c.ke_component_id, track_changes: bool) ?*c.ecs_query_t {
     var fdesc: c.ecs_query_desc_t = std.mem.zeroes(c.ecs_query_desc_t);
     for (terms, 0..) |t, i| {
         fdesc.terms[i].id = idOf(s, t.component);
@@ -707,7 +706,7 @@ fn componentLookup(
 }
 
 /// Slot `component_meta`. Answers from the flecs type info and the remembered field table of the cid.
-fn componentMeta(self_in: ?*abi_ecs.c.ke_ecs, cid: abi_asset_resolver.c.ke_component_id, out_meta: ?*abi_ecs.c.ke_component_meta) callconv(.c) bool {
+fn componentMeta(self_in: ?*abi_ecs.c.ke_ecs, cid: abi_ecs.c.ke_component_id, out_meta: ?*abi_ecs.c.ke_component_meta) callconv(.c) bool {
     const self = self_in orelse return false;
     if (self.handle == null or cid == 0) return false;
     const s = stateOf(self);
@@ -732,8 +731,8 @@ fn componentMeta(self_in: ?*abi_ecs.c.ke_ecs, cid: abi_asset_resolver.c.ke_compo
 /// and an entity still not alive after that is refused.
 fn componentAdd(
     self_in: ?*abi_ecs.c.ke_ecs,
-    entity: abi_asset_resolver.c.ke_entity,
-    component: abi_asset_resolver.c.ke_component_id,
+    entity: abi_ecs.c.ke_entity,
+    component: abi_ecs.c.ke_component_id,
     out_data: ?*?*anyopaque,
 ) callconv(.c) abi_result.c.ke_result {
     const out = out_data orelse return R.code(error.InvalidArgument);
@@ -752,7 +751,7 @@ fn componentAdd(
 
 /// Adds a component to a living entity, zeroing and seeding it with the remembered defaults only
 /// when the entity did not hold it, and writes its bytes, or null for a zero-size component.
-fn attachTo(s: *State, entity: c.ecs_entity_t, component: abi_asset_resolver.c.ke_component_id, out: *?*anyopaque) abi_result.c.ke_result {
+fn attachTo(s: *State, entity: c.ecs_entity_t, component: abi_ecs.c.ke_component_id, out: *?*anyopaque) abi_result.c.ke_result {
     const id = idOf(s, component);
     if (id == 0) {
         log.warn("no component has id {d}", .{component});
@@ -781,7 +780,7 @@ fn attachTo(s: *State, entity: c.ecs_entity_t, component: abi_asset_resolver.c.k
 
 /// Slot `component_remove`. Removes a component from a living entity. An entity that is not alive
 /// is left alone.
-fn componentRemove(self_in: ?*abi_ecs.c.ke_ecs, entity: abi_asset_resolver.c.ke_entity, component: abi_asset_resolver.c.ke_component_id) callconv(.c) abi_result.c.ke_result {
+fn componentRemove(self_in: ?*abi_ecs.c.ke_ecs, entity: abi_ecs.c.ke_entity, component: abi_ecs.c.ke_component_id) callconv(.c) abi_result.c.ke_result {
     const self = self_in orelse return R.code(error.InvalidArgument);
     if (self.handle == null or entity == 0 or component == 0) return R.code(error.InvalidArgument);
     const s = stateOf(self);
@@ -793,7 +792,7 @@ fn componentRemove(self_in: ?*abi_ecs.c.ke_ecs, entity: abi_asset_resolver.c.ke_
 
 /// Slot `component_get`. The bytes of a component for a living entity that holds it, otherwise
 /// null.
-fn componentGet(self_in: ?*abi_ecs.c.ke_ecs, entity: abi_asset_resolver.c.ke_entity, component: abi_asset_resolver.c.ke_component_id) callconv(.c) ?*anyopaque {
+fn componentGet(self_in: ?*abi_ecs.c.ke_ecs, entity: abi_ecs.c.ke_entity, component: abi_ecs.c.ke_component_id) callconv(.c) ?*anyopaque {
     const self = self_in orelse return null;
     if (self.handle == null or entity == 0 or component == 0) return null;
     const s = stateOf(self);
@@ -805,7 +804,7 @@ fn componentGet(self_in: ?*abi_ecs.c.ke_ecs, entity: abi_asset_resolver.c.ke_ent
 
 /// Slot `component_size`. The byte size flecs holds for a component id, zero for an unknown id or
 /// a tag.
-fn componentSize(self_in: ?*abi_ecs.c.ke_ecs, cid: abi_asset_resolver.c.ke_component_id) callconv(.c) usize {
+fn componentSize(self_in: ?*abi_ecs.c.ke_ecs, cid: abi_ecs.c.ke_component_id) callconv(.c) usize {
     const self = self_in orelse return 0;
     if (self.handle == null or cid == 0) return 0;
     const s = stateOf(self);
@@ -844,8 +843,8 @@ fn queryRegister(
     if (self.handle == null or d.terms == null or d.term_count == 0) return R.code(error.InvalidArgument);
     if ((d.with_count != 0 and d.with == null) or (d.without_count != 0 and d.without == null)) return R.code(error.InvalidArgument);
     const terms = d.terms.?[0..d.term_count];
-    const with: []const abi_asset_resolver.c.ke_component_id = if (d.with_count == 0) &.{} else d.with.?[0..d.with_count];
-    const without: []const abi_asset_resolver.c.ke_component_id = if (d.without_count == 0) &.{} else d.without.?[0..d.without_count];
+    const with: []const abi_ecs.c.ke_component_id = if (d.with_count == 0) &.{} else d.with.?[0..d.with_count];
+    const without: []const abi_ecs.c.ke_component_id = if (d.without_count == 0) &.{} else d.without.?[0..d.without_count];
     const access_mask: c_uint = abi_ecs.c.KE_ECS_ACCESS_READ | abi_ecs.c.KE_ECS_ACCESS_WRITE;
     for (terms, 0..) |t, i| {
         if (t.access == 0 or (@as(c_uint, @intCast(t.access)) & ~access_mask) != 0) {
@@ -865,8 +864,8 @@ fn queryRegister(
         for (existing[0..s.rquery_count], 1..) |*rq, id| {
             if (rq.track_changes) continue;
             if (!std.mem.eql(u8, std.mem.sliceAsBytes(rq.terms), std.mem.sliceAsBytes(terms))) continue;
-            if (!std.mem.eql(abi_asset_resolver.c.ke_component_id, rq.with, with)) continue;
-            if (!std.mem.eql(abi_asset_resolver.c.ke_component_id, rq.without, without)) continue;
+            if (!std.mem.eql(abi_ecs.c.ke_component_id, rq.with, with)) continue;
+            if (!std.mem.eql(abi_ecs.c.ke_component_id, rq.without, without)) continue;
             out.* = @intCast(id);
             return R.ok;
         }
@@ -918,13 +917,13 @@ fn queryRegister(
 fn copyDescription(
     rq: *RegisteredQuery,
     terms: []const abi_ecs.c.ke_ecs_query_term,
-    with: []const abi_asset_resolver.c.ke_component_id,
-    without: []const abi_asset_resolver.c.ke_component_id,
+    with: []const abi_ecs.c.ke_component_id,
+    without: []const abi_ecs.c.ke_component_id,
 ) error{OutOfMemory}!void {
     rq.elem_sizes = try heap.gpa.alloc(usize, terms.len);
     rq.terms = try heap.gpa.dupe(abi_ecs.c.ke_ecs_query_term, terms);
-    rq.with = try heap.gpa.dupe(abi_asset_resolver.c.ke_component_id, with);
-    rq.without = try heap.gpa.dupe(abi_asset_resolver.c.ke_component_id, without);
+    rq.with = try heap.gpa.dupe(abi_ecs.c.ke_component_id, with);
+    rq.without = try heap.gpa.dupe(abi_ecs.c.ke_component_id, without);
 }
 
 /// Slot `query_resolve`. Runs the query from its start and writes one segment per matching table:
@@ -941,7 +940,7 @@ fn queryResolve(
     out_segments: [*c]abi_ecs.c.ke_ecs_segment,
     max_segments: usize,
     out_columns: [*c]?*anyopaque,
-    out_matched: [*c]abi_asset_resolver.c.ke_component_id,
+    out_matched: [*c]abi_ecs.c.ke_component_id,
     out_count: [*c]usize,
 ) callconv(.c) abi_result.c.ke_result {
     if (out_count == null) return R.code(error.InvalidArgument);
@@ -989,7 +988,7 @@ fn queryResolve(
 
 /// Slot `singleton_add`. Attaches the component to the disabled singleton entity, as `component_add`
 /// attaches it to an entity.
-fn singletonAdd(self_in: ?*abi_ecs.c.ke_ecs, component: abi_asset_resolver.c.ke_component_id, out_data: ?*?*anyopaque) callconv(.c) abi_result.c.ke_result {
+fn singletonAdd(self_in: ?*abi_ecs.c.ke_ecs, component: abi_ecs.c.ke_component_id, out_data: ?*?*anyopaque) callconv(.c) abi_result.c.ke_result {
     const out = out_data orelse return R.code(error.InvalidArgument);
     out.* = null;
     const self = self_in orelse return R.code(error.InvalidArgument);
@@ -1004,7 +1003,7 @@ fn singletonAdd(self_in: ?*abi_ecs.c.ke_ecs, component: abi_asset_resolver.c.ke_
 }
 
 /// Slot `singleton_get`. The bytes of the component on the singleton entity, otherwise null.
-fn singletonGet(self_in: ?*abi_ecs.c.ke_ecs, component: abi_asset_resolver.c.ke_component_id) callconv(.c) ?*anyopaque {
+fn singletonGet(self_in: ?*abi_ecs.c.ke_ecs, component: abi_ecs.c.ke_component_id) callconv(.c) ?*anyopaque {
     const self = self_in orelse return null;
     if (self.handle == null or component == 0) return null;
     const s = stateOf(self);
@@ -1014,7 +1013,7 @@ fn singletonGet(self_in: ?*abi_ecs.c.ke_ecs, component: abi_asset_resolver.c.ke_
 }
 
 /// Slot `singleton_remove`. Removes the component from the singleton entity.
-fn singletonRemove(self_in: ?*abi_ecs.c.ke_ecs, component: abi_asset_resolver.c.ke_component_id) callconv(.c) abi_result.c.ke_result {
+fn singletonRemove(self_in: ?*abi_ecs.c.ke_ecs, component: abi_ecs.c.ke_component_id) callconv(.c) abi_result.c.ke_result {
     const self = self_in orelse return R.code(error.InvalidArgument);
     if (self.handle == null or component == 0) return R.code(error.InvalidArgument);
     const s = stateOf(self);
@@ -1067,7 +1066,7 @@ fn destroy(self_in: ?*abi_ecs.c.ke_ecs) callconv(.c) void {
 
 /// Slot `pair`. A pair id is flecs's own pair of the relation's component entity and the target, or
 /// flecs's wildcard for KE_ENTITY_WILDCARD.
-fn pair(self_in: ?*abi_ecs.c.ke_ecs, relation: abi_asset_resolver.c.ke_component_id, target: abi_asset_resolver.c.ke_entity, out_cid: ?*abi_asset_resolver.c.ke_component_id) callconv(.c) abi_result.c.ke_result {
+fn pair(self_in: ?*abi_ecs.c.ke_ecs, relation: abi_ecs.c.ke_component_id, target: abi_ecs.c.ke_entity, out_cid: ?*abi_ecs.c.ke_component_id) callconv(.c) abi_result.c.ke_result {
     const out = out_cid orelse return R.code(error.InvalidArgument);
     out.* = 0;
     const s = stateOf(self_in orelse return R.code(error.InvalidArgument));
@@ -1082,7 +1081,7 @@ fn pair(self_in: ?*abi_ecs.c.ke_ecs, relation: abi_asset_resolver.c.ke_component
 }
 
 /// Slot `pair_parts`.
-fn pairParts(self_in: ?*abi_ecs.c.ke_ecs, cid: abi_asset_resolver.c.ke_component_id, out_relation: ?*abi_asset_resolver.c.ke_component_id, out_target: ?*abi_asset_resolver.c.ke_entity) callconv(.c) bool {
+fn pairParts(self_in: ?*abi_ecs.c.ke_ecs, cid: abi_ecs.c.ke_component_id, out_relation: ?*abi_ecs.c.ke_component_id, out_target: ?*abi_ecs.c.ke_entity) callconv(.c) bool {
     const s = stateOf(self_in orelse return false);
     const id = idOf(s, cid);
     if (id == 0 or !c.ecs_id_is_pair(id)) return false;
@@ -1114,7 +1113,7 @@ fn observe(s: *State, t: *Tracker) error{InvalidArgument}!void {
 }
 
 /// Slot `removal_track`. The tracker id is its index plus one.
-fn removalTrack(self_in: ?*abi_ecs.c.ke_ecs, component: abi_asset_resolver.c.ke_component_id, out_tracker: ?*abi_ecs.c.ke_removal_tracker) callconv(.c) abi_result.c.ke_result {
+fn removalTrack(self_in: ?*abi_ecs.c.ke_ecs, component: abi_ecs.c.ke_component_id, out_tracker: ?*abi_ecs.c.ke_removal_tracker) callconv(.c) abi_result.c.ke_result {
     const out = out_tracker orelse return R.code(error.InvalidArgument);
     out.* = 0;
     const s = stateOf(self_in orelse return R.code(error.InvalidArgument));
@@ -1134,7 +1133,7 @@ fn removalTrack(self_in: ?*abi_ecs.c.ke_ecs, component: abi_asset_resolver.c.ke_
 }
 
 /// Slot `removals`.
-fn removals(self_in: ?*abi_ecs.c.ke_ecs, tracker: abi_ecs.c.ke_removal_tracker, out_entities: [*c]abi_asset_resolver.c.ke_entity, capacity: usize, out_count: ?*usize) callconv(.c) abi_result.c.ke_result {
+fn removals(self_in: ?*abi_ecs.c.ke_ecs, tracker: abi_ecs.c.ke_removal_tracker, out_entities: [*c]abi_ecs.c.ke_entity, capacity: usize, out_count: ?*usize) callconv(.c) abi_result.c.ke_result {
     const count = out_count orelse return R.code(error.InvalidArgument);
     count.* = 0;
     const s = stateOf(self_in orelse return R.code(error.InvalidArgument));
@@ -1149,7 +1148,7 @@ fn removals(self_in: ?*abi_ecs.c.ke_ecs, tracker: abi_ecs.c.ke_removal_tracker, 
 
 /// Slot `entity_components`. Pairs of a registered relation get their component id on first sight;
 /// flecs's own ids are left out.
-fn entityComponents(self_in: ?*abi_ecs.c.ke_ecs, entity: abi_asset_resolver.c.ke_entity, out_cids: [*c]abi_asset_resolver.c.ke_component_id, capacity: usize, out_count: ?*usize) callconv(.c) abi_result.c.ke_result {
+fn entityComponents(self_in: ?*abi_ecs.c.ke_ecs, entity: abi_ecs.c.ke_entity, out_cids: [*c]abi_ecs.c.ke_component_id, capacity: usize, out_count: ?*usize) callconv(.c) abi_result.c.ke_result {
     const count = out_count orelse return R.code(error.InvalidArgument);
     count.* = 0;
     const s = stateOf(self_in orelse return R.code(error.InvalidArgument));
@@ -1169,7 +1168,7 @@ fn entityComponents(self_in: ?*abi_ecs.c.ke_ecs, entity: abi_asset_resolver.c.ke
 }
 
 /// Slot `components`: every component id that is not a pair.
-fn components(self_in: ?*abi_ecs.c.ke_ecs, out_cids: [*c]abi_asset_resolver.c.ke_component_id, capacity: usize, out_count: ?*usize) callconv(.c) abi_result.c.ke_result {
+fn components(self_in: ?*abi_ecs.c.ke_ecs, out_cids: [*c]abi_ecs.c.ke_component_id, capacity: usize, out_count: ?*usize) callconv(.c) abi_result.c.ke_result {
     const count = out_count orelse return R.code(error.InvalidArgument);
     count.* = 0;
     const s = stateOf(self_in orelse return R.code(error.InvalidArgument));
@@ -1186,9 +1185,9 @@ fn components(self_in: ?*abi_ecs.c.ke_ecs, out_cids: [*c]abi_asset_resolver.c.ke
 
 /// The values of one component a snapshot holds: its holders and their bytes, and the singleton's.
 const Column = struct {
-    cid: abi_asset_resolver.c.ke_component_id,
+    cid: abi_ecs.c.ke_component_id,
     size: usize,
-    holders: []abi_asset_resolver.c.ke_entity,
+    holders: []abi_ecs.c.ke_entity,
     bytes: []u8,
     singleton: ?[]u8,
 };
@@ -1200,7 +1199,7 @@ const Snapshot = struct {
     next_user: u32,
     reserve_next: u32,
     materialized: ?[]u8,
-    alive: []abi_asset_resolver.c.ke_entity,
+    alive: []abi_ecs.c.ke_entity,
     columns: []Column,
 };
 
@@ -1216,8 +1215,8 @@ fn freeSnapshot(snap: *Snapshot) void {
     heap.gpa.destroy(snap);
 }
 
-fn livingEntities(s: *State) error{OutOfMemory}![]abi_asset_resolver.c.ke_entity {
-    var list: std.ArrayListUnmanaged(abi_asset_resolver.c.ke_entity) = .empty;
+fn livingEntities(s: *State) error{OutOfMemory}![]abi_ecs.c.ke_entity {
+    var list: std.ArrayListUnmanaged(abi_ecs.c.ke_entity) = .empty;
     errdefer list.deinit(heap.gpa);
     const reserved = @min(s.reserve_next.load(.monotonic), s.reserve_end - s.reserve_low);
     for (s.reserve_low..s.reserve_low + reserved) |e| if (c.ecs_is_alive(s.world, e)) try list.append(heap.gpa, e);
@@ -1225,12 +1224,12 @@ fn livingEntities(s: *State) error{OutOfMemory}![]abi_asset_resolver.c.ke_entity
     return list.toOwnedSlice(heap.gpa);
 }
 
-fn capture(s: *State, cid: abi_asset_resolver.c.ke_component_id) error{ OutOfMemory, InvalidArgument }!Column {
+fn capture(s: *State, cid: abi_ecs.c.ke_component_id) error{ OutOfMemory, InvalidArgument }!Column {
     const id = idOf(s, cid);
     if (id == 0) return error.InvalidArgument;
     const ti = c.ecs_get_type_info(s.world, id);
     const size: usize = if (ti != null) @intCast(ti.*.size) else 0;
-    var holders: std.ArrayListUnmanaged(abi_asset_resolver.c.ke_entity) = .empty;
+    var holders: std.ArrayListUnmanaged(abi_ecs.c.ke_entity) = .empty;
     errdefer holders.deinit(heap.gpa);
     var bytes: std.ArrayListUnmanaged(u8) = .empty;
     errdefer bytes.deinit(heap.gpa);
@@ -1259,7 +1258,7 @@ fn capture(s: *State, cid: abi_asset_resolver.c.ke_component_id) error{ OutOfMem
 }
 
 /// Slot `snapshot`.
-fn snapshot(self_in: ?*abi_ecs.c.ke_ecs, listed: [*c]const abi_asset_resolver.c.ke_component_id, listed_count: u32, out_snapshot: ?*?*abi_ecs.c.ke_ecs_snapshot) callconv(.c) abi_result.c.ke_result {
+fn snapshot(self_in: ?*abi_ecs.c.ke_ecs, listed: [*c]const abi_ecs.c.ke_component_id, listed_count: u32, out_snapshot: ?*?*abi_ecs.c.ke_ecs_snapshot) callconv(.c) abi_result.c.ke_result {
     const out = out_snapshot orelse return R.code(error.InvalidArgument);
     out.* = null;
     const s = stateOf(self_in orelse return R.code(error.InvalidArgument));
@@ -1275,7 +1274,7 @@ fn snapshot(self_in: ?*abi_ecs.c.ke_ecs, listed: [*c]const abi_asset_resolver.c.
     return R.ok;
 }
 
-fn fill(s: *State, snap: *Snapshot, listed: []const abi_asset_resolver.c.ke_component_id) error{ OutOfMemory, InvalidArgument }!void {
+fn fill(s: *State, snap: *Snapshot, listed: []const abi_ecs.c.ke_component_id) error{ OutOfMemory, InvalidArgument }!void {
     if (s.materialized) |m| snap.materialized = try heap.gpa.dupe(u8, m);
     snap.alive = try livingEntities(s);
     const columns = try heap.gpa.alloc(Column, listed.len);
@@ -1295,9 +1294,9 @@ fn fill(s: *State, snap: *Snapshot, listed: []const abi_asset_resolver.c.ke_comp
     snap.columns = columns;
 }
 
-fn contains(sorted: []const abi_asset_resolver.c.ke_entity, e: abi_asset_resolver.c.ke_entity) bool {
-    return std.sort.binarySearch(abi_asset_resolver.c.ke_entity, sorted, e, struct {
-        fn order(key: abi_asset_resolver.c.ke_entity, item: abi_asset_resolver.c.ke_entity) std.math.Order {
+fn contains(sorted: []const abi_ecs.c.ke_entity, e: abi_ecs.c.ke_entity) bool {
+    return std.sort.binarySearch(abi_ecs.c.ke_entity, sorted, e, struct {
+        fn order(key: abi_ecs.c.ke_entity, item: abi_ecs.c.ke_entity) std.math.Order {
             return std.math.order(key, item);
         }
     }.order) != null;
@@ -1328,7 +1327,7 @@ fn restore(self_in: ?*abi_ecs.c.ke_ecs, snap_in: ?*const abi_ecs.c.ke_ecs_snapsh
             heap.gpa.free(current.bytes);
             if (current.singleton) |b| heap.gpa.free(b);
         }
-        var held: std.AutoHashMapUnmanaged(abi_asset_resolver.c.ke_entity, void) = .empty;
+        var held: std.AutoHashMapUnmanaged(abi_ecs.c.ke_entity, void) = .empty;
         defer held.deinit(heap.gpa);
         for (col.holders) |e| held.put(heap.gpa, e, {}) catch return R.code(error.OutOfMemory);
         for (current.holders) |e| if (!held.contains(e) and c.ecs_is_alive(s.world, e)) c.ecs_remove_id(s.world, e, id);
@@ -1501,31 +1500,31 @@ fn made() !abi_ecs.c.ke_ecs_handle {
     return madeWith(null);
 }
 
-fn register(h: abi_ecs.c.ke_ecs_handle, params: *const abi_ecs.c.ke_component_desc) R.Error!abi_asset_resolver.c.ke_component_id {
-    var cid: abi_asset_resolver.c.ke_component_id = 0;
+fn register(h: abi_ecs.c.ke_ecs_handle, params: *const abi_ecs.c.ke_component_desc) R.Error!abi_ecs.c.ke_component_id {
+    var cid: abi_ecs.c.ke_component_id = 0;
     try R.check(h.ref.?.component_register.?(h.ref, params, &cid));
     return cid;
 }
 
-fn spawn(h: abi_ecs.c.ke_ecs_handle) R.Error!abi_asset_resolver.c.ke_entity {
-    var entity: abi_asset_resolver.c.ke_entity = 0;
+fn spawn(h: abi_ecs.c.ke_ecs_handle) R.Error!abi_ecs.c.ke_entity {
+    var entity: abi_ecs.c.ke_entity = 0;
     try R.check(h.ref.?.entity_create.?(h.ref, &entity));
     return entity;
 }
 
-fn reserve(h: abi_ecs.c.ke_ecs_handle) R.Error!abi_asset_resolver.c.ke_entity {
-    var entity: abi_asset_resolver.c.ke_entity = 0;
+fn reserve(h: abi_ecs.c.ke_ecs_handle) R.Error!abi_ecs.c.ke_entity {
+    var entity: abi_ecs.c.ke_entity = 0;
     try R.check(h.ref.?.entity_reserve.?(h.ref, &entity));
     return entity;
 }
 
-fn attach(h: abi_ecs.c.ke_ecs_handle, entity: abi_asset_resolver.c.ke_entity, cid: abi_asset_resolver.c.ke_component_id) R.Error!?*anyopaque {
+fn attach(h: abi_ecs.c.ke_ecs_handle, entity: abi_ecs.c.ke_entity, cid: abi_ecs.c.ke_component_id) R.Error!?*anyopaque {
     var data: ?*anyopaque = null;
     try R.check(h.ref.?.component_add.?(h.ref, entity, cid, &data));
     return data;
 }
 
-fn queryOf(h: abi_ecs.c.ke_ecs_handle, cids: []const abi_asset_resolver.c.ke_component_id) R.Error!abi_ecs.c.ke_query_id {
+fn queryOf(h: abi_ecs.c.ke_ecs_handle, cids: []const abi_ecs.c.ke_component_id) R.Error!abi_ecs.c.ke_query_id {
     var terms: [32]abi_ecs.c.ke_ecs_query_term = undefined;
     for (cids, terms[0..cids.len]) |cid, *t| t.* = .{ .component = cid, .access = abi_ecs.c.KE_ECS_ACCESS_READ };
     return registerDesc(h, .{ .terms = &terms, .term_count = @intCast(cids.len), .with = null, .with_count = 0, .without = null, .without_count = 0, .track_changes = false });
@@ -1537,11 +1536,11 @@ fn registerDesc(h: abi_ecs.c.ke_ecs_handle, desc: abi_ecs.c.ke_ecs_query_desc) R
     return query;
 }
 
-fn sized(h: abi_ecs.c.ke_ecs_handle, name: [*:0]const u8) R.Error!abi_asset_resolver.c.ke_component_id {
+fn sized(h: abi_ecs.c.ke_ecs_handle, name: [*:0]const u8) R.Error!abi_ecs.c.ke_component_id {
     return register(h, &abi_ecs.c.ke_component_desc{ .name = name, .size = 4, .alignment = 4, .fields = null, .field_count = 0 });
 }
 
-fn term(cid: abi_asset_resolver.c.ke_component_id, access: c_uint) abi_ecs.c.ke_ecs_query_term {
+fn term(cid: abi_ecs.c.ke_component_id, access: c_uint) abi_ecs.c.ke_ecs_query_term {
     return .{ .component = cid, .access = @intCast(access) };
 }
 
@@ -1552,7 +1551,7 @@ fn tracking(h: abi_ecs.c.ke_ecs_handle, terms: []const abi_ecs.c.ke_ecs_query_te
 const Resolved = struct {
     segs: [4]abi_ecs.c.ke_ecs_segment = undefined,
     columns: [16]?*anyopaque = undefined,
-    matched: [16]abi_asset_resolver.c.ke_component_id = undefined,
+    matched: [16]abi_ecs.c.ke_component_id = undefined,
     count: usize = 0,
 
     fn changedCount(r: *const Resolved) usize {
@@ -1604,7 +1603,7 @@ test "a component keeps the alignment it was registered with, and a lookup repor
     const handle = try made();
     defer handle.destroy.?(handle.ref);
 
-    var cid: abi_asset_resolver.c.ke_component_id = 0;
+    var cid: abi_ecs.c.ke_component_id = 0;
     try R.check(handle.ref.?.component_register.?(handle.ref, &abi_ecs.c.ke_component_desc{ .name = "aligned4", .size = 12, .alignment = 4, .fields = null, .field_count = 0 }, &cid));
     try testing.expect(cid != 0);
     var meta = std.mem.zeroes(abi_ecs.c.ke_component_meta);
@@ -1616,7 +1615,7 @@ test "a component's meta is found by its id, and an unknown id finds none" {
     const handle = try made();
     defer handle.destroy.?(handle.ref);
 
-    var cid: abi_asset_resolver.c.ke_component_id = 0;
+    var cid: abi_ecs.c.ke_component_id = 0;
     try R.check(handle.ref.?.component_register.?(handle.ref, &abi_ecs.c.ke_component_desc{ .name = "by_id", .size = 8, .alignment = 8, .fields = null, .field_count = 0 }, &cid));
     var meta = std.mem.zeroes(abi_ecs.c.ke_component_meta);
     try testing.expect(handle.ref.?.component_meta.?(handle.ref, cid, &meta));
@@ -1630,7 +1629,7 @@ test "a tag registered with size zero is found by lookup with size zero" {
     const handle = try made();
     defer handle.destroy.?(handle.ref);
 
-    var cid: abi_asset_resolver.c.ke_component_id = 0;
+    var cid: abi_ecs.c.ke_component_id = 0;
     try R.check(handle.ref.?.component_register.?(handle.ref, &abi_ecs.c.ke_component_desc{ .name = "node.paddle", .size = 0, .alignment = 0, .fields = null, .field_count = 0 }, &cid));
     var meta = std.mem.zeroes(abi_ecs.c.ke_component_meta);
     try testing.expect(handle.ref.?.component_lookup.?(handle.ref, "node.paddle", &meta));
@@ -1642,7 +1641,7 @@ test "an entity that was never registered as a component is not found by lookup"
     const handle = try made();
     defer handle.destroy.?(handle.ref);
 
-    var cid: abi_asset_resolver.c.ke_component_id = 0;
+    var cid: abi_ecs.c.ke_component_id = 0;
     try R.check(handle.ref.?.component_register.?(handle.ref, &abi_ecs.c.ke_component_desc{ .name = "scope.inner", .size = 4, .alignment = 4, .fields = null, .field_count = 0 }, &cid));
     try testing.expect(!handle.ref.?.component_lookup.?(handle.ref, "scope", null));
 }
@@ -1651,7 +1650,7 @@ test "a sized component with an alignment of zero is refused, not given a defaul
     const handle = try made();
     defer handle.destroy.?(handle.ref);
 
-    var ignored: abi_asset_resolver.c.ke_component_id = 0;
+    var ignored: abi_ecs.c.ke_component_id = 0;
     try testing.expectError(error.InvalidArgument, R.check(handle.ref.?.component_register.?(handle.ref, &abi_ecs.c.ke_component_desc{ .name = "unaligned", .size = 12, .alignment = 0, .fields = null, .field_count = 0 }, &ignored)));
 }
 
@@ -1744,10 +1743,10 @@ test "the table of the first registrant to carry one describes the component aft
     const handle = try made();
     defer handle.destroy.?(handle.ref);
 
-    var tableless: abi_asset_resolver.c.ke_component_id = 0;
+    var tableless: abi_ecs.c.ke_component_id = 0;
     try R.check(handle.ref.?.component_register.?(handle.ref, &abi_ecs.c.ke_component_desc{ .name = "late_table", .size = 8, .alignment = 4, .fields = null, .field_count = 0 }, &tableless));
     {
-        var ignored: abi_asset_resolver.c.ke_component_id = 0;
+        var ignored: abi_ecs.c.ke_component_id = 0;
         try R.check(handle.ref.?.component_register.?(handle.ref, &abi_ecs.c.ke_component_desc{ .name = "late_table", .size = 8, .alignment = 4, .fields = &swapped_a, .field_count = swapped_a.len }, &ignored));
     }
 
@@ -1766,7 +1765,7 @@ test "a field table is copied, names and enum names with it, so the caller's may
     var choice_buf = "fast".*;
     var choices = [_]?[*:0]const u8{&choice_buf};
     var fields = [_]abi_ecs.c.ke_component_field{.{ .name = &name_buf, .type = abi_ecs_variant.c.KE_VARIANT_INT, .offset = 0, .size = 4, .enum_names = @ptrCast(&choices), .enum_count = 1 }};
-    var cid: abi_asset_resolver.c.ke_component_id = 0;
+    var cid: abi_ecs.c.ke_component_id = 0;
     try R.check(handle.ref.?.component_register.?(handle.ref, &abi_ecs.c.ke_component_desc{ .name = "copied_table", .size = 4, .alignment = 4, .fields = &fields, .field_count = 1 }, &cid));
     @memset(&name_buf, 'x');
     @memset(&choice_buf, 'x');
@@ -1786,7 +1785,7 @@ test "a field with no enum names is copied without a list, whatever pointer came
 
     var none = [_]?[*:0]const u8{null};
     const fields = [_]abi_ecs.c.ke_component_field{.{ .name = "name", .type = abi_ecs_variant.c.KE_VARIANT_STRING, .offset = 0, .size = 4, .enum_names = @ptrCast(&none), .enum_count = 0 }};
-    var cid: abi_asset_resolver.c.ke_component_id = 0;
+    var cid: abi_ecs.c.ke_component_id = 0;
     try R.check(handle.ref.?.component_register.?(handle.ref, &abi_ecs.c.ke_component_desc{ .name = "no_enum", .size = 4, .alignment = 4, .fields = &fields, .field_count = 1 }, &cid));
     var meta: abi_ecs.c.ke_component_meta = undefined;
     try testing.expect(handle.ref.?.component_lookup.?(handle.ref, "no_enum", &meta));
@@ -1866,16 +1865,16 @@ test "reserving past the pool's capacity reports exhaustion instead of colliding
 
     var i: usize = 0;
     while (i < 4) : (i += 1) try testing.expect(try reserve(handle) != 0);
-    var spent: abi_asset_resolver.c.ke_entity = 1;
+    var spent: abi_ecs.c.ke_entity = 1;
     try testing.expectError(error.OutOfMemory, R.check(e.entity_reserve.?(handle.ref, &spent)));
-    try testing.expectEqual(@as(abi_asset_resolver.c.ke_entity, 0), spent);
+    try testing.expectEqual(@as(abi_ecs.c.ke_entity, 0), spent);
 }
 
 test "every reserved id is distinct" {
     const handle = try made();
     defer handle.destroy.?(handle.ref);
 
-    var seen: [256]abi_asset_resolver.c.ke_entity = undefined;
+    var seen: [256]abi_ecs.c.ke_entity = undefined;
     for (&seen) |*slot| slot.* = try reserve(handle);
     for (seen, 0..) |a, i| {
         try testing.expect(a != 0);
@@ -1889,10 +1888,10 @@ test "reserving concurrently never hands the same id to two threads" {
 
     const thread_count = 8;
     const per_thread = 2000;
-    var ids: [thread_count][per_thread]abi_asset_resolver.c.ke_entity = undefined;
+    var ids: [thread_count][per_thread]abi_ecs.c.ke_entity = undefined;
 
     const Worker = struct {
-        fn run(ecs: *abi_ecs.c.ke_ecs, out: *[per_thread]abi_asset_resolver.c.ke_entity) void {
+        fn run(ecs: *abi_ecs.c.ke_ecs, out: *[per_thread]abi_ecs.c.ke_entity) void {
             for (out) |*slot| {
                 if (ecs.entity_reserve.?(ecs, slot) != abi_result.c.KE_OK) slot.* = 0;
             }
@@ -1905,9 +1904,9 @@ test "reserving concurrently never hands the same id to two threads" {
     }
     for (threads) |t| t.join();
 
-    var flat: [thread_count * per_thread]abi_asset_resolver.c.ke_entity = undefined;
+    var flat: [thread_count * per_thread]abi_ecs.c.ke_entity = undefined;
     for (ids, 0..) |row, i| @memcpy(flat[i * per_thread ..][0..per_thread], &row);
-    std.mem.sort(abi_asset_resolver.c.ke_entity, &flat, {}, std.sort.asc(abi_asset_resolver.c.ke_entity));
+    std.mem.sort(abi_ecs.c.ke_entity, &flat, {}, std.sort.asc(abi_ecs.c.ke_entity));
     for (flat[1..], 0..) |v, i| {
         try testing.expect(v != 0);
         try testing.expect(v != flat[i]);
@@ -1919,7 +1918,7 @@ test "a reserved id is not in the world until something materializes it" {
     defer handle.destroy.?(handle.ref);
     const e = handle.ref.?.*;
 
-    var cid: abi_asset_resolver.c.ke_component_id = 0;
+    var cid: abi_ecs.c.ke_component_id = 0;
     try R.check(e.component_register.?(handle.ref, &abi_ecs.c.ke_component_desc{ .name = "reserve_probe", .size = 4, .alignment = 4, .fields = null, .field_count = 0 }, &cid));
     const reserved = try reserve(handle);
     try testing.expect(e.component_get.?(handle.ref, reserved, cid) == null);
@@ -1933,7 +1932,7 @@ test "attaching to a reserved id materializes it without a separate call" {
     defer handle.destroy.?(handle.ref);
     const e = handle.ref.?.*;
 
-    var cid: abi_asset_resolver.c.ke_component_id = 0;
+    var cid: abi_ecs.c.ke_component_id = 0;
     try R.check(e.component_register.?(handle.ref, &abi_ecs.c.ke_component_desc{ .name = "attach_probe", .size = 4, .alignment = 4, .fields = null, .field_count = 0 }, &cid));
     const reserved = try reserve(handle);
 
@@ -1948,7 +1947,7 @@ test "materializing an id twice is a no-op rather than a second entity" {
     defer handle.destroy.?(handle.ref);
     const e = handle.ref.?.*;
 
-    var cid: abi_asset_resolver.c.ke_component_id = 0;
+    var cid: abi_ecs.c.ke_component_id = 0;
     try R.check(e.component_register.?(handle.ref, &abi_ecs.c.ke_component_desc{ .name = "twice_probe", .size = 4, .alignment = 4, .fields = null, .field_count = 0 }, &cid));
     const reserved = try reserve(handle);
     try R.check(e.entity_materialize.?(handle.ref, reserved));
@@ -1965,7 +1964,7 @@ test "materializing an id the world already owns leaves it alone" {
     defer handle.destroy.?(handle.ref);
     const e = handle.ref.?.*;
 
-    var cid: abi_asset_resolver.c.ke_component_id = 0;
+    var cid: abi_ecs.c.ke_component_id = 0;
     try R.check(e.component_register.?(handle.ref, &abi_ecs.c.ke_component_desc{ .name = "owned_probe", .size = 4, .alignment = 4, .fields = null, .field_count = 0 }, &cid));
     const created = try spawn(handle);
     const slot = (try attach(handle, created, cid)) orelse return error.TestUnexpectedResult;
@@ -1996,7 +1995,7 @@ test "a reserved entity that was destroyed does not come back on the next attach
     defer handle.destroy.?(handle.ref);
     const e = handle.ref.?.*;
 
-    var cid: abi_asset_resolver.c.ke_component_id = 0;
+    var cid: abi_ecs.c.ke_component_id = 0;
     try R.check(e.component_register.?(handle.ref, &abi_ecs.c.ke_component_desc{ .name = "revive_probe", .size = 4, .alignment = 4, .fields = null, .field_count = 0 }, &cid));
     const reserved = try reserve(handle);
     try testing.expect((try attach(handle, reserved, cid)) != null);
@@ -2041,7 +2040,7 @@ test "attaching a component seeds the defaults its field table declares" {
     defer handle.destroy.?(handle.ref);
     const e = handle.ref.?.*;
 
-    var cid: abi_asset_resolver.c.ke_component_id = 0;
+    var cid: abi_ecs.c.ke_component_id = 0;
     try R.check(e.component_register.?(handle.ref, &abi_ecs.c.ke_component_desc{ .name = "layered", .size = @sizeOf(Layered), .alignment = @alignOf(Layered), .fields = &layered_fields, .field_count = layered_fields.len }, &cid));
     try testing.expect(cid != 0);
 
@@ -2058,7 +2057,7 @@ test "attaching a component that is already there keeps the value it holds" {
     defer handle.destroy.?(handle.ref);
     const e = handle.ref.?.*;
 
-    var cid: abi_asset_resolver.c.ke_component_id = 0;
+    var cid: abi_ecs.c.ke_component_id = 0;
     try R.check(e.component_register.?(handle.ref, &abi_ecs.c.ke_component_desc{ .name = "layered_twice", .size = @sizeOf(Layered), .alignment = @alignOf(Layered), .fields = &layered_fields, .field_count = layered_fields.len }, &cid));
     const entity = try spawn(handle);
 
@@ -2074,7 +2073,7 @@ test "a component registered without a field table still attaches zeroed" {
     defer handle.destroy.?(handle.ref);
     const e = handle.ref.?.*;
 
-    var cid: abi_asset_resolver.c.ke_component_id = 0;
+    var cid: abi_ecs.c.ke_component_id = 0;
     try R.check(e.component_register.?(handle.ref, &abi_ecs.c.ke_component_desc{ .name = "untabled", .size = @sizeOf(Layered), .alignment = @alignOf(Layered), .fields = null, .field_count = 0 }, &cid));
     const entity = try spawn(handle);
     const v: *const Layered = @ptrCast(@alignCast((try attach(handle, entity, cid)).?));
@@ -2087,7 +2086,7 @@ test "a component attached over memory a destroyed entity dirtied still arrives 
     defer handle.destroy.?(handle.ref);
     const e = handle.ref.?.*;
 
-    var cid: abi_asset_resolver.c.ke_component_id = 0;
+    var cid: abi_ecs.c.ke_component_id = 0;
     try R.check(e.component_register.?(handle.ref, &abi_ecs.c.ke_component_desc{ .name = "recycled", .size = @sizeOf(Layered), .alignment = @alignOf(Layered), .fields = null, .field_count = 0 }, &cid));
     const first = try spawn(handle);
     const dirty: [*]u8 = @ptrCast((try attach(handle, first, cid)).?);
@@ -2105,12 +2104,12 @@ test "registering the same component tuple twice returns one query, and another 
     defer handle.destroy.?(handle.ref);
     const e = handle.ref.?.*;
 
-    var a: abi_asset_resolver.c.ke_component_id = 0;
+    var a: abi_ecs.c.ke_component_id = 0;
     try R.check(e.component_register.?(handle.ref, &abi_ecs.c.ke_component_desc{ .name = "dedup_a", .size = 4, .alignment = 4, .fields = null, .field_count = 0 }, &a));
-    var b: abi_asset_resolver.c.ke_component_id = 0;
+    var b: abi_ecs.c.ke_component_id = 0;
     try R.check(e.component_register.?(handle.ref, &abi_ecs.c.ke_component_desc{ .name = "dedup_b", .size = 4, .alignment = 4, .fields = null, .field_count = 0 }, &b));
-    const ab = [_]abi_asset_resolver.c.ke_component_id{ a, b };
-    const ba = [_]abi_asset_resolver.c.ke_component_id{ b, a };
+    const ab = [_]abi_ecs.c.ke_component_id{ a, b };
+    const ba = [_]abi_ecs.c.ke_component_id{ b, a };
 
     const first = (try queryOf(handle, &ab));
     try testing.expect(first != abi_ecs.c.KE_QUERY_INVALID);
@@ -2123,9 +2122,9 @@ test "resolving a query into too small an array reports every segment it matches
     defer handle.destroy.?(handle.ref);
     const e = handle.ref.?.*;
 
-    var shared: abi_asset_resolver.c.ke_component_id = 0;
+    var shared: abi_ecs.c.ke_component_id = 0;
     try R.check(e.component_register.?(handle.ref, &abi_ecs.c.ke_component_desc{ .name = "resolve_shared", .size = 4, .alignment = 4, .fields = null, .field_count = 0 }, &shared));
-    var extras: [4]abi_asset_resolver.c.ke_component_id = undefined;
+    var extras: [4]abi_ecs.c.ke_component_id = undefined;
     const names = [_][*:0]const u8{ "resolve_x0", "resolve_x1", "resolve_x2", "resolve_x3" };
     for (&extras, names) |*cid, name| try R.check(e.component_register.?(handle.ref, &abi_ecs.c.ke_component_desc{ .name = name, .size = 4, .alignment = 4, .fields = null, .field_count = 0 }, cid));
 
@@ -2137,20 +2136,20 @@ test "resolving a query into too small an array reports every segment it matches
         }
     }
 
-    const cids = [_]abi_asset_resolver.c.ke_component_id{shared};
+    const cids = [_]abi_ecs.c.ke_component_id{shared};
     const query = (try queryOf(handle, &cids));
     try testing.expect(query != abi_ecs.c.KE_QUERY_INVALID);
 
     var small: [4]abi_ecs.c.ke_ecs_segment = undefined;
     var small_columns: [4]?*anyopaque = undefined;
-    var small_matched: [4]abi_asset_resolver.c.ke_component_id = undefined;
+    var small_matched: [4]abi_ecs.c.ke_component_id = undefined;
     var count: usize = 0;
     try R.check(e.query_resolve.?(handle.ref, query, &small, small.len, &small_columns[0], &small_matched[0], &count));
     try testing.expectEqual(@as(usize, 16), count);
 
     var roomy: [32]abi_ecs.c.ke_ecs_segment = undefined;
     var roomy_columns: [32]?*anyopaque = undefined;
-    var roomy_matched: [32]abi_asset_resolver.c.ke_component_id = undefined;
+    var roomy_matched: [32]abi_ecs.c.ke_component_id = undefined;
     try R.check(e.query_resolve.?(handle.ref, query, &roomy, roomy.len, &roomy_columns[0], &roomy_matched[0], &count));
     try testing.expectEqual(@as(usize, 16), count);
 }
@@ -2160,7 +2159,7 @@ test "a query over twelve components resolves with a column for each" {
     defer handle.destroy.?(handle.ref);
     const e = handle.ref.?.*;
 
-    var cids: [12]abi_asset_resolver.c.ke_component_id = undefined;
+    var cids: [12]abi_ecs.c.ke_component_id = undefined;
     const names = [_][*:0]const u8{ "wide_0", "wide_1", "wide_2", "wide_3", "wide_4", "wide_5", "wide_6", "wide_7", "wide_8", "wide_9", "wide_10", "wide_11" };
     for (&cids, names) |*cid, name| try R.check(e.component_register.?(handle.ref, &abi_ecs.c.ke_component_desc{ .name = name, .size = 4, .alignment = 4, .fields = null, .field_count = 0 }, cid));
 
@@ -2172,7 +2171,7 @@ test "a query over twelve components resolves with a column for each" {
 
     var segs: [4]abi_ecs.c.ke_ecs_segment = undefined;
     var columns: [4 * cids.len]?*anyopaque = undefined;
-    var matched: [4 * cids.len]abi_asset_resolver.c.ke_component_id = undefined;
+    var matched: [4 * cids.len]abi_ecs.c.ke_component_id = undefined;
     var count: usize = 0;
     try R.check(e.query_resolve.?(handle.ref, query, &segs, segs.len, &columns[0], &matched[0], &count));
 
@@ -2316,9 +2315,9 @@ test "a pair is a component of its own, and a wildcard query reports the pair ea
     const a = try spawn(h);
     const b = try spawn(h);
     const fan = try spawn(h);
-    var likes_a: abi_asset_resolver.c.ke_component_id = 0;
-    var likes_b: abi_asset_resolver.c.ke_component_id = 0;
-    var likes_any: abi_asset_resolver.c.ke_component_id = 0;
+    var likes_a: abi_ecs.c.ke_component_id = 0;
+    var likes_b: abi_ecs.c.ke_component_id = 0;
+    var likes_any: abi_ecs.c.ke_component_id = 0;
     try R.check(h.ref.?.pair.?(h.ref, likes, a, &likes_a));
     try R.check(h.ref.?.pair.?(h.ref, likes, b, &likes_b));
     try R.check(h.ref.?.pair.?(h.ref, likes, abi_ecs.c.KE_ENTITY_WILDCARD, &likes_any));
@@ -2328,8 +2327,8 @@ test "a pair is a component of its own, and a wildcard query reports the pair ea
     try testing.expectEqual(@as(i32, 7), @as(*i32, @ptrCast(@alignCast(h.ref.?.component_get.?(h.ref, fan, likes_a).?))).*);
     try testing.expect(h.ref.?.component_get.?(h.ref, fan, likes_b) == null);
 
-    var relation: abi_asset_resolver.c.ke_component_id = 0;
-    var target: abi_asset_resolver.c.ke_entity = 0;
+    var relation: abi_ecs.c.ke_component_id = 0;
+    var target: abi_ecs.c.ke_entity = 0;
     try testing.expect(h.ref.?.pair_parts.?(h.ref, likes_a, &relation, &target));
     try testing.expectEqual(likes, relation);
     try testing.expectEqual(a, target);
@@ -2339,7 +2338,7 @@ test "a pair is a component of its own, and a wildcard query reports the pair ea
     const q = try registerDesc(h, .{ .terms = &terms, .term_count = 1, .with = null, .with_count = 0, .without = null, .without_count = 0, .track_changes = false });
     var segs: [4]abi_ecs.c.ke_ecs_segment = undefined;
     var columns: [4]?*anyopaque = undefined;
-    var matched: [4]abi_asset_resolver.c.ke_component_id = undefined;
+    var matched: [4]abi_ecs.c.ke_component_id = undefined;
     var count: usize = 0;
     try R.check(h.ref.?.query_resolve.?(h.ref, q, &segs, segs.len, &columns[0], &matched[0], &count));
     try testing.expectEqual(@as(usize, 1), count);
@@ -2353,17 +2352,17 @@ test "a removal tracker reports each entity that lost the component once, destro
     const kept = try spawn(h);
     const stripped = try spawn(h);
     const destroyed = try spawn(h);
-    for ([_]abi_asset_resolver.c.ke_entity{ kept, stripped, destroyed }) |e| _ = try attach(h, e, pos);
+    for ([_]abi_ecs.c.ke_entity{ kept, stripped, destroyed }) |e| _ = try attach(h, e, pos);
     var tracker: abi_ecs.c.ke_removal_tracker = 0;
     try R.check(h.ref.?.removal_track.?(h.ref, pos, &tracker));
     try R.check(h.ref.?.component_remove.?(h.ref, stripped, pos));
     try R.check(h.ref.?.entity_destroy.?(h.ref, destroyed));
-    var lost: [4]abi_asset_resolver.c.ke_entity = undefined;
+    var lost: [4]abi_ecs.c.ke_entity = undefined;
     var n: usize = 0;
     try R.check(h.ref.?.removals.?(h.ref, tracker, &lost, lost.len, &n));
     try testing.expectEqual(@as(usize, 2), n);
-    try testing.expect(std.mem.indexOfScalar(abi_asset_resolver.c.ke_entity, lost[0..2], stripped) != null);
-    try testing.expect(std.mem.indexOfScalar(abi_asset_resolver.c.ke_entity, lost[0..2], destroyed) != null);
+    try testing.expect(std.mem.indexOfScalar(abi_ecs.c.ke_entity, lost[0..2], stripped) != null);
+    try testing.expect(std.mem.indexOfScalar(abi_ecs.c.ke_entity, lost[0..2], destroyed) != null);
     try R.check(h.ref.?.removals.?(h.ref, tracker, &lost, lost.len, &n));
     try testing.expectEqual(@as(usize, 0), n);
 }
@@ -2376,12 +2375,12 @@ test "an entity lists its components and the world lists what is registered" {
     const e = try spawn(h);
     _ = try attach(h, e, pos);
     _ = try attach(h, e, vel);
-    var cids: [8]abi_asset_resolver.c.ke_component_id = undefined;
+    var cids: [8]abi_ecs.c.ke_component_id = undefined;
     var n: usize = 0;
     try R.check(h.ref.?.entity_components.?(h.ref, e, &cids, cids.len, &n));
     try testing.expectEqual(@as(usize, 2), n);
-    try testing.expect(std.mem.indexOfScalar(abi_asset_resolver.c.ke_component_id, cids[0..n], pos) != null);
-    try testing.expect(std.mem.indexOfScalar(abi_asset_resolver.c.ke_component_id, cids[0..n], vel) != null);
+    try testing.expect(std.mem.indexOfScalar(abi_ecs.c.ke_component_id, cids[0..n], pos) != null);
+    try testing.expect(std.mem.indexOfScalar(abi_ecs.c.ke_component_id, cids[0..n], vel) != null);
     try R.check(h.ref.?.components.?(h.ref, &cids, cids.len, &n));
     try testing.expectEqual(@as(usize, 2), n);
 }
@@ -2394,7 +2393,7 @@ test "a restore brings back the entities, the listed values and the ids later cr
     const a = try spawn(h);
     @as(*i32, @ptrCast(@alignCast((try attach(h, a, pos)).?))).* = 1;
     @as(*i32, @ptrCast(@alignCast((try attach(h, a, untouched)).?))).* = 10;
-    const listed = [_]abi_asset_resolver.c.ke_component_id{pos};
+    const listed = [_]abi_ecs.c.ke_component_id{pos};
     var snap: ?*abi_ecs.c.ke_ecs_snapshot = null;
     try R.check(h.ref.?.snapshot.?(h.ref, &listed, listed.len, &snap));
     defer h.ref.?.snapshot_free.?(h.ref, snap);
@@ -2446,7 +2445,7 @@ test "a different size with no field table is still refused" {
     const h = try made();
     defer h.destroy.?(h.ref);
     _ = try sized(h, "bare");
-    var cid: abi_asset_resolver.c.ke_component_id = 0;
+    var cid: abi_ecs.c.ke_component_id = 0;
     try testing.expectEqual(abi_result.c.KE_RESULT_INVALID_ARGUMENT, h.ref.?.component_register.?(h.ref, &.{ .name = "bare", .size = 8, .alignment = 4, .fields = null, .field_count = 0 }, &cid));
 }
 
@@ -2461,7 +2460,7 @@ test "the library's part is ecs_flecs, built from its factory" {
 
 test "creating, filling and destroying an ecs leaves no block allocated" {
     const handle = try made();
-    var cid: abi_asset_resolver.c.ke_component_id = 0;
+    var cid: abi_ecs.c.ke_component_id = 0;
     try R.check(handle.ref.?.component_register.?(handle.ref, &abi_ecs.c.ke_component_desc{ .name = "leak_probe", .size = 8, .alignment = 4, .fields = null, .field_count = 0 }, &cid));
     const entity = try spawn(handle);
     try testing.expect((try attach(handle, entity, cid)) != null);

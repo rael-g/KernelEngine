@@ -4,12 +4,10 @@
 const abi_asset_resolver = @import("abi_asset_resolver");
 const abi_image_loader = @import("abi_image_loader");
 const abi_mesh_data = @import("abi_mesh_data");
-const abi_render_handles = @import("abi_render_handles");
 const abi_render_material = @import("abi_render_material");
 const std = @import("std");
 
 const c = @import("c");
-const abi_render = @import("abi_render");
 const abi_result = @import("abi_result");
 const part = @import("part");
 const abi_part = @import("abi_part");
@@ -106,7 +104,7 @@ fn parseMaterialFile(io: *abi_io.c.ke_io, path: [*:0]const u8, out: *abi_render_
     out.roughness = 0.5;
     out.albedo_path[0] = 0;
     out.normal_path[0] = 0;
-    out.alpha_mode = abi_render_handles.c.KE_ALPHA_MODE_OPAQUE;
+    out.alpha_mode = abi_render_material.c.KE_ALPHA_MODE_OPAQUE;
     out.alpha_cutoff = 0.5;
     out.ior = 1.5;
     out.distortion_strength = 0.05;
@@ -147,16 +145,15 @@ fn parseMaterialFile(io: *abi_io.c.ke_io, path: [*:0]const u8, out: *abi_render_
     if (am.ok != 0) {
         const mode = std.mem.span(am.u.s);
         if (std.mem.eql(u8, mode, "MASK")) {
-            out.alpha_mode = abi_render_handles.c.KE_ALPHA_MODE_MASK;
+            out.alpha_mode = abi_render_material.c.KE_ALPHA_MODE_MASK;
         } else if (std.mem.eql(u8, mode, "BLEND")) {
-            out.alpha_mode = abi_render_handles.c.KE_ALPHA_MODE_BLEND;
+            out.alpha_mode = abi_render_material.c.KE_ALPHA_MODE_BLEND;
         }
         std.c.free(am.u.s);
     }
 }
 
-/// Slot `resolve_texture`, and the decode step of `vtResolveTextureInto` on a cache miss. A
-/// missing image loader is an invalid argument and a missing file is not found, both before the
+/// Slot `resolve_texture`. A missing image loader is an invalid argument and a missing file is not found, both before the
 /// loader is called; a loader failure returns the loader's code. On success the decoded data
 /// belongs to the caller until `vtFreeTexture`.
 fn vtResolveTexture(self_in: ?*abi_asset_resolver.c.ke_asset_resolver, path: [*c]const u8, out: [*c]?*abi_mesh_data.c.ke_texture_data) callconv(.c) abi_result.c.ke_result {
@@ -189,8 +186,7 @@ fn vtFreeTexture(self_in: ?*abi_asset_resolver.c.ke_asset_resolver, data: ?*abi_
     }
 }
 
-/// Slot `resolve_mesh`, and the bake step of `vtResolveMeshInto` on a cache miss. A mesh has no
-/// file: only a path under "res://primitives/" naming "quad", "plane", "cube" or "sphere" is
+/// Slot `resolve_mesh`. A mesh has no file: only a path under "res://primitives/" naming "quad", "plane", "cube" or "sphere" is
 /// accepted, and any other path or name is not found. The shape it writes belongs to the caller
 /// until `vtFreeMesh` releases it; on failure it writes null.
 fn vtResolveMesh(self_in: ?*abi_asset_resolver.c.ke_asset_resolver, path: [*c]const u8, out_in: ?*?*abi_mesh_data.c.ke_mesh_shape_data) callconv(.c) abi_result.c.ke_result {
@@ -238,8 +234,7 @@ fn vtFreeMesh(self_in: ?*abi_asset_resolver.c.ke_asset_resolver, data: ?*abi_mes
     heap.gpa.destroy(shape);
 }
 
-/// Slot `resolve_material`, and the first step of `vtResolveMaterialInto` on a cache miss. The
-/// file is TOML read by `parseMaterialFile`, so a key it omits keeps its default. A file that
+/// Slot `resolve_material`. The file is TOML read by `parseMaterialFile`, so a key it omits keeps its default. A file that
 /// cannot be opened is not found, one that is not TOML or has no material table is io.
 fn vtResolveMaterial(self_in: ?*abi_asset_resolver.c.ke_asset_resolver, path: [*c]const u8, out: ?*abi_render_material.c.ke_material_spec) callconv(.c) abi_result.c.ke_result {
     const self = self_in orelse return R.code(error.InvalidArgument);
@@ -298,125 +293,6 @@ fn vtFreeFont(self_in: ?*abi_asset_resolver.c.ke_asset_resolver, data: ?*abi_tex
     }
 }
 
-/// Slot `resolve_texture_into`. Checks the service's cache first, so a path it already holds costs
-/// no file access. Uploads under the authored path, not the resolved one, so the service keys the
-/// texture by what the caller wrote. A missing service is an invalid argument; the failures of
-/// `vtResolveTexture` and of the upload are returned as they are.
-fn vtResolveTextureInto(self_in: ?*abi_asset_resolver.c.ke_asset_resolver, core_in: ?*abi_render.c.ke_render_service, path: [*c]const u8, out_texture: ?*abi_render_handles.c.ke_texture_handle) callconv(.c) abi_result.c.ke_result {
-    const out = out_texture orelse return R.code(error.InvalidArgument);
-    out.* = abi_render_handles.c.KE_TEXTURE_NONE;
-    const self = self_in orelse return R.code(error.InvalidArgument);
-    const core = core_in orelse return R.code(error.InvalidArgument);
-    if (self.handle == null or path == null) return R.code(error.InvalidArgument);
-    out.* = textureInto(stateOf(self), core, path) catch |err| return R.code(err);
-    return R.ok;
-}
-
-fn textureInto(s: *State, core: *abi_render.c.ke_render_service, path: [*:0]const u8) R.Error!abi_render_handles.c.ke_texture_handle {
-    var cached: abi_render_handles.c.ke_texture_handle = undefined;
-    if (core.try_get_texture.?(core, path, &cached)) return cached;
-
-    const d = try resolveTexture(s, path);
-    defer vtFreeTexture(&s.api, d);
-    var h: abi_render_handles.c.ke_texture_handle = abi_render_handles.c.KE_TEXTURE_NONE;
-    try R.check(core.upload_texture.?(core, path, d.width, d.height, @ptrCast(d.pixels), @as(usize, d.width) * d.height * 4, &h));
-    return h;
-}
-
-const gpu_floats_per_vertex = 11;
-
-/// Slot `resolve_mesh_into`. Checks the service's cache first, as `vtResolveTextureInto` does,
-/// and uploads the baked vertices converted to the layout the service takes. The shape is freed
-/// on every path once it is baked, so none of its memory outlives the call. An allocation failure
-/// is out of memory; the other failures are those of `vtResolveMesh` and of the upload.
-fn vtResolveMeshInto(self_in: ?*abi_asset_resolver.c.ke_asset_resolver, core_in: ?*abi_render.c.ke_render_service, path: [*c]const u8, out_mesh: ?*abi_render_handles.c.ke_mesh_handle) callconv(.c) abi_result.c.ke_result {
-    const out = out_mesh orelse return R.code(error.InvalidArgument);
-    out.* = abi_render_handles.c.KE_MESH_NONE;
-    const self = self_in orelse return R.code(error.InvalidArgument);
-    const core = core_in orelse return R.code(error.InvalidArgument);
-    if (self.handle == null or path == null) return R.code(error.InvalidArgument);
-    out.* = meshInto(core, path) catch |err| return R.code(err);
-    return R.ok;
-}
-
-fn meshInto(core: *abi_render.c.ke_render_service, path: [*:0]const u8) R.Error!abi_render_handles.c.ke_mesh_handle {
-    var cached: abi_render_handles.c.ke_mesh_handle = undefined;
-    if (core.try_get_mesh.?(core, path, &cached)) return cached;
-
-    var shape: abi_mesh_data.c.ke_mesh_shape_data = undefined;
-    try bakePrimitive(path, &shape);
-    defer mesh_shape.ke_mesh_shape_free_internal(&shape);
-
-    const float_count = @as(usize, shape.vertex_count) * gpu_floats_per_vertex;
-    const gpu_verts = heap.gpa.alloc(f32, float_count) catch return error.OutOfMemory;
-    defer heap.gpa.free(gpu_verts);
-
-    for (0..shape.vertex_count) |i| {
-        const v = &shape.vertices.?[i];
-        const dst = gpu_verts[i * gpu_floats_per_vertex ..][0..gpu_floats_per_vertex];
-        dst[0] = v.x;
-        dst[1] = v.y;
-        dst[2] = v.z;
-        dst[3] = v.nx;
-        dst[4] = v.ny;
-        dst[5] = v.nz;
-        dst[6] = v.u;
-        dst[7] = v.v;
-        dst[8] = v.tx;
-        dst[9] = v.ty;
-        dst[10] = v.tz;
-    }
-
-    var h: abi_render_handles.c.ke_mesh_handle = abi_render_handles.c.KE_MESH_NONE;
-    try R.check(core.upload_mesh.?(core, path, @ptrCast(gpu_verts.ptr), shape.vertex_count, shape.indices, shape.index_count, &h));
-    return h;
-}
-
-/// Slot `resolve_material_into`. Checks the service's cache first. The albedo and normal textures
-/// go through `vtResolveTextureInto`, so each is cached under its own path, and a failure there
-/// ends the call before the material is created. The other failures are those of
-/// `vtResolveMaterial` and of the material creation.
-fn vtResolveMaterialInto(self_in: ?*abi_asset_resolver.c.ke_asset_resolver, core_in: ?*abi_render.c.ke_render_service, path: [*c]const u8, out_material: ?*abi_render_handles.c.ke_material_handle) callconv(.c) abi_result.c.ke_result {
-    const out = out_material orelse return R.code(error.InvalidArgument);
-    out.* = abi_render_handles.c.KE_MATERIAL_NONE;
-    const self = self_in orelse return R.code(error.InvalidArgument);
-    const core = core_in orelse return R.code(error.InvalidArgument);
-    if (self.handle == null or path == null) return R.code(error.InvalidArgument);
-    out.* = materialInto(stateOf(self), core, path) catch |err| return R.code(err);
-    return R.ok;
-}
-
-fn materialInto(s: *State, core: *abi_render.c.ke_render_service, path: [*:0]const u8) R.Error!abi_render_handles.c.ke_material_handle {
-    var cached: abi_render_handles.c.ke_material_handle = undefined;
-    if (core.try_get_material.?(core, path, &cached)) return cached;
-
-    var spec: abi_render_material.c.ke_material_spec = undefined;
-    try readMaterial(s, path, &spec);
-
-    var albedo = abi_render_handles.c.KE_TEXTURE_NONE;
-    if (spec.albedo_path[0] != 0) albedo = try textureInto(s, core, @ptrCast(&spec.albedo_path));
-    var normal = abi_render_handles.c.KE_TEXTURE_NONE;
-    if (spec.normal_path[0] != 0) normal = try textureInto(s, core, @ptrCast(&spec.normal_path));
-
-    var h: abi_render_handles.c.ke_material_handle = abi_render_handles.c.KE_MATERIAL_NONE;
-    try R.check(core.create_material.?(
-        core,
-        path,
-        .{ .x = spec.base_color[0], .y = spec.base_color[1], .z = spec.base_color[2], .w = spec.base_color[3] },
-        spec.metallic,
-        spec.roughness,
-        albedo,
-        normal,
-        spec.alpha_mode,
-        spec.alpha_cutoff,
-        spec.ior,
-        spec.distortion_strength,
-        null,
-        &h,
-    ));
-    return h;
-}
-
 /// The destroy of the handle that `ke_asset_resolver_create` returns. Frees the state; the loaders
 /// are not touched.
 fn vtDestroy(self_in: ?*abi_asset_resolver.c.ke_asset_resolver) callconv(.c) void {
@@ -455,9 +331,6 @@ export fn ke_asset_resolver_create(
     s.api.resolve_material = vtResolveMaterial;
     s.api.resolve_font = vtResolveFont;
     s.api.free_font = vtFreeFont;
-    s.api.resolve_texture_into = vtResolveTextureInto;
-    s.api.resolve_mesh_into = vtResolveMeshInto;
-    s.api.resolve_material_into = vtResolveMaterialInto;
     s.api.resolve_path = vtResolvePath;
 
     out.* = .{ .ref = &s.api, .destroy = vtDestroy };
@@ -898,7 +771,7 @@ test "a material that names no alpha mode resolves as opaque with the default cu
     defer mat.deinit();
 
     const spec = try resolveMaterial(mat.cPath());
-    try testing.expectEqual(@as(@TypeOf(spec.alpha_mode), abi_render_handles.c.KE_ALPHA_MODE_OPAQUE), spec.alpha_mode);
+    try testing.expectEqual(@as(@TypeOf(spec.alpha_mode), abi_render_material.c.KE_ALPHA_MODE_OPAQUE), spec.alpha_mode);
     try testing.expectApproxEqAbs(@as(f32, 0.5), spec.alpha_cutoff, material_tolerance);
 }
 
@@ -907,7 +780,7 @@ test "a masked material carries both its mode and its authored cutoff" {
     defer mat.deinit();
 
     const spec = try resolveMaterial(mat.cPath());
-    try testing.expectEqual(@as(@TypeOf(spec.alpha_mode), abi_render_handles.c.KE_ALPHA_MODE_MASK), spec.alpha_mode);
+    try testing.expectEqual(@as(@TypeOf(spec.alpha_mode), abi_render_material.c.KE_ALPHA_MODE_MASK), spec.alpha_mode);
     try testing.expectApproxEqAbs(@as(f32, 0.75), spec.alpha_cutoff, material_tolerance);
 }
 
@@ -916,7 +789,7 @@ test "a blended material resolves to the blend mode" {
     defer mat.deinit();
 
     const spec = try resolveMaterial(mat.cPath());
-    try testing.expectEqual(@as(@TypeOf(spec.alpha_mode), abi_render_handles.c.KE_ALPHA_MODE_BLEND), spec.alpha_mode);
+    try testing.expectEqual(@as(@TypeOf(spec.alpha_mode), abi_render_material.c.KE_ALPHA_MODE_BLEND), spec.alpha_mode);
 }
 
 test "an alpha mode nobody recognises falls back to opaque instead of failing the load" {
@@ -924,7 +797,7 @@ test "an alpha mode nobody recognises falls back to opaque instead of failing th
     defer mat.deinit();
 
     const spec = try resolveMaterial(mat.cPath());
-    try testing.expectEqual(@as(@TypeOf(spec.alpha_mode), abi_render_handles.c.KE_ALPHA_MODE_OPAQUE), spec.alpha_mode);
+    try testing.expectEqual(@as(@TypeOf(spec.alpha_mode), abi_render_material.c.KE_ALPHA_MODE_OPAQUE), spec.alpha_mode);
 }
 
 test "a material that names no index of refraction defaults to glass" {
@@ -1039,17 +912,6 @@ test "a res prefixed path keeps only what follows the prefix" {
     const a = r.api();
     var spec = std.mem.zeroes(abi_render_material.c.ke_material_spec);
     try testing.expect(a.resolve_material.?(a, @ptrCast(&ref_buf), &spec) == R.ok);
-}
-
-test "the none handle of every render resource is all bits zero" {
-    try testing.expectEqual(@as(u32, 0), abi_render_handles.c.KE_MESH_NONE.bits);
-    try testing.expectEqual(@as(u32, 0), abi_render_handles.c.KE_TEXTURE_NONE.bits);
-    try testing.expectEqual(@as(u32, 0), abi_render_handles.c.KE_MATERIAL_NONE.bits);
-    try testing.expectEqual(@as(u32, 0), abi_render_handles.c.KE_CUBEMAP_NONE.bits);
-    try testing.expectEqual(@as(u32, 0), abi_render_handles.c.KE_SHADOW_MAP_NONE.bits);
-
-    const zeroed = std.mem.zeroes(abi_render_handles.c.ke_mesh_handle);
-    try testing.expectEqual(@as(u32, abi_render_handles.c.KE_HANDLE_NONE), zeroed.bits);
 }
 
 test "a res:// path keeps what follows the prefix and any other path stands as written" {

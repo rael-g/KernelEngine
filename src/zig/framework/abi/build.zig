@@ -15,6 +15,7 @@ pub fn build(b: *std.Build) void {
     abi.addImport("io", b.dependency("abi_io", .{}).module("abi"));
     abi.addImport("logger", b.dependency("abi_logger", .{}).module("abi"));
     abi.addImport("part", b.dependency("abi_part", .{}).module("abi"));
+    abi.addImport("render", b.dependency("abi_render", .{}).module("abi"));
     abi.addImport("result", b.dependency("abi_result", .{}).module("abi"));
     abi.addImport("scene_tree", b.dependency("abi_scene_tree", .{}).module("abi"));
     abi.addImport("schedule", b.dependency("abi_schedule", .{}).module("abi"));
@@ -24,6 +25,7 @@ pub fn build(b: *std.Build) void {
 
     const headers = b.addWriteFiles().add("layout.h",
         \\#include <kernel_engine/framework/asset_resolver_create.h>
+        \\#include <kernel_engine/framework/render_assets_create.h>
         \\#include <kernel_engine/framework/framework_log.h>
         \\#include <kernel_engine/framework/input_actions_create.h>
         \\#include <kernel_engine/framework/input_actions_evaluation_create.h>

@@ -23,28 +23,14 @@ fn translated(comptime name: []const u8) type {
 
 test "every record is laid out as the header lays it out" {
     @setEvalBranchQuota(100_000_000);
-    try expectSameLayout(abi.c.ke_vertex, translated("ke_vertex"));
     try expectSameLayout(abi.c.ke_mesh_vertex, translated("ke_mesh_vertex"));
 }
 
-extern const layout_values: [19]c_ulonglong;
+extern const layout_values: [6]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
     const expected = [_]usize{
-        @sizeOf(abi.c.ke_vertex),
-        @offsetOf(abi.c.ke_vertex, "x"),
-        @offsetOf(abi.c.ke_vertex, "y"),
-        @offsetOf(abi.c.ke_vertex, "z"),
-        @offsetOf(abi.c.ke_vertex, "nx"),
-        @offsetOf(abi.c.ke_vertex, "ny"),
-        @offsetOf(abi.c.ke_vertex, "nz"),
-        @offsetOf(abi.c.ke_vertex, "u"),
-        @offsetOf(abi.c.ke_vertex, "v"),
-        @offsetOf(abi.c.ke_vertex, "tx"),
-        @offsetOf(abi.c.ke_vertex, "ty"),
-        @offsetOf(abi.c.ke_vertex, "tz"),
-        @offsetOf(abi.c.ke_vertex, "tw"),
         @sizeOf(abi.c.ke_mesh_vertex),
         @offsetOf(abi.c.ke_mesh_vertex, "position"),
         @offsetOf(abi.c.ke_mesh_vertex, "normal"),

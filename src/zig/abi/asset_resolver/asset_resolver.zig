@@ -2,8 +2,6 @@
 
 const std = @import("std");
 const abi_mesh_data = @import("mesh_data");
-const abi_render = @import("render");
-const abi_render_handles = @import("render_handles");
 const abi_render_material = @import("render_material");
 const abi_result = @import("result");
 const abi_text = @import("text");
@@ -76,30 +74,6 @@ pub const AssetResolver = struct {
                     return T.freeFont(state, a0);
                 }
             }.call,
-            .resolve_texture_into = &struct {
-                fn call(self: ?*c.ke_asset_resolver, a0: ?*abi_render.c.ke_render_service, a1: ?[*:0]const u8, a2: ?*abi_render_handles.c.ke_texture_handle) callconv(.c) abi_result.c.ke_result {
-                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
-                    const value = T.resolveTextureInto(state, a0, std.mem.span(a1 orelse return resultOf(error.Failed))) catch |failure| return resultOf(failure);
-                    (a2 orelse return resultOf(error.Failed)).* = value;
-                    return abi_result.c.KE_OK;
-                }
-            }.call,
-            .resolve_mesh_into = &struct {
-                fn call(self: ?*c.ke_asset_resolver, a0: ?*abi_render.c.ke_render_service, a1: ?[*:0]const u8, a2: ?*abi_render_handles.c.ke_mesh_handle) callconv(.c) abi_result.c.ke_result {
-                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
-                    const value = T.resolveMeshInto(state, a0, std.mem.span(a1 orelse return resultOf(error.Failed))) catch |failure| return resultOf(failure);
-                    (a2 orelse return resultOf(error.Failed)).* = value;
-                    return abi_result.c.KE_OK;
-                }
-            }.call,
-            .resolve_material_into = &struct {
-                fn call(self: ?*c.ke_asset_resolver, a0: ?*abi_render.c.ke_render_service, a1: ?[*:0]const u8, a2: ?*abi_render_handles.c.ke_material_handle) callconv(.c) abi_result.c.ke_result {
-                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
-                    const value = T.resolveMaterialInto(state, a0, std.mem.span(a1 orelse return resultOf(error.Failed))) catch |failure| return resultOf(failure);
-                    (a2 orelse return resultOf(error.Failed)).* = value;
-                    return abi_result.c.KE_OK;
-                }
-            }.call,
             .resolve_path = &struct {
                 fn call(self: ?*c.ke_asset_resolver, a0: ?[*:0]const u8, a1: ?[*]u8, a2: usize) callconv(.c) abi_result.c.ke_result {
                     const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
@@ -156,28 +130,6 @@ pub const AssetResolver = struct {
     /// Frees a ke_font_data resolve_font returned. A null data is ignored.
     pub fn freeFont(self: AssetResolver, data: ?*abi_text.c.ke_font_data) void {
         return self.ptr.free_font.?(self.ptr, data);
-    }
-
-    /// Resolves and uploads a texture, deduped by `path`. On a cache hit, nothing is decoded.
-    pub fn resolveTextureInto(self: AssetResolver, core: ?*abi_render.c.ke_render_service, path: [:0]const u8) Error!abi_render_handles.c.ke_texture_handle {
-        var written: abi_render_handles.c.ke_texture_handle = undefined;
-        try checkResult(self.ptr.resolve_texture_into.?(self.ptr, core, path.ptr, &written));
-        return written;
-    }
-
-    /// Resolves and uploads a mesh, deduped by `path`. Resolution is that of resolve_mesh.
-    pub fn resolveMeshInto(self: AssetResolver, core: ?*abi_render.c.ke_render_service, path: [:0]const u8) Error!abi_render_handles.c.ke_mesh_handle {
-        var written: abi_render_handles.c.ke_mesh_handle = undefined;
-        try checkResult(self.ptr.resolve_mesh_into.?(self.ptr, core, path.ptr, &written));
-        return written;
-    }
-
-    /// Resolves a `.material` file, resolving/uploading its albedo and normal textures (each deduped
-    /// by their own path) and creating the material, deduped by `path`.
-    pub fn resolveMaterialInto(self: AssetResolver, core: ?*abi_render.c.ke_render_service, path: [:0]const u8) Error!abi_render_handles.c.ke_material_handle {
-        var written: abi_render_handles.c.ke_material_handle = undefined;
-        try checkResult(self.ptr.resolve_material_into.?(self.ptr, core, path.ptr, &written));
-        return written;
     }
 
     /// Writes the file path `path` names into `out`, terminated: a path that begins with "res://" is

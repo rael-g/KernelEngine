@@ -29,6 +29,8 @@ test "every record is laid out as the header lays it out" {
     try expectSameLayout(abi.c.ke_render_scene_component_ids, translated("ke_render_scene_component_ids"));
     try expectSameLayout(abi.c.ke_render_service, translated("ke_render_service"));
     try expectSameLayout(abi.c.ke_render_service_handle, translated("ke_render_service_handle"));
+    try expectSameLayout(abi.c.ke_render_assets, translated("ke_render_assets"));
+    try expectSameLayout(abi.c.ke_render_assets_handle, translated("ke_render_assets_handle"));
     try expectSameLayout(abi.c.ke_render_camera, translated("ke_render_camera"));
     try expectSameLayout(abi.c.ke_render_camera_handle, translated("ke_render_camera_handle"));
     try expectSameLayout(abi.c.ke_render_scene_resolve, translated("ke_render_scene_resolve"));
@@ -84,7 +86,7 @@ test "every constant is the header's value" {
     try std.testing.expectEqualStrings(c.KE_RENDER_RESOURCE_CLUSTER_GRID, abi.c.KE_RENDER_RESOURCE_CLUSTER_GRID);
 }
 
-extern const layout_values: [89]c_ulonglong;
+extern const layout_values: [97]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
@@ -160,6 +162,14 @@ test "every size and offset is the one C computes" {
         @sizeOf(abi.c.ke_render_service_handle),
         @offsetOf(abi.c.ke_render_service_handle, "ref"),
         @offsetOf(abi.c.ke_render_service_handle, "destroy"),
+        @sizeOf(abi.c.ke_render_assets),
+        @offsetOf(abi.c.ke_render_assets, "handle"),
+        @offsetOf(abi.c.ke_render_assets, "resolve_texture"),
+        @offsetOf(abi.c.ke_render_assets, "resolve_mesh"),
+        @offsetOf(abi.c.ke_render_assets, "resolve_material"),
+        @sizeOf(abi.c.ke_render_assets_handle),
+        @offsetOf(abi.c.ke_render_assets_handle, "ref"),
+        @offsetOf(abi.c.ke_render_assets_handle, "destroy"),
         @sizeOf(abi.c.ke_render_camera),
         @offsetOf(abi.c.ke_render_camera, "handle"),
         @offsetOf(abi.c.ke_render_camera, "view"),

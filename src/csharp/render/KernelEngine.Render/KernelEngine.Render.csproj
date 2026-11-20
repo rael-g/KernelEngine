@@ -13,8 +13,9 @@
     <ProjectReference Include="..\KernelEngine.Render.Abstractions\KernelEngine.Render.Abstractions.csproj" />
     <ProjectReference Include="..\..\common\KernelEngine.Common\KernelEngine.Common.csproj" />
     <ProjectReference Include="..\KernelEngine.Render.Native\KernelEngine.Render.Native.csproj" />
-    <ProjectReference Include="..\..\framework\KernelEngine.Framework\KernelEngine.Framework.csproj" />
     <ProjectReference Include="..\..\asset\KernelEngine.Text\KernelEngine.Text.csproj" />
+    <ProjectReference Include="..\..\ecs\KernelEngine.Ecs\KernelEngine.Ecs.csproj" />
+    <ProjectReference Include="..\..\input\KernelEngine.Input\KernelEngine.Input.csproj" />
   </ItemGroup>
 
 </Project>

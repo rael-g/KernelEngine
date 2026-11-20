@@ -3,7 +3,6 @@
 
 const abi_framework_components = @import("abi_framework_components");
 const abi_spatial_contract = @import("abi_spatial_contract");
-const abi_asset_resolver = @import("abi_asset_resolver");
 const std = @import("std");
 
 const abi_ecs = @import("abi_ecs");
@@ -28,13 +27,13 @@ const State = struct {
     system: abi_schedule.c.ke_schedule_system_id = 0,
     set: [1]abi_schedule.c.ke_schedule_set_id = .{0},
     ecs: *abi_ecs.c.ke_ecs,
-    transform_cid: abi_asset_resolver.c.ke_component_id,
-    transform2d_cid: abi_asset_resolver.c.ke_component_id,
-    world_transform_cid: abi_asset_resolver.c.ke_component_id,
-    hierarchy_cid: abi_asset_resolver.c.ke_component_id,
+    transform_cid: abi_ecs.c.ke_component_id,
+    transform2d_cid: abi_ecs.c.ke_component_id,
+    world_transform_cid: abi_ecs.c.ke_component_id,
+    hierarchy_cid: abi_ecs.c.ke_component_id,
 
-    order: std.ArrayList(abi_asset_resolver.c.ke_entity) = .empty,
-    stack: std.ArrayList(abi_asset_resolver.c.ke_entity) = .empty,
+    order: std.ArrayList(abi_ecs.c.ke_entity) = .empty,
+    stack: std.ArrayList(abi_ecs.c.ke_entity) = .empty,
 
     queries_terms: [1]abi_ecs.c.ke_ecs_query_term = undefined,
 
@@ -42,19 +41,19 @@ const State = struct {
     access: [4]abi_ecs.c.ke_ecs_query_term = undefined,
 };
 
-fn hierarchyOf(s: *State, e: abi_asset_resolver.c.ke_entity) ?*const abi_framework_components.c.ke_hierarchy_component {
+fn hierarchyOf(s: *State, e: abi_ecs.c.ke_entity) ?*const abi_framework_components.c.ke_hierarchy_component {
     return @ptrCast(@alignCast(s.ecs.component_get.?(s.ecs, e, s.hierarchy_cid)));
 }
 
-fn transformOf(s: *State, e: abi_asset_resolver.c.ke_entity) ?*const abi_spatial.c.ke_transform_component {
+fn transformOf(s: *State, e: abi_ecs.c.ke_entity) ?*const abi_spatial.c.ke_transform_component {
     return @ptrCast(@alignCast(s.ecs.component_get.?(s.ecs, e, s.transform_cid)));
 }
 
-fn transform2dOf(s: *State, e: abi_asset_resolver.c.ke_entity) ?*const abi_spatial.c.ke_transform2d_component {
+fn transform2dOf(s: *State, e: abi_ecs.c.ke_entity) ?*const abi_spatial.c.ke_transform2d_component {
     return @ptrCast(@alignCast(s.ecs.component_get.?(s.ecs, e, s.transform2d_cid)));
 }
 
-fn worldTransformOf(s: *State, e: abi_asset_resolver.c.ke_entity) ?*abi_spatial.c.ke_world_transform_component {
+fn worldTransformOf(s: *State, e: abi_ecs.c.ke_entity) ?*abi_spatial.c.ke_world_transform_component {
     return @ptrCast(@alignCast(s.ecs.component_get.?(s.ecs, e, s.world_transform_cid)));
 }
 
@@ -67,7 +66,7 @@ fn identityMatrix() abi_math.c.ke_mat4 {
 /// Appends the subtree below the root to `order` through `stack`, without recursion. A parent is
 /// appended before its children. An allocation failure is not reported: the entities
 /// it prevents from being pushed or appended are left out of `order`.
-fn pushSubtree(s: *State, root: abi_asset_resolver.c.ke_entity) void {
+fn pushSubtree(s: *State, root: abi_ecs.c.ke_entity) void {
     s.stack.append(heap.gpa, root) catch return;
     while (s.stack.pop()) |entity| {
         s.order.append(heap.gpa, entity) catch return;

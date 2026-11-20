@@ -1,7 +1,7 @@
 #ifndef KERNEL_ENGINE_RENDER_SCENE_SCENE_RESOLVE_CREATE_H_
 #define KERNEL_ENGINE_RENDER_SCENE_SCENE_RESOLVE_CREATE_H_
 
-#include <kernel_engine/asset/asset_resolver.h>
+#include <kernel_engine/render/assets.h>
 #include <kernel_engine/result/result.h>
 #include <kernel_engine/ecs/ke_ecs.h>
 #include <kernel_engine/render/scene_resolve.h>
@@ -33,13 +33,14 @@ extern "C"
     /// @param render     The render world; borrowed, must outlive it.
     /// @param extraction Copies each component from main into render; borrowed, must outlive it.
     /// @param service    Uploads the meshes, materials and textures; borrowed, must outlive it.
-    /// @param resolver [optional] Reads the image a sprite names; borrowed. Without it a sprite draws untextured.
+    /// @param assets [optional] Makes the texture of the image a sprite names; borrowed. Without them a sprite
+    ///        draws untextured.
     /// @param out_resolve [out] Receives the handle; left zeroed on failure, and the component types
     ///                    registered before the failure stay registered.
     /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a NULL part; the code of the world or the extraction
     ///         that refused a component.
     KE_RENDER_SCENE_API ke_result ke_render_scene_resolve_create(
-        ke_ecs *main, ke_ecs *render, ke_extraction *extraction, ke_render_service *service, ke_asset_resolver *resolver,
+        ke_ecs *main, ke_ecs *render, ke_extraction *extraction, ke_render_service *service, ke_render_assets *assets,
         ke_render_scene_resolve_handle *out_resolve);
 
 #ifdef __cplusplus

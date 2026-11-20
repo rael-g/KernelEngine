@@ -10,6 +10,7 @@ const abi_input_actions = @import("input_actions");
 const abi_io = @import("io");
 const abi_logger = @import("logger");
 const abi_part = @import("part");
+const abi_render = @import("render");
 const abi_result = @import("result");
 const abi_scene_tree = @import("scene_tree");
 const abi_schedule = @import("schedule");
@@ -31,6 +32,13 @@ const resultOf = abi_result.resultOf;
 pub fn assetResolverCreate(image_loader: ?*abi_image_loader.c.ke_image_loader, font_loader: ?*abi_text.c.ke_font_loader, io: ?*abi_io.c.ke_io) Error!abi_asset_resolver.c.ke_asset_resolver_handle {
     var written: abi_asset_resolver.c.ke_asset_resolver_handle = undefined;
     try checkResult(c.ke_asset_resolver_create(image_loader, font_loader, io, &written));
+    return written;
+}
+
+/// Allocates render assets over a resolver and a render service, neither of which it owns.
+pub fn renderAssetsCreate(resolver: ?*abi_asset_resolver.c.ke_asset_resolver, service: ?*abi_render.c.ke_render_service) Error!abi_render.c.ke_render_assets_handle {
+    var written: abi_render.c.ke_render_assets_handle = undefined;
+    try checkResult(c.ke_render_assets_create(resolver, service, &written));
     return written;
 }
 

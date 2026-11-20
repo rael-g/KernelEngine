@@ -23,6 +23,7 @@ fn translated(comptime name: []const u8) type {
 
 test "every record is laid out as the header lays it out" {
     @setEvalBranchQuota(100_000_000);
+    try expectSameLayout(abi.c.ke_vertex, translated("ke_vertex"));
     try expectSameLayout(abi.c.ke_mesh_data, translated("ke_mesh_data"));
     try expectSameLayout(abi.c.ke_material_data, translated("ke_material_data"));
     try expectSameLayout(abi.c.ke_texture_data, translated("ke_texture_data"));
@@ -38,11 +39,24 @@ test "every enum value is the header's value" {
     try std.testing.expectEqual(@as(i64, c.KE_MESH_PRIMITIVE_SPHERE), @as(i64, abi.c.KE_MESH_PRIMITIVE_SPHERE));
 }
 
-extern const layout_values: [36]c_ulonglong;
+extern const layout_values: [49]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
     const expected = [_]usize{
+        @sizeOf(abi.c.ke_vertex),
+        @offsetOf(abi.c.ke_vertex, "x"),
+        @offsetOf(abi.c.ke_vertex, "y"),
+        @offsetOf(abi.c.ke_vertex, "z"),
+        @offsetOf(abi.c.ke_vertex, "nx"),
+        @offsetOf(abi.c.ke_vertex, "ny"),
+        @offsetOf(abi.c.ke_vertex, "nz"),
+        @offsetOf(abi.c.ke_vertex, "u"),
+        @offsetOf(abi.c.ke_vertex, "v"),
+        @offsetOf(abi.c.ke_vertex, "tx"),
+        @offsetOf(abi.c.ke_vertex, "ty"),
+        @offsetOf(abi.c.ke_vertex, "tz"),
+        @offsetOf(abi.c.ke_vertex, "tw"),
         @sizeOf(abi.c.ke_mesh_data),
         @offsetOf(abi.c.ke_mesh_data, "vertices"),
         @offsetOf(abi.c.ke_mesh_data, "vertex_count"),

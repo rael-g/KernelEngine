@@ -6,7 +6,7 @@ const abi_framework = @import("framework");
 const abi_physics_components = @import("physics_components");
 const abi_render_components = @import("render_components");
 const abi_render_contract = @import("render_contract");
-const abi_render_handles = @import("render_handles");
+const abi_render_material = @import("render_material");
 const abi_result = @import("result");
 const abi_spatial = @import("spatial");
 const abi_ui_components = @import("ui_components");
@@ -45,9 +45,9 @@ pub const ke_spot_light_node_initial: abi_render_components.c.ke_spot_light_comp
 
 pub const ke_ambient_light_node_initial: abi_render_components.c.ke_ambient_light_component = .{ .color = .{ .x = 0.05, .y = 0.05, .z = 0.05 } };
 
-pub const ke_mesh_node_initial: abi_render_components.c.ke_mesh_component = .{ .base_color = .{ .x = 1.0, .y = 1.0, .z = 1.0, .w = 1.0 }, .roughness = 1.0, .alpha_mode = abi_render_handles.c.KE_ALPHA_MODE_OPAQUE, .alpha_cutoff = 0.5, .ior = 1.5, .distortion_strength = 0.05, .layers = 1 };
+pub const ke_mesh_node_initial: abi_render_components.c.ke_mesh_component = .{ .base_color = .{ .x = 1.0, .y = 1.0, .z = 1.0, .w = 1.0 }, .roughness = 1.0, .alpha_mode = abi_render_material.c.KE_ALPHA_MODE_OPAQUE, .alpha_cutoff = 0.5, .ior = 1.5, .distortion_strength = 0.05, .layers = 1 };
 
-pub const ke_sprite2d_node_initial: abi_render_components.c.ke_sprite2d_component = .{ .region = .{ .x = 0.0, .y = 0.0, .z = 1.0, .w = 1.0 }, .size = .{ .x = 1.0, .y = 1.0 }, .pivot = .{ .x = 0.5, .y = 0.5 }, .color = .{ .x = 1.0, .y = 1.0, .z = 1.0, .w = 1.0 }, .alpha_mode = abi_render_handles.c.KE_ALPHA_MODE_OPAQUE, .alpha_cutoff = 0.5 };
+pub const ke_sprite2d_node_initial: abi_render_components.c.ke_sprite2d_component = .{ .region = .{ .x = 0.0, .y = 0.0, .z = 1.0, .w = 1.0 }, .size = .{ .x = 1.0, .y = 1.0 }, .pivot = .{ .x = 0.5, .y = 0.5 }, .color = .{ .x = 1.0, .y = 1.0, .z = 1.0, .w = 1.0 }, .alpha_mode = abi_render_material.c.KE_ALPHA_MODE_OPAQUE, .alpha_cutoff = 0.5 };
 
 pub const ke_label_node_initial: abi_ui_components.c.ke_label_component = .{ .font_size = 32.0, .color = .{ 1.0, 1.0, 1.0, 1.0 } };
 

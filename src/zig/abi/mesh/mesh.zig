@@ -11,5 +11,4 @@ pub const Error = abi_result.Error;
 const checkResult = abi_result.checkResult;
 const resultOf = abi_result.resultOf;
 
-pub const Vertex = c.ke_vertex;
 pub const MeshVertex = c.ke_mesh_vertex;

@@ -760,6 +760,14 @@ ke_render_service size=280 align=8
 ke_render_service_handle size=16 align=8
   ref 0
   destroy 8
+ke_render_assets size=32 align=8
+  handle 0
+  resolve_texture 8
+  resolve_mesh 16
+  resolve_material 24
+ke_render_assets_handle size=16 align=8
+  ref 0
+  destroy 8
 ke_render_camera size=48 align=8
   handle 0
   view 8
@@ -788,6 +796,19 @@ ke_asset_loader_handle size=16 align=8
   destroy 8
 
 [mesh_data]
+ke_vertex size=48 align=4
+  x 0
+  y 4
+  z 8
+  nx 12
+  ny 16
+  nz 20
+  u 24
+  v 28
+  tx 32
+  ty 36
+  tz 40
+  tw 44
 ke_mesh_data size=96 align=8
   vertices 0
   vertex_count 8
@@ -834,7 +855,7 @@ ke_image_loader_handle size=16 align=8
   destroy 8
 
 [asset_resolver]
-ke_asset_resolver size=96 align=8
+ke_asset_resolver size=72 align=8
   handle 0
   resolve_texture 8
   free_texture 16
@@ -843,10 +864,7 @@ ke_asset_resolver size=96 align=8
   resolve_material 40
   resolve_font 48
   free_font 56
-  resolve_texture_into 64
-  resolve_mesh_into 72
-  resolve_material_into 80
-  resolve_path 88
+  resolve_path 64
 ke_asset_resolver_handle size=16 align=8
   ref 0
   destroy 8
@@ -1080,19 +1098,6 @@ ke_input_actions_handle size=16 align=8
   destroy 8
 
 [mesh]
-ke_vertex size=48 align=4
-  x 0
-  y 4
-  z 8
-  nx 12
-  ny 16
-  nz 20
-  u 24
-  v 28
-  tx 32
-  ty 36
-  tz 40
-  tw 44
 ke_mesh_vertex size=44 align=4
   position 0
   normal 12

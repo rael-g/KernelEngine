@@ -2,7 +2,6 @@
 //! publish each buffer in the frame under its own name, and declare at the prepass stage the compute
 //! pass binning them into a view-space grid of clusters.
 
-const abi_asset_resolver = @import("abi_asset_resolver");
 const abi_render_components = @import("abi_render_components");
 const abi_render_gpu = @import("abi_render_gpu");
 const std = @import("std");
@@ -86,7 +85,7 @@ const cull_layout_params = abi_render_gpu.c.ke_render_shader_layout_desc{
 };
 
 /// A buffer the pass publishes, beside its size.
-const Published = struct { buffer: abi_asset_resolver.c.ke_gpu_buffer, size: usize };
+const Published = struct { buffer: abi_render.c.ke_gpu_buffer, size: usize };
 
 /// The buffers the cull writes, by their index in `cluster_buffers`.
 const written = [_]usize{ 2, 3, 4, 5 };
@@ -109,22 +108,22 @@ const ClusterModule = struct {
     num_clusters: u32 = undefined,
     max_lights_per_cluster: u32 = undefined,
 
-    cluster_grid_uniform: abi_asset_resolver.c.ke_gpu_buffer = abi_render_gpu.c.KE_GPU_INVALID_HANDLE,
+    cluster_grid_uniform: abi_render.c.ke_gpu_buffer = abi_render_gpu.c.KE_GPU_INVALID_HANDLE,
 
-    point_lights_sb: abi_asset_resolver.c.ke_gpu_buffer = abi_render_gpu.c.KE_GPU_INVALID_HANDLE,
-    spot_lights_sb: abi_asset_resolver.c.ke_gpu_buffer = abi_render_gpu.c.KE_GPU_INVALID_HANDLE,
-    point_indices_sb: abi_asset_resolver.c.ke_gpu_buffer = abi_render_gpu.c.KE_GPU_INVALID_HANDLE,
-    point_counts_sb: abi_asset_resolver.c.ke_gpu_buffer = abi_render_gpu.c.KE_GPU_INVALID_HANDLE,
-    spot_indices_sb: abi_asset_resolver.c.ke_gpu_buffer = abi_render_gpu.c.KE_GPU_INVALID_HANDLE,
-    spot_counts_sb: abi_asset_resolver.c.ke_gpu_buffer = abi_render_gpu.c.KE_GPU_INVALID_HANDLE,
+    point_lights_sb: abi_render.c.ke_gpu_buffer = abi_render_gpu.c.KE_GPU_INVALID_HANDLE,
+    spot_lights_sb: abi_render.c.ke_gpu_buffer = abi_render_gpu.c.KE_GPU_INVALID_HANDLE,
+    point_indices_sb: abi_render.c.ke_gpu_buffer = abi_render_gpu.c.KE_GPU_INVALID_HANDLE,
+    point_counts_sb: abi_render.c.ke_gpu_buffer = abi_render_gpu.c.KE_GPU_INVALID_HANDLE,
+    spot_indices_sb: abi_render.c.ke_gpu_buffer = abi_render_gpu.c.KE_GPU_INVALID_HANDLE,
+    spot_counts_sb: abi_render.c.ke_gpu_buffer = abi_render_gpu.c.KE_GPU_INVALID_HANDLE,
     published: [cluster_buffers.len]Published = undefined,
     resources: [cluster_buffers.len]rg.ke_render_graph_resource = [_]rg.ke_render_graph_resource{0} ** cluster_buffers.len,
 
-    cull_pipeline: abi_asset_resolver.c.ke_gpu_pipeline = abi_render_gpu.c.KE_GPU_INVALID_HANDLE,
-    cull_uniform: abi_asset_resolver.c.ke_gpu_buffer = abi_render_gpu.c.KE_GPU_INVALID_HANDLE,
+    cull_pipeline: abi_render.c.ke_gpu_pipeline = abi_render_gpu.c.KE_GPU_INVALID_HANDLE,
+    cull_uniform: abi_render.c.ke_gpu_buffer = abi_render_gpu.c.KE_GPU_INVALID_HANDLE,
     binder: *abi_render_gpu.c.ke_render_resource_binder = undefined,
-    cull_layout: abi_asset_resolver.c.ke_render_shader_layout = abi_render_gpu.c.KE_RENDER_BINDING_INVALID,
-    cull_set: abi_asset_resolver.c.ke_render_resource_set = abi_render_gpu.c.KE_RENDER_BINDING_INVALID,
+    cull_layout: abi_render.c.ke_render_shader_layout = abi_render_gpu.c.KE_RENDER_BINDING_INVALID,
+    cull_set: abi_render.c.ke_render_resource_set = abi_render_gpu.c.KE_RENDER_BINDING_INVALID,
     access: [1]abi_ecs.c.ke_ecs_query_term = undefined,
     cull_queries_terms: [6]abi_ecs.c.ke_ecs_query_term = undefined,
     cull_queries: [3]abi_ecs.c.ke_ecs_query_desc = undefined,
@@ -304,7 +303,7 @@ fn uploadGrid(cm: *const ClusterModule, bw: u32, bh: u32, near: f32, far: f32) v
     core.*.upload.?(core, cm.cluster_grid_uniform, 0, &grid_data, @sizeOf(ClusterGridUniform));
 }
 
-fn makeStorageBuffer(dev: *abi_render_gpu.c.ke_gpu_device, label: [*c]const u8, size: usize, out: *abi_asset_resolver.c.ke_gpu_buffer) R.Error!void {
+fn makeStorageBuffer(dev: *abi_render_gpu.c.ke_gpu_device, label: [*c]const u8, size: usize, out: *abi_render.c.ke_gpu_buffer) R.Error!void {
     try R.check(dev.create_buffer.?(dev, &abi_render_gpu.c.ke_gpu_buffer_desc{
         .label = label,
         .initial_data = null,
@@ -382,7 +381,7 @@ fn setup(cm: *ClusterModule, service: *abi_render.c.ke_render_service, device: *
     };
     try R.check(cm.binder.create_set.?(cm.binder, cm.cull_layout, null, "cluster.cull_set", &cull_bindings, cull_bindings.len, &cm.cull_set));
 
-    var cs: abi_asset_resolver.c.ke_gpu_shader_module = undefined;
+    var cs: abi_render.c.ke_gpu_shader_module = undefined;
     try R.check(core.*.load_shader.?(core, "cluster_cull", abi_render_gpu.c.KE_GPU_SHADER_STAGE_COMPUTE, &cs));
 
     var cull_pipeline_params = abi_render_gpu.c.ke_gpu_compute_pipeline_desc{
@@ -413,7 +412,7 @@ fn destroyModule(cm: *const ClusterModule) void {
     }
     if (cm.cull_uniform != invalid) dev.destroy_buffer.?(dev, cm.cull_uniform);
     if (cm.cluster_grid_uniform != invalid) dev.destroy_buffer.?(dev, cm.cluster_grid_uniform);
-    const storage = [_]abi_asset_resolver.c.ke_gpu_buffer{
+    const storage = [_]abi_render.c.ke_gpu_buffer{
         cm.point_lights_sb,  cm.spot_lights_sb,
         cm.point_indices_sb, cm.point_counts_sb,
         cm.spot_indices_sb,  cm.spot_counts_sb,

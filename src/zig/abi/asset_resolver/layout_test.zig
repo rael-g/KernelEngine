@@ -42,12 +42,9 @@ test "every record is laid out as the header lays it out" {
     if (@hasDecl(c, "ke_gpu_texture_aspect")) try expectSameLayout(abi.c.ke_gpu_texture_aspect, c.ke_gpu_texture_aspect);
     if (@hasDecl(c, "ke_gpu_texture_usage")) try expectSameLayout(abi.c.ke_gpu_texture_usage, c.ke_gpu_texture_usage);
     if (@hasDecl(c, "ke_gpu_texture_view")) try expectSameLayout(abi.c.ke_gpu_texture_view, c.ke_gpu_texture_view);
-    if (@hasDecl(c, "ke_render_material_binding")) try expectSameLayout(abi.c.ke_render_material_binding, c.ke_render_material_binding);
-    if (@hasDecl(c, "ke_render_resource_set")) try expectSameLayout(abi.c.ke_render_resource_set, c.ke_render_resource_set);
-    if (@hasDecl(c, "ke_render_shader_layout")) try expectSameLayout(abi.c.ke_render_shader_layout, c.ke_render_shader_layout);
 }
 
-extern const layout_values: [17]c_ulonglong;
+extern const layout_values: [14]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
@@ -61,9 +58,6 @@ test "every size and offset is the one C computes" {
         @offsetOf(abi.c.ke_asset_resolver, "resolve_material"),
         @offsetOf(abi.c.ke_asset_resolver, "resolve_font"),
         @offsetOf(abi.c.ke_asset_resolver, "free_font"),
-        @offsetOf(abi.c.ke_asset_resolver, "resolve_texture_into"),
-        @offsetOf(abi.c.ke_asset_resolver, "resolve_mesh_into"),
-        @offsetOf(abi.c.ke_asset_resolver, "resolve_material_into"),
         @offsetOf(abi.c.ke_asset_resolver, "resolve_path"),
         @sizeOf(abi.c.ke_asset_resolver_handle),
         @offsetOf(abi.c.ke_asset_resolver_handle, "ref"),

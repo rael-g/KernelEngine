@@ -1,6 +1,5 @@
 //! Draws one resource into another, so a pass's first color write can start as a resource it reads.
 
-const abi_asset_resolver = @import("abi_asset_resolver");
 const abi_render_gpu = @import("abi_render_gpu");
 const std = @import("std");
 const rc = @import("render_service.zig");
@@ -21,18 +20,18 @@ const layout_params = abi_render_gpu.c.ke_render_shader_layout_desc{
 /// of one wave open their render passes concurrently. It starts with no slots and grows to the
 /// draws a frame makes.
 pub const Blit = struct {
-    layout: abi_asset_resolver.c.ke_render_shader_layout = abi_render_gpu.c.KE_RENDER_BINDING_INVALID,
+    layout: abi_render.c.ke_render_shader_layout = abi_render_gpu.c.KE_RENDER_BINDING_INVALID,
     pipeline: abi_render_gpu.c.ke_gpu_render_pipeline_desc = undefined,
-    sets: FrameLog(abi_asset_resolver.c.ke_render_resource_set) = .{ .items = &.{}, .blank = abi_render_gpu.c.KE_RENDER_BINDING_INVALID },
+    sets: FrameLog(abi_render.c.ke_render_resource_set) = .{ .items = &.{}, .blank = abi_render_gpu.c.KE_RENDER_BINDING_INVALID },
 
     /// Loads the "blit" shaders and creates their layout. When either fails nothing is left to
     /// release.
     pub fn prepare(self: *Blit, service: [*c]abi_render.c.ke_render_service, binder: *abi_render_gpu.c.ke_render_resource_binder) R.Error!void {
-        var vs: abi_asset_resolver.c.ke_gpu_shader_module = undefined;
+        var vs: abi_render.c.ke_gpu_shader_module = undefined;
         try R.check(service.*.load_shader.?(service, "blit", abi_render_gpu.c.KE_GPU_SHADER_STAGE_VERTEX, &vs));
-        var fs: abi_asset_resolver.c.ke_gpu_shader_module = undefined;
+        var fs: abi_render.c.ke_gpu_shader_module = undefined;
         try R.check(service.*.load_shader.?(service, "blit", abi_render_gpu.c.KE_GPU_SHADER_STAGE_FRAGMENT, &fs));
-        var layout: abi_asset_resolver.c.ke_render_shader_layout = undefined;
+        var layout: abi_render.c.ke_render_shader_layout = undefined;
         try R.check(binder.create_shader_layout.?(binder, &layout_params, &layout));
         errdefer binder.destroy_shader_layout.?(binder, layout);
 
@@ -72,12 +71,12 @@ pub const Blit = struct {
 
     /// Draws `src` over the whole of `pass`'s colour attachment, whose format is `dst_format`.
     /// False, recording nothing, when no entry of the log or no set can be made.
-    pub fn draw(self: *Blit, service: [*c]abi_render.c.ke_render_service, binder: *abi_render_gpu.c.ke_render_resource_binder, pass: [*c]abi_render_gpu.c.ke_gpu_render_pass, src: abi_asset_resolver.c.ke_gpu_texture_view, dst_format: abi_render_gpu.c.ke_gpu_texture_format) bool {
+    pub fn draw(self: *Blit, service: [*c]abi_render.c.ke_render_service, binder: *abi_render_gpu.c.ke_render_resource_binder, pass: [*c]abi_render_gpu.c.ke_gpu_render_pass, src: abi_render.c.ke_gpu_texture_view, dst_format: abi_render_gpu.c.ke_gpu_texture_format) bool {
         const slot = self.sets.claim() orelse return false;
         const bindings = [1]abi_render_gpu.c.ke_render_shader_binding{
             .{ .name = "t_src", .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = src, .sampler = 0 },
         };
-        var set: abi_asset_resolver.c.ke_render_resource_set = abi_render_gpu.c.KE_RENDER_BINDING_INVALID;
+        var set: abi_render.c.ke_render_resource_set = abi_render_gpu.c.KE_RENDER_BINDING_INVALID;
         const made = binder.create_set.?(binder, self.layout, null, "blit.set", &bindings, bindings.len, &set);
         slot.* = set;
         if (made != R.ok) return false;

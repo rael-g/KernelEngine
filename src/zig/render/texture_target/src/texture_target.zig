@@ -1,7 +1,6 @@
 //! A render target whose frame is a view of a texture the caller owns, so drawing into the target
 //! draws into that texture.
 
-const abi_asset_resolver = @import("abi_asset_resolver");
 const abi_render_gpu = @import("abi_render_gpu");
 const std = @import("std");
 
@@ -23,7 +22,7 @@ const log = std.log.scoped(.texture_target);
 const TextureTarget = struct {
     vtable: abi_render_gpu.c.ke_gpu_render_target,
     device: *abi_render_gpu.c.ke_gpu_device,
-    view: abi_asset_resolver.c.ke_gpu_texture_view,
+    view: abi_render.c.ke_gpu_texture_view,
     width: u32,
     height: u32,
     format: abi_render_gpu.c.ke_gpu_texture_format,
@@ -37,7 +36,7 @@ fn of(self: [*c]abi_render_gpu.c.ke_gpu_render_target) *TextureTarget {
 /// Opens a frame and writes the view built by `ke_gpu_render_target_texture_create`, the same one
 /// every frame. Fails as an invalid argument, writing KE_GPU_INVALID_HANDLE, while a frame is
 /// already open, leaving that frame open.
-fn acquire(self: [*c]abi_render_gpu.c.ke_gpu_render_target, out_view: [*c]abi_asset_resolver.c.ke_gpu_texture_view) callconv(.c) abi_result.c.ke_result {
+fn acquire(self: [*c]abi_render_gpu.c.ke_gpu_render_target, out_view: [*c]abi_render.c.ke_gpu_texture_view) callconv(.c) abi_result.c.ke_result {
     const out = out_view orelse return R.code(error.InvalidArgument);
     out.* = abi_render_gpu.c.KE_GPU_INVALID_HANDLE;
     if (self == null) return R.code(error.InvalidArgument);
@@ -103,7 +102,7 @@ export fn ke_gpu_render_target_texture_create(
     const p: Target = .{ .texture = texture, .width = width, .height = height, .format = texture_format };
     if (p.texture == abi_render_gpu.c.KE_GPU_INVALID_HANDLE or p.format == abi_render_gpu.c.KE_GPU_TEXTURE_FORMAT_INVALID or p.width == 0 or p.height == 0)
         return R.code(error.InvalidArgument);
-    var view: abi_asset_resolver.c.ke_gpu_texture_view = abi_render_gpu.c.KE_GPU_INVALID_HANDLE;
+    var view: abi_render.c.ke_gpu_texture_view = abi_render_gpu.c.KE_GPU_INVALID_HANDLE;
     const made = dev.create_texture_view.?(dev, p.texture, &abi_render_gpu.c.ke_gpu_texture_view_desc{
         .label = "texture_target.view",
         .format = p.format,
@@ -173,11 +172,11 @@ test "a texture target hands out one view per frame, reports the texture's size 
     try testing.expectEqual(@as(u32, 32), ht);
     try testing.expectEqual(@as(abi_render_gpu.c.ke_gpu_texture_format, abi_render_gpu.c.KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM), t.*.format.?(t));
 
-    var first: abi_asset_resolver.c.ke_gpu_texture_view = undefined;
+    var first: abi_render.c.ke_gpu_texture_view = undefined;
     try R.check(t.*.acquire.?(t, &first));
     try testing.expect(first != abi_render_gpu.c.KE_GPU_INVALID_HANDLE);
     try R.check(t.*.present.?(t));
-    var second: abi_asset_resolver.c.ke_gpu_texture_view = undefined;
+    var second: abi_render.c.ke_gpu_texture_view = undefined;
     try R.check(t.*.acquire.?(t, &second));
     try testing.expectEqual(first, second);
     try R.check(t.*.present.?(t));
@@ -200,10 +199,10 @@ test "a texture target refuses a second acquire and a present without a frame" {
 
     try testing.expectError(error.InvalidArgument, R.check(t.*.present.?(t)));
 
-    var view: abi_asset_resolver.c.ke_gpu_texture_view = undefined;
+    var view: abi_render.c.ke_gpu_texture_view = undefined;
     try R.check(t.*.acquire.?(t, &view));
     try testing.expectError(error.InvalidArgument, R.check(t.*.acquire.?(t, &view)));
-    try testing.expectEqual(@as(abi_asset_resolver.c.ke_gpu_texture_view, abi_render_gpu.c.KE_GPU_INVALID_HANDLE), view);
+    try testing.expectEqual(@as(abi_render.c.ke_gpu_texture_view, abi_render_gpu.c.KE_GPU_INVALID_HANDLE), view);
 }
 
 test "a texture target without a device, texture, format or size is refused and leaves nothing behind" {

@@ -8,6 +8,7 @@
         .abi_ecs_variant = .{ .path = "../ecs_variant" },
         .abi_math = .{ .path = "../math" },
         .abi_render_handles = .{ .path = "../render_handles" },
+        .abi_render_material = .{ .path = "../render_material" },
         .abi_result = .{ .path = "../result" },
         .abi_spatial = .{ .path = "../spatial" },
     },

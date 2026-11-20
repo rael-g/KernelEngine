@@ -5,6 +5,7 @@ const abi_ecs = @import("ecs");
 const abi_ecs_variant = @import("ecs_variant");
 const abi_math = @import("math");
 const abi_render_handles = @import("render_handles");
+const abi_render_material = @import("render_material");
 const abi_result = @import("result");
 
 /// The ABI as the headers declare it.

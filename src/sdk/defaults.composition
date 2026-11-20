@@ -184,6 +184,9 @@ part = "view_space_rh"
 [instance.camera]
 part = "render_camera"
 
+[instance.render_assets]
+part = "render_assets"
+
 [instance.scene]
 part = "render_scene_resolve"
 [instance.scene.bind]

@@ -6,7 +6,6 @@ pub fn build(b: *std.Build) void {
 
     const abi = b.addModule("abi", .{ .root_source_file = b.path("mesh.zig") });
     abi.addImport("math", b.dependency("abi_math", .{}).module("abi"));
-    abi.addImport("render_handles", b.dependency("abi_render_handles", .{}).module("abi"));
     abi.addImport("result", b.dependency("abi_result", .{}).module("abi"));
 
     const headers = b.addWriteFiles().add("layout.h",

@@ -1,8 +1,11 @@
 using System.Numerics;
 
-using global::KernelEngine.Ecs;
+using global::KernelEngine.Render;
 
-namespace KernelEngine.Render;
+using KernelEngine.Result.Native;
+using KernelEngine.Text.Native;
+
+namespace KernelEngine.Asset.Native;
 
 public partial struct Vertex
 {

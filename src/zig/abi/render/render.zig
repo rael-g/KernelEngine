@@ -6,6 +6,7 @@ const abi_mesh = @import("mesh");
 const abi_render_components = @import("render_components");
 const abi_render_gpu = @import("render_gpu");
 const abi_render_handles = @import("render_handles");
+const abi_render_material = @import("render_material");
 const abi_result = @import("result");
 
 /// The ABI as the headers declare it.
@@ -89,7 +90,7 @@ pub const RenderService = struct {
                 }
             }.call,
             .create_material = &struct {
-                fn call(self: ?*c.ke_render_service, a0: ?[*:0]const u8, a1: abi_math.c.ke_vec4, a2: f32, a3: f32, a4: abi_render_handles.c.ke_texture_handle, a5: abi_render_handles.c.ke_texture_handle, a6: abi_render_handles.c.ke_alpha_mode, a7: f32, a8: f32, a9: f32, a10: ?[*:0]const u8, a11: ?*abi_render_handles.c.ke_material_handle) callconv(.c) abi_result.c.ke_result {
+                fn call(self: ?*c.ke_render_service, a0: ?[*:0]const u8, a1: abi_math.c.ke_vec4, a2: f32, a3: f32, a4: abi_render_handles.c.ke_texture_handle, a5: abi_render_handles.c.ke_texture_handle, a6: abi_render_material.c.ke_alpha_mode, a7: f32, a8: f32, a9: f32, a10: ?[*:0]const u8, a11: ?*abi_render_handles.c.ke_material_handle) callconv(.c) abi_result.c.ke_result {
                     const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
                     const value = T.createMaterial(state, std.mem.span(a0 orelse return resultOf(error.Failed)), a1, a2, a3, a4, a5, a6, a7, a8, a9, std.mem.span(a10 orelse return resultOf(error.Failed))) catch |failure| return resultOf(failure);
                     (a11 orelse return resultOf(error.Failed)).* = value;
@@ -103,8 +104,8 @@ pub const RenderService = struct {
                 }
             }.call,
             .material_alpha_mode = &struct {
-                fn call(self: ?*c.ke_render_service, a0: abi_render_handles.c.ke_material_handle) callconv(.c) abi_render_handles.c.ke_alpha_mode {
-                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return std.mem.zeroes(abi_render_handles.c.ke_alpha_mode)));
+                fn call(self: ?*c.ke_render_service, a0: abi_render_handles.c.ke_material_handle) callconv(.c) abi_render_material.c.ke_alpha_mode {
+                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return std.mem.zeroes(abi_render_material.c.ke_alpha_mode)));
                     return T.materialAlphaMode(state, a0);
                 }
             }.call,
@@ -302,7 +303,7 @@ pub const RenderService = struct {
         return written;
     }
 
-    pub fn createMaterial(self: RenderService, key: [:0]const u8, base_color: abi_math.c.ke_vec4, metallic: f32, roughness: f32, albedo: abi_render_handles.c.ke_texture_handle, normal: abi_render_handles.c.ke_texture_handle, alpha_mode: abi_render_handles.c.ke_alpha_mode, alpha_cutoff: f32, ior: f32, distortion_strength: f32, shader: [:0]const u8) Error!abi_render_handles.c.ke_material_handle {
+    pub fn createMaterial(self: RenderService, key: [:0]const u8, base_color: abi_math.c.ke_vec4, metallic: f32, roughness: f32, albedo: abi_render_handles.c.ke_texture_handle, normal: abi_render_handles.c.ke_texture_handle, alpha_mode: abi_render_material.c.ke_alpha_mode, alpha_cutoff: f32, ior: f32, distortion_strength: f32, shader: [:0]const u8) Error!abi_render_handles.c.ke_material_handle {
         var written: abi_render_handles.c.ke_material_handle = undefined;
         try checkResult(self.ptr.create_material.?(self.ptr, key.ptr, base_color, metallic, roughness, albedo, normal, alpha_mode, alpha_cutoff, ior, distortion_strength, shader.ptr, &written));
         return written;
@@ -315,7 +316,7 @@ pub const RenderService = struct {
     }
 
     /// The pass bucket for a material handle, resolved from CPU-side storage — no GPU state touched.
-    pub fn materialAlphaMode(self: RenderService, h: abi_render_handles.c.ke_material_handle) abi_render_handles.c.ke_alpha_mode {
+    pub fn materialAlphaMode(self: RenderService, h: abi_render_handles.c.ke_material_handle) abi_render_material.c.ke_alpha_mode {
         return self.ptr.material_alpha_mode.?(self.ptr, h);
     }
 
@@ -451,6 +452,68 @@ pub const RenderService = struct {
 
 };
 
+pub const RenderAssets = struct {
+    ptr: *c.ke_render_assets,
+    owner: ?c.ke_render_assets_handle = null,
+
+    pub fn deinit(self: RenderAssets) void {
+        if (self.owner) |owner| owner.destroy.?(owner.ref);
+    }
+
+    /// The vtable whose slots call the methods of T, which embeds it as the named field.
+    pub fn implement(comptime T: type, comptime field: []const u8) c.ke_render_assets {
+        return .{
+            .resolve_texture = &struct {
+                fn call(self: ?*c.ke_render_assets, a0: ?[*:0]const u8, a1: ?*abi_render_handles.c.ke_texture_handle) callconv(.c) abi_result.c.ke_result {
+                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
+                    const value = T.resolveTexture(state, std.mem.span(a0 orelse return resultOf(error.Failed))) catch |failure| return resultOf(failure);
+                    (a1 orelse return resultOf(error.Failed)).* = value;
+                    return abi_result.c.KE_OK;
+                }
+            }.call,
+            .resolve_mesh = &struct {
+                fn call(self: ?*c.ke_render_assets, a0: ?[*:0]const u8, a1: ?*abi_render_handles.c.ke_mesh_handle) callconv(.c) abi_result.c.ke_result {
+                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
+                    const value = T.resolveMesh(state, std.mem.span(a0 orelse return resultOf(error.Failed))) catch |failure| return resultOf(failure);
+                    (a1 orelse return resultOf(error.Failed)).* = value;
+                    return abi_result.c.KE_OK;
+                }
+            }.call,
+            .resolve_material = &struct {
+                fn call(self: ?*c.ke_render_assets, a0: ?[*:0]const u8, a1: ?*abi_render_handles.c.ke_material_handle) callconv(.c) abi_result.c.ke_result {
+                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
+                    const value = T.resolveMaterial(state, std.mem.span(a0 orelse return resultOf(error.Failed))) catch |failure| return resultOf(failure);
+                    (a1 orelse return resultOf(error.Failed)).* = value;
+                    return abi_result.c.KE_OK;
+                }
+            }.call,
+        };
+    }
+
+    /// The texture the image at `path` makes. On a path the service already holds, nothing is read.
+    pub fn resolveTexture(self: RenderAssets, path: [:0]const u8) Error!abi_render_handles.c.ke_texture_handle {
+        var written: abi_render_handles.c.ke_texture_handle = undefined;
+        try checkResult(self.ptr.resolve_texture.?(self.ptr, path.ptr, &written));
+        return written;
+    }
+
+    /// The mesh the asset at `path` makes. On a path the service already holds, nothing is baked.
+    pub fn resolveMesh(self: RenderAssets, path: [:0]const u8) Error!abi_render_handles.c.ke_mesh_handle {
+        var written: abi_render_handles.c.ke_mesh_handle = undefined;
+        try checkResult(self.ptr.resolve_mesh.?(self.ptr, path.ptr, &written));
+        return written;
+    }
+
+    /// The material the `.material` file at `path` makes, its albedo and normal textures each found
+    /// by its own path as resolve_texture finds them.
+    pub fn resolveMaterial(self: RenderAssets, path: [:0]const u8) Error!abi_render_handles.c.ke_material_handle {
+        var written: abi_render_handles.c.ke_material_handle = undefined;
+        try checkResult(self.ptr.resolve_material.?(self.ptr, path.ptr, &written));
+        return written;
+    }
+
+};
+
 pub const RenderCamera = struct {
     ptr: *c.ke_render_camera,
     owner: ?c.ke_render_camera_handle = null,
@@ -569,5 +632,6 @@ pub const RenderLighting = c.ke_render_lighting;
 pub const CameraFrustum = c.ke_camera_frustum;
 pub const RenderSceneComponentIds = c.ke_render_scene_component_ids;
 pub const RenderServiceHandle = c.ke_render_service_handle;
+pub const RenderAssetsHandle = c.ke_render_assets_handle;
 pub const RenderCameraHandle = c.ke_render_camera_handle;
 pub const RenderSceneResolveHandle = c.ke_render_scene_resolve_handle;

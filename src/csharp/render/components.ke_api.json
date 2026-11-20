@@ -2,7 +2,7 @@
   "enums": [
     {
       "name": "ke_alpha_mode",
-      "doc": null,
+      "doc": "How a material\u0027s alpha combines with what is behind it.",
       "values": [
         {
           "name": "KE_ALPHA_MODE_OPAQUE",
@@ -242,6 +242,70 @@
         {
           "name": "scale",
           "type": "ke_vec3",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_material_spec",
+      "doc": "A material as a \u0060.material\u0060 file describes it; its textures are paths.",
+      "tags": [
+        "value"
+      ],
+      "fields": [
+        {
+          "name": "base_color",
+          "type": "float[4]",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "metallic",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "roughness",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "albedo_path",
+          "type": "char[256]",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "normal_path",
+          "type": "char[256]",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "alpha_mode",
+          "type": "ke_alpha_mode",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "alpha_cutoff",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "ior",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "distortion_strength",
+          "type": "float",
           "tags": [],
           "doc": null
         }

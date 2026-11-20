@@ -1,9 +1,7 @@
 using System.Numerics;
 
-using global::KernelEngine.Ecs;
 using global::KernelEngine.Render;
 
-using KernelEngine.Render.Native;
 using KernelEngine.Result.Native;
 using KernelEngine.Text.Native;
 

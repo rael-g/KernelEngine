@@ -10,7 +10,7 @@
         .abi_physics_components = .{ .path = "../physics_components" },
         .abi_render_components = .{ .path = "../render_components" },
         .abi_render_contract = .{ .path = "../render_contract" },
-        .abi_render_handles = .{ .path = "../render_handles" },
+        .abi_render_material = .{ .path = "../render_material" },
         .abi_result = .{ .path = "../result" },
         .abi_spatial = .{ .path = "../spatial" },
         .abi_ui_components = .{ .path = "../ui_components" },

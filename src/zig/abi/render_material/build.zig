@@ -5,14 +5,13 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     const abi = b.addModule("abi", .{ .root_source_file = b.path("render_material.zig") });
-    abi.addImport("render_handles", b.dependency("abi_render_handles", .{}).module("abi"));
     abi.addImport("result", b.dependency("abi_result", .{}).module("abi"));
 
     const headers = b.addWriteFiles().add("layout.h",
-        \\#include <kernel_engine/render/material_file.h>
+        \\#include <kernel_engine/asset/material.h>
     );
     const translated = b.addTranslateC(.{ .root_source_file = headers, .target = target, .optimize = optimize });
-    translated.addIncludePath(b.path("../../../c/render"));
+    translated.addIncludePath(b.path("../../../c/asset"));
     translated.addIncludePath(b.path("../../../c/result"));
     const tests = b.addTest(.{ .root_module = b.createModule(.{
         .root_source_file = b.path("layout_test.zig"),
@@ -25,7 +24,7 @@ pub fn build(b: *std.Build) void {
         },
     }) });
     tests.root_module.addCSourceFile(.{ .file = b.path("layout_values.c") });
-    tests.root_module.addIncludePath(b.path("../../../c/render"));
+    tests.root_module.addIncludePath(b.path("../../../c/asset"));
     tests.root_module.addIncludePath(b.path("../../../c/result"));
     b.step("test", "Check the render_material ABI against its headers").dependOn(&b.addRunArtifact(tests).step);
 }

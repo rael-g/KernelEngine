@@ -10,6 +10,7 @@ const abi_input_actions = @import("input_actions");
 const abi_io = @import("io");
 const abi_logger = @import("logger");
 const abi_part = @import("part");
+const abi_render = @import("render");
 const abi_result = @import("result");
 const abi_scene_tree = @import("scene_tree");
 const abi_schedule = @import("schedule");
@@ -83,6 +84,9 @@ pub const ke_scheduler_run_fn = ?*const fn (?*anyopaque, f32, ?*?*abi_completion
 /// loader. A path that begins with res:// names what follows the prefix, resolved by io against
 /// the root of its file system; any other path is passed on as written.
 pub extern fn ke_asset_resolver_create(image_loader: ?*abi_image_loader.c.ke_image_loader, font_loader: ?*abi_text.c.ke_font_loader, io: ?*abi_io.c.ke_io, out_resolver: ?*abi_asset_resolver.c.ke_asset_resolver_handle) abi_result.c.ke_result;
+
+/// Allocates render assets over a resolver and a render service, neither of which it owns.
+pub extern fn ke_render_assets_create(resolver: ?*abi_asset_resolver.c.ke_asset_resolver, service: ?*abi_render.c.ke_render_service, out_assets: ?*abi_render.c.ke_render_assets_handle) abi_result.c.ke_result;
 
 /// Sends every line ke_framework logs to callback, with ctx; a NULL callback sends them back to
 /// stderr, where they go until this is called. Called once, before the library logs.

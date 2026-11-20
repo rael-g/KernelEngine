@@ -11,10 +11,12 @@ pub fn build(b: *std.Build) void {
     abi.addImport("render_components", b.dependency("abi_render_components", .{}).module("abi"));
     abi.addImport("render_gpu", b.dependency("abi_render_gpu", .{}).module("abi"));
     abi.addImport("render_handles", b.dependency("abi_render_handles", .{}).module("abi"));
+    abi.addImport("render_material", b.dependency("abi_render_material", .{}).module("abi"));
     abi.addImport("result", b.dependency("abi_result", .{}).module("abi"));
 
     const headers = b.addWriteFiles().add("layout.h",
         \\#include <kernel_engine/render/service/render_service.h>
+        \\#include <kernel_engine/render/assets.h>
         \\#include <kernel_engine/render/camera.h>
         \\#include <kernel_engine/render/scene_resolve.h>
         \\#include <kernel_engine/render/resource_groups.h>
@@ -23,6 +25,7 @@ pub fn build(b: *std.Build) void {
     translated.addIncludePath(b.path("../../../c/ecs"));
     translated.addIncludePath(b.path("../../../c/math"));
     translated.addIncludePath(b.path("../../../c/render"));
+    translated.addIncludePath(b.path("../../../c/asset"));
     translated.addIncludePath(b.path("../../../c/result"));
     const tests = b.addTest(.{ .root_module = b.createModule(.{
         .root_source_file = b.path("layout_test.zig"),
@@ -38,6 +41,7 @@ pub fn build(b: *std.Build) void {
     tests.root_module.addIncludePath(b.path("../../../c/ecs"));
     tests.root_module.addIncludePath(b.path("../../../c/math"));
     tests.root_module.addIncludePath(b.path("../../../c/render"));
+    tests.root_module.addIncludePath(b.path("../../../c/asset"));
     tests.root_module.addIncludePath(b.path("../../../c/result"));
     b.step("test", "Check the render ABI against its headers").dependOn(&b.addRunArtifact(tests).step);
 }

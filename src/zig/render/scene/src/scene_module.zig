@@ -74,8 +74,8 @@ fn destroyScene(self: ?*abi_render.c.ke_render_scene_resolve) callconv(.c) void 
 }
 
 /// Registers a component of the contract by its description and returns the id the ecs gives it.
-fn registerComponent(e: *abi_ecs.c.ke_ecs, desc: *const abi_ecs.c.ke_component_desc) R.Error!abi_asset_resolver.c.ke_component_id {
-    var cid: abi_asset_resolver.c.ke_component_id = abi_ecs.c.KE_COMPONENT_INVALID;
+fn registerComponent(e: *abi_ecs.c.ke_ecs, desc: *const abi_ecs.c.ke_component_desc) R.Error!abi_ecs.c.ke_component_id {
+    var cid: abi_ecs.c.ke_component_id = abi_ecs.c.KE_COMPONENT_INVALID;
     try R.check(e.component_register.?(e, desc, &cid));
     return cid;
 }
@@ -107,7 +107,7 @@ fn pair(extraction: *abi_extraction.c.ke_extraction, ids: *const abi_render.c.ke
 /// The factory declared in scene_resolve_create.h. A missing world, extraction or service fails as
 /// an invalid argument, a failed allocation as out of memory, and a component a world or the
 /// extraction refuses with its code; each leaves the handle zeroed.
-export fn ke_render_scene_resolve_create(main_in: ?*abi_ecs.c.ke_ecs, render_in: ?*abi_ecs.c.ke_ecs, extraction_in: ?*abi_extraction.c.ke_extraction, service: ?*abi_render.c.ke_render_service, resolver: ?*abi_asset_resolver.c.ke_asset_resolver, out_resolve: ?*abi_render.c.ke_render_scene_resolve_handle) callconv(.c) abi_result.c.ke_result {
+export fn ke_render_scene_resolve_create(main_in: ?*abi_ecs.c.ke_ecs, render_in: ?*abi_ecs.c.ke_ecs, extraction_in: ?*abi_extraction.c.ke_extraction, service: ?*abi_render.c.ke_render_service, assets: ?*abi_render.c.ke_render_assets, out_resolve: ?*abi_render.c.ke_render_scene_resolve_handle) callconv(.c) abi_result.c.ke_result {
     const out = out_resolve orelse return R.code(error.InvalidArgument);
     out.* = .{ .ref = null, .destroy = null };
     const main = main_in orelse return R.code(error.InvalidArgument);
@@ -116,7 +116,7 @@ export fn ke_render_scene_resolve_create(main_in: ?*abi_ecs.c.ke_ecs, render_in:
     const core = service orelse return R.code(error.InvalidArgument);
 
     const st = gpa.create(SceneResolve) catch |err| return R.code(err);
-    registerScene(st, resolver, main, render, extraction, core) catch |err| {
+    registerScene(st, assets, main, render, extraction, core) catch |err| {
         gpa.destroy(st);
         return R.code(err);
     };
@@ -124,7 +124,7 @@ export fn ke_render_scene_resolve_create(main_in: ?*abi_ecs.c.ke_ecs, render_in:
     return R.ok;
 }
 
-fn registerScene(st: *SceneResolve, resolver: ?*abi_asset_resolver.c.ke_asset_resolver, main: *abi_ecs.c.ke_ecs, render: *abi_ecs.c.ke_ecs, extraction: *abi_extraction.c.ke_extraction, core: *abi_render.c.ke_render_service) R.Error!void {
+fn registerScene(st: *SceneResolve, assets: ?*abi_render.c.ke_render_assets, main: *abi_ecs.c.ke_ecs, render: *abi_ecs.c.ke_ecs, extraction: *abi_extraction.c.ke_extraction, core: *abi_render.c.ke_render_service) R.Error!void {
     st.* = .{
         .api = .{ .handle = st, .component_ids = componentIds, .render_component_ids = renderComponentIds },
         .core = core,
@@ -141,7 +141,7 @@ fn registerScene(st: *SceneResolve, resolver: ?*abi_asset_resolver.c.ke_asset_re
     try pair(extraction, &st.ids, &st.render_ids);
 
     const wr = abi_ecs.c.KE_ECS_ACCESS_WRITE;
-    st.sprite = .{ .core = core, .mesh_cid = st.ids.mesh, .resolver = resolver };
+    st.sprite = .{ .core = core, .mesh_cid = st.ids.mesh, .assets = assets };
     st.sprite_terms = .{ .{ .component = st.ids.sprite2d, .access = wr }, .{ .component = st.ids.mesh, .access = wr }, .{ .component = st.ids.sprite2d, .access = wr } };
     st.sprite_queries = .{ .{ .terms = st.sprite_terms[0..].ptr, .term_count = 2 }, .{ .terms = st.sprite_terms[2..].ptr, .term_count = 1 } };
     st.mesh_terms = .{.{ .component = st.ids.mesh, .access = wr }};
@@ -263,7 +263,7 @@ export fn ke_render_label_resolve_create(
 }
 
 pub const parts = [_]abi_part.c.ke_part{
-    part.of(ke_render_scene_resolve_create, .{ .name = "render_scene_resolve", .slots = &.{"main", "render", "extraction", "service", "resolver"}, .optional = &.{"resolver"}, .set_log = @ptrCast(&@import("log").Destination("ke_render_scene").setLogCallback) }),
+    part.of(ke_render_scene_resolve_create, .{ .name = "render_scene_resolve", .slots = &.{"main", "render", "extraction", "service", "assets"}, .optional = &.{"assets"}, .set_log = @ptrCast(&@import("log").Destination("ke_render_scene").setLogCallback) }),
     part.of(ke_render_scene_resolve_systems_create, .{ .name = "render_scene_resolve_systems", .slots = &.{"scene"}, .hooks = &.{"update", "post_update"}, .set_log = @ptrCast(&@import("log").Destination("ke_render_scene").setLogCallback) }),
     part.of(ke_render_label_resolve_create, .{ .name = "render_label_resolve", .slots = &.{"service", "scene", "ui", "resolver"}, .hooks = &.{"update"}, .optional = &.{"resolver"}, .set_log = @ptrCast(&@import("log").Destination("ke_render_scene").setLogCallback) }),
 };

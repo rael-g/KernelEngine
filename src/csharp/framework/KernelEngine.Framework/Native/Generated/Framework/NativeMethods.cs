@@ -10,6 +10,7 @@ using KernelEngine.Ecs.Native;
 using KernelEngine.Input.Native;
 using KernelEngine.Io.Native;
 using KernelEngine.Part.Native;
+using KernelEngine.Render.Native;
 using KernelEngine.Result.Native;
 using KernelEngine.Schedule.Native;
 using KernelEngine.Settings.Native;
@@ -38,6 +39,10 @@ public static unsafe partial class NativeMethods
     [DllImport("ke_framework", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_asset_resolver_create", ExactSpelling = true)]
     [return: NativeTypeName("ke_result")]
     public static extern KernelEngine.Result.Native.Result asset_resolver_create([NativeTypeName("ke_image_loader *")] KernelEngine.Asset.Native.ke_image_loader* image_loader, [NativeTypeName("ke_font_loader *")] KernelEngine.Text.Native.ke_font_loader* font_loader, [NativeTypeName("ke_io *")] KernelEngine.Io.Native.ke_io* io, [NativeTypeName("ke_asset_resolver_handle *")] KernelEngine.Asset.Native.ke_asset_resolver_handle* out_resolver);
+
+    [DllImport("ke_framework", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_render_assets_create", ExactSpelling = true)]
+    [return: NativeTypeName("ke_result")]
+    public static extern KernelEngine.Result.Native.Result render_assets_create([NativeTypeName("ke_asset_resolver *")] KernelEngine.Asset.Native.ke_asset_resolver* resolver, [NativeTypeName("ke_render_service *")] KernelEngine.Render.Native.ke_render_service* service, [NativeTypeName("ke_render_assets_handle *")] KernelEngine.Render.Native.ke_render_assets_handle* out_assets);
 
     [DllImport("ke_framework", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_framework_set_log_callback", ExactSpelling = true)]
     public static extern void framework_set_log_callback([NativeTypeName("ke_log_callback")] delegate* unmanaged[Cdecl]<void*, global::KernelEngine.Logger.LogLevel, sbyte*, sbyte*, void> callback, void* ctx);

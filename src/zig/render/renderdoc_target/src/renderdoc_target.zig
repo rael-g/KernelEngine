@@ -1,7 +1,6 @@
 //! A render target that wraps another one and brackets the chosen frames with a RenderDoc capture,
 //! forwarding everything else to the inner target.
 
-const abi_asset_resolver = @import("abi_asset_resolver");
 const abi_render_gpu = @import("abi_render_gpu");
 const std = @import("std");
 const builtin = @import("builtin");
@@ -47,7 +46,7 @@ fn chosen(t: *const RenderdocTarget) bool {
 /// when `chosen` accepts the frame counter. A capture it starts stays open until `present` ends it
 /// or `destroy` discards it, and is discarded here when the inner target yields no view. The code
 /// and the view are the inner target's.
-fn acquire(self: [*c]abi_render_gpu.c.ke_gpu_render_target, out_view: [*c]abi_asset_resolver.c.ke_gpu_texture_view) callconv(.c) abi_result.c.ke_result {
+fn acquire(self: [*c]abi_render_gpu.c.ke_gpu_render_target, out_view: [*c]abi_render.c.ke_gpu_texture_view) callconv(.c) abi_result.c.ke_result {
     const out = out_view orelse return R.code(error.InvalidArgument);
     out.* = abi_render_gpu.c.KE_GPU_INVALID_HANDLE;
     if (self == null) return R.code(error.InvalidArgument);
@@ -229,7 +228,7 @@ const Fake = struct {
         return @ptrCast(@alignCast(target.*.handle));
     }
 
-    fn innerAcquire(target: [*c]abi_render_gpu.c.ke_gpu_render_target, out_view: [*c]abi_asset_resolver.c.ke_gpu_texture_view) callconv(.c) abi_result.c.ke_result {
+    fn innerAcquire(target: [*c]abi_render_gpu.c.ke_gpu_render_target, out_view: [*c]abi_render.c.ke_gpu_texture_view) callconv(.c) abi_result.c.ke_result {
         const self = selfOf(target);
         if (self.empty_frames > 0) {
             self.empty_frames -= 1;
@@ -258,12 +257,12 @@ const Fake = struct {
 };
 
 fn frame(t: *abi_render_gpu.c.ke_gpu_render_target) !void {
-    try testing.expectEqual(@as(abi_asset_resolver.c.ke_gpu_texture_view, 9), try acquired(t));
+    try testing.expectEqual(@as(abi_render.c.ke_gpu_texture_view, 9), try acquired(t));
     try R.check(t.present.?(t));
 }
 
-fn acquired(t: *abi_render_gpu.c.ke_gpu_render_target) !abi_asset_resolver.c.ke_gpu_texture_view {
-    var view: abi_asset_resolver.c.ke_gpu_texture_view = undefined;
+fn acquired(t: *abi_render_gpu.c.ke_gpu_render_target) !abi_render.c.ke_gpu_texture_view {
+    var view: abi_render.c.ke_gpu_texture_view = undefined;
     try R.check(t.acquire.?(t, &view));
     return view;
 }
@@ -298,7 +297,7 @@ test "a chosen frame the inner target has nothing to draw into is discarded and 
     const t = h.ref orelse return error.TestUnexpectedResult;
     defer h.destroy.?(t);
 
-    try testing.expectEqual(@as(abi_asset_resolver.c.ke_gpu_texture_view, abi_render_gpu.c.KE_GPU_INVALID_HANDLE), try acquired(t));
+    try testing.expectEqual(@as(abi_render.c.ke_gpu_texture_view, abi_render_gpu.c.KE_GPU_INVALID_HANDLE), try acquired(t));
     try testing.expectEqual(@as(u32, 1), Fake.discarded);
     try testing.expectEqual(@as(u32, 0), Fake.ended);
 
@@ -332,7 +331,7 @@ test "a target destroyed with a capture open discards it" {
     const h = try create(&inner.vtable, p.first, p.count, api);
     const t = h.ref orelse return error.TestUnexpectedResult;
 
-    try testing.expectEqual(@as(abi_asset_resolver.c.ke_gpu_texture_view, 9), try acquired(t));
+    try testing.expectEqual(@as(abi_render.c.ke_gpu_texture_view, 9), try acquired(t));
     h.destroy.?(t);
     try testing.expectEqual(@as(u32, 1), Fake.discarded);
     try heap.expectNoLeaks();

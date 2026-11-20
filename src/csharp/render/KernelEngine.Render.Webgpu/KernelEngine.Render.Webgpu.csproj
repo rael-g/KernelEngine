@@ -38,6 +38,8 @@
     <ProjectReference Include="..\..\render\KernelEngine.View\KernelEngine.View.csproj" />
     <ProjectReference Include="..\KernelEngine.Render.Abstractions\KernelEngine.Render.Abstractions.csproj" />
     <ProjectReference Include="..\KernelEngine.Render\KernelEngine.Render.csproj" />
+    <ProjectReference Include="..\..\asset\KernelEngine.Asset\KernelEngine.Asset.csproj" />
+    <ProjectReference Include="..\..\framework\KernelEngine.Framework\KernelEngine.Framework.csproj" />
 
     <ProjectReference Include="..\..\logger\KernelEngine.Logger\KernelEngine.Logger.csproj" />
     <ProjectReference Include="..\..\ecs\KernelEngine.Ecs\KernelEngine.Ecs.csproj" />

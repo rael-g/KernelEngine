@@ -55,24 +55,24 @@ public sealed unsafe partial class DefaultRenderSceneResolve : KernelEngine.Rend
     /// <param name="render">The render world; borrowed, must outlive it.</param>
     /// <param name="extraction">Copies each component from main into render; borrowed, must outlive it.</param>
     /// <param name="service">Uploads the meshes, materials and textures; borrowed, must outlive it.</param>
-    /// <param name="resolver">Reads the image a sprite names; borrowed. Without it a sprite draws untextured.</param>
-    public DefaultRenderSceneResolve(KernelEngine.Ecs.INativeEcs main, KernelEngine.Ecs.INativeEcs render, KernelEngine.Extraction.INativeExtraction extraction, KernelEngine.Render.INativeRenderService service, KernelEngine.Framework.INativeAssetResolver? resolver = default) : base(Create(main, render, extraction, service, resolver))
+    /// <param name="assets">Makes the texture of the image a sprite names; borrowed. Without them a sprite draws untextured.</param>
+    public DefaultRenderSceneResolve(KernelEngine.Ecs.INativeEcs main, KernelEngine.Ecs.INativeEcs render, KernelEngine.Extraction.INativeExtraction extraction, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.INativeRenderAssets? assets = default) : base(Create(main, render, extraction, service, assets))
     {
         Hold(main.Owner);
         Hold(render.Owner);
         Hold(extraction.Owner);
         Hold(service.Owner);
-        Hold(resolver?.Owner);
+        Hold(assets?.Owner);
     }
 
-    private static KernelEngine.Render.Native.ke_render_scene_resolve_handle Create(KernelEngine.Ecs.INativeEcs main, KernelEngine.Ecs.INativeEcs render, KernelEngine.Extraction.INativeExtraction extraction, KernelEngine.Render.INativeRenderService service, KernelEngine.Framework.INativeAssetResolver? resolver)
+    private static KernelEngine.Render.Native.ke_render_scene_resolve_handle Create(KernelEngine.Ecs.INativeEcs main, KernelEngine.Ecs.INativeEcs render, KernelEngine.Extraction.INativeExtraction extraction, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.INativeRenderAssets? assets)
     {
         ArgumentNullException.ThrowIfNull(main);
         ArgumentNullException.ThrowIfNull(render);
         ArgumentNullException.ThrowIfNull(extraction);
         ArgumentNullException.ThrowIfNull(service);
         KernelEngine.Render.Native.ke_render_scene_resolve_handle handle;
-        NativeResult.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_scene_resolve_create(main.Native, render.Native, extraction.Native, service.Native, (resolver is null ? null : resolver.Native), &handle), "ke_render_scene_resolve_create");
+        NativeResult.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_scene_resolve_create(main.Native, render.Native, extraction.Native, service.Native, (assets is null ? null : assets.Native), &handle), "ke_render_scene_resolve_create");
         return handle;
     }
 }

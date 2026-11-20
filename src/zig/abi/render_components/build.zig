@@ -9,6 +9,7 @@ pub fn build(b: *std.Build) void {
     abi.addImport("ecs_variant", b.dependency("abi_ecs_variant", .{}).module("abi"));
     abi.addImport("math", b.dependency("abi_math", .{}).module("abi"));
     abi.addImport("render_handles", b.dependency("abi_render_handles", .{}).module("abi"));
+    abi.addImport("render_material", b.dependency("abi_render_material", .{}).module("abi"));
     abi.addImport("result", b.dependency("abi_result", .{}).module("abi"));
     abi.addImport("spatial", b.dependency("abi_spatial", .{}).module("abi"));
 
@@ -20,6 +21,7 @@ pub fn build(b: *std.Build) void {
     translated.addIncludePath(b.path("../../../c/ecs"));
     translated.addIncludePath(b.path("../../../c/math"));
     translated.addIncludePath(b.path("../../../c/render"));
+    translated.addIncludePath(b.path("../../../c/asset"));
     translated.addIncludePath(b.path("../../../c/result"));
     const tests = b.addTest(.{ .root_module = b.createModule(.{
         .root_source_file = b.path("layout_test.zig"),
@@ -35,6 +37,7 @@ pub fn build(b: *std.Build) void {
     tests.root_module.addIncludePath(b.path("../../../c/ecs"));
     tests.root_module.addIncludePath(b.path("../../../c/math"));
     tests.root_module.addIncludePath(b.path("../../../c/render"));
+    tests.root_module.addIncludePath(b.path("../../../c/asset"));
     tests.root_module.addIncludePath(b.path("../../../c/result"));
     b.step("test", "Check the render_components ABI against its headers").dependOn(&b.addRunArtifact(tests).step);
 }

@@ -11,7 +11,7 @@ pub fn build(b: *std.Build) void {
     abi.addImport("physics_components", b.dependency("abi_physics_components", .{}).module("abi"));
     abi.addImport("render_components", b.dependency("abi_render_components", .{}).module("abi"));
     abi.addImport("render_contract", b.dependency("abi_render_contract", .{}).module("abi"));
-    abi.addImport("render_handles", b.dependency("abi_render_handles", .{}).module("abi"));
+    abi.addImport("render_material", b.dependency("abi_render_material", .{}).module("abi"));
     abi.addImport("result", b.dependency("abi_result", .{}).module("abi"));
     abi.addImport("spatial", b.dependency("abi_spatial", .{}).module("abi"));
     abi.addImport("ui_components", b.dependency("abi_ui_components", .{}).module("abi"));
@@ -27,6 +27,7 @@ pub fn build(b: *std.Build) void {
     translated.addIncludePath(b.path("../../../c/math"));
     translated.addIncludePath(b.path("../../../c/physics"));
     translated.addIncludePath(b.path("../../../c/render"));
+    translated.addIncludePath(b.path("../../../c/asset"));
     translated.addIncludePath(b.path("../../../c/result"));
     const tests = b.addTest(.{ .root_module = b.createModule(.{
         .root_source_file = b.path("layout_test.zig"),
@@ -46,6 +47,7 @@ pub fn build(b: *std.Build) void {
     tests.root_module.addIncludePath(b.path("../../../c/math"));
     tests.root_module.addIncludePath(b.path("../../../c/physics"));
     tests.root_module.addIncludePath(b.path("../../../c/render"));
+    tests.root_module.addIncludePath(b.path("../../../c/asset"));
     tests.root_module.addIncludePath(b.path("../../../c/result"));
     b.step("test", "Check the engine_node_types ABI against its headers").dependOn(&b.addRunArtifact(tests).step);
 }

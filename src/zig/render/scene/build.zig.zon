@@ -11,6 +11,7 @@
         .abi_render_contract = .{ .path = "../../abi/render_contract" },
         .abi_ui_components = .{ .path = "../../abi/ui_components" },
         .abi_render_handles = .{ .path = "../../abi/render_handles" },
+        .abi_render_material = .{ .path = "../../abi/render_material" },
         .abi_mesh = .{ .path = "../../abi/mesh" },
         .abi_math = .{ .path = "../../abi/math" },
         .abi_render_components = .{ .path = "../../abi/render_components" },

@@ -1,28 +1,6 @@
 {
   "enums": [
     {
-      "name": "ke_alpha_mode",
-      "doc": null,
-      "values": [
-        {
-          "name": "KE_ALPHA_MODE_OPAQUE",
-          "value": 0,
-          "doc": null
-        },
-        {
-          "name": "KE_ALPHA_MODE_MASK",
-          "value": 1,
-          "doc": null
-        },
-        {
-          "name": "KE_ALPHA_MODE_BLEND",
-          "value": 2,
-          "doc": null
-        }
-      ],
-      "external": true
-    },
-    {
       "name": "ke_variant_type",
       "doc": null,
       "values": [
