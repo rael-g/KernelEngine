@@ -1,5 +1,5 @@
-#ifndef KERNEL_ENGINE_SETTINGS_SETTINGS_H_
-#define KERNEL_ENGINE_SETTINGS_SETTINGS_H_
+#ifndef KERNEL_ENGINE_CONFIGURATION_SETTINGS_H_
+#define KERNEL_ENGINE_CONFIGURATION_SETTINGS_H_
 
 #include <kernel_engine/result/result.h>
 #include <stdbool.h>

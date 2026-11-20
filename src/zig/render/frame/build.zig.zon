@@ -19,7 +19,7 @@
         .abi_render = .{ .path = "../../abi/render" },
         .abi_result = .{ .path = "../../abi/result" },
         .abi_settings = .{ .path = "../../abi/settings" },
-        .ke_settings_schema = .{ .path = "../../settings/schema" },
+        .ke_settings_schema = .{ .path = "../../configuration/settings_schema" },
         .abi_spatial = .{ .path = "../../abi/spatial" },
         .abi_render_frame_factory = .{ .path = "abi" },
         .ke_common = .{ .path = "../../common" },

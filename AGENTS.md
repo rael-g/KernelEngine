@@ -144,7 +144,7 @@ The full rules are in [`docs/conventions/docs.md`](docs/conventions/docs.md).
 - A factory takes its dependencies, then what the host computes, then a `ke_settings *` with what a person
   writes in the project file, read once. A value that changes afterwards is a slot, never a setting. A key
   every implementation reads is a `KE_<DOMAIN>_SETTING_*` macro in the contract; the implementation
-  publishes defaults and ranges through `settings_schema` (`src/zig/settings/schema/`) and refuses an
+  publishes defaults and ranges through `settings_schema` (`src/zig/configuration/settings_schema/`) and refuses an
   unknown key, a wrong type or an out-of-range value. A contract declares no defaults, and zero is a value,
   never "use the default". How a node of a type is born is the type's `initial`, stated by its author.
 - Shape of a plugin: the entry file is named after domain and plugin (a render pass ends in `module`); the

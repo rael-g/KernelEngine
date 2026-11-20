@@ -5,7 +5,7 @@
 #include <kernel_engine/input/input.h>
 #include <kernel_engine/runner/runner.h>
 #include <kernel_engine/scheduler/scheduler.h>
-#include <kernel_engine/settings/settings.h>
+#include <kernel_engine/configuration/settings.h>
 
 #ifdef __cplusplus
 extern "C"

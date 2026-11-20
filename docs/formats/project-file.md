@@ -15,7 +15,7 @@ same way, so `clear_color = [0.04, 0.04, 0.08, 1.0]` is the keys `clear_color.0`
 
 The store accepts whatever the file says. A part checks its own section when it is made: a key it
 does not know, a value of another type or out of range refuses the creation, with a warning naming
-the key (`settings_schema`, `src/zig/settings/schema/settings_schema.zig`).
+the key (`settings_schema`, `src/zig/configuration/settings_schema/settings_schema.zig`).
 
 ## Which part reads a section
 

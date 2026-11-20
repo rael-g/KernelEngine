@@ -30,7 +30,7 @@ pub fn build(b: *std.Build) void {
     translated.addIncludePath(b.path("../../../common/include"));
     translated.addIncludePath(b.path("../../../../c/scheduler"));
     translated.addIncludePath(b.path("../../../scheduler/include"));
-    translated.addIncludePath(b.path("../../../../c/settings"));
+    translated.addIncludePath(b.path("../../../../c/configuration"));
     translated.addIncludePath(b.path("../../../../c/window"));
     const tests = b.addTest(.{ .root_module = b.createModule(.{
         .root_source_file = b.path("layout_test.zig"),
@@ -54,7 +54,7 @@ pub fn build(b: *std.Build) void {
     tests.root_module.addIncludePath(b.path("../../../common/include"));
     tests.root_module.addIncludePath(b.path("../../../../c/scheduler"));
     tests.root_module.addIncludePath(b.path("../../../scheduler/include"));
-    tests.root_module.addIncludePath(b.path("../../../../c/settings"));
+    tests.root_module.addIncludePath(b.path("../../../../c/configuration"));
     tests.root_module.addIncludePath(b.path("../../../../c/window"));
     b.step("test", "Check the runner_window_factory ABI against its headers").dependOn(&b.addRunArtifact(tests).step);
 }

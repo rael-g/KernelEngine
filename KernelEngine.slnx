@@ -33,7 +33,7 @@
     <Project Path="src/csharp/scheduler/KernelEngine.Scheduler/KernelEngine.Scheduler.csproj" />
     <Project Path="src/csharp/schedule/KernelEngine.Schedule/KernelEngine.Schedule.csproj" />
     <Project Path="src/csharp/completion/KernelEngine.Completion/KernelEngine.Completion.csproj" />
-    <Project Path="src/csharp/settings/KernelEngine.Settings/KernelEngine.Settings.csproj" />
+    <Project Path="src/csharp/configuration/KernelEngine.Settings/KernelEngine.Settings.csproj" />
     <Project Path="src/csharp/part/KernelEngine.Part/KernelEngine.Part.csproj" />
     <Project Path="src/csharp/assembly/KernelEngine.Assembly/KernelEngine.Assembly.csproj" />
     <Project Path="src/csharp/assembly/KernelEngine.Assembly.Default/KernelEngine.Assembly.Default.csproj" />

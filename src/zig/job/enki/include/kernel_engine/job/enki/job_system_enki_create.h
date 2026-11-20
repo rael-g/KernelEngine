@@ -1,7 +1,7 @@
 #ifndef KERNEL_ENGINE_JOB_ENKI_JOB_SYSTEM_ENKI_CREATE_H_
 #define KERNEL_ENGINE_JOB_ENKI_JOB_SYSTEM_ENKI_CREATE_H_
 
-#include <kernel_engine/settings/settings.h>
+#include <kernel_engine/configuration/settings.h>
 #include <kernel_engine/common/export.h>
 #include <kernel_engine/job/job_system.h>
 

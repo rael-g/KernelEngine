@@ -11,7 +11,7 @@
         .abi_io_inline_factory = .{ .path = "abi" },
         .abi_result = .{ .path = "../../abi/result" },
         .abi_settings = .{ .path = "../../abi/settings" },
-        .ke_settings_schema = .{ .path = "../../settings/schema" },
+        .ke_settings_schema = .{ .path = "../../configuration/settings_schema" },
         .abi_completion = .{ .path = "../../abi/completion" },
         .ke_common = .{ .path = "../../common" },
         .ke_build = .{ .path = "../../build" },

@@ -28,7 +28,7 @@ pub fn build(b: *std.Build) void {
     translated.addIncludePath(b.path("../../../../c/render"));
     translated.addIncludePath(b.path("../../../../c/part"));
     translated.addIncludePath(b.path("../../../../c/result"));
-    translated.addIncludePath(b.path("../../../../c/settings"));
+    translated.addIncludePath(b.path("../../../../c/configuration"));
     const tests = b.addTest(.{ .root_module = b.createModule(.{
         .root_source_file = b.path("layout_test.zig"),
         .link_libc = true,
@@ -51,6 +51,6 @@ pub fn build(b: *std.Build) void {
     tests.root_module.addIncludePath(b.path("../../../../c/render"));
     tests.root_module.addIncludePath(b.path("../../../../c/part"));
     tests.root_module.addIncludePath(b.path("../../../../c/result"));
-    tests.root_module.addIncludePath(b.path("../../../../c/settings"));
+    tests.root_module.addIncludePath(b.path("../../../../c/configuration"));
     b.step("test", "Check the asset_assimp_factory ABI against its headers").dependOn(&b.addRunArtifact(tests).step);
 }

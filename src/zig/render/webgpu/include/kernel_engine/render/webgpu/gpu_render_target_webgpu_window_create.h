@@ -1,7 +1,7 @@
 #ifndef KERNEL_ENGINE_RENDER_WEBGPU_GPU_RENDER_TARGET_WEBGPU_WINDOW_CREATE_H_
 #define KERNEL_ENGINE_RENDER_WEBGPU_GPU_RENDER_TARGET_WEBGPU_WINDOW_CREATE_H_
 
-#include <kernel_engine/settings/settings.h>
+#include <kernel_engine/configuration/settings.h>
 #include <kernel_engine/result/result.h>
 #include <kernel_engine/render/gpu/gpu_device.h>
 #include <kernel_engine/render/gpu/gpu_render_target.h>

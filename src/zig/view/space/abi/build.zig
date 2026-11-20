@@ -23,7 +23,7 @@ pub fn build(b: *std.Build) void {
     translated.addIncludePath(b.path("../../../../c/part"));
     translated.addIncludePath(b.path("../../../../c/render"));
     translated.addIncludePath(b.path("../../../../c/result"));
-    translated.addIncludePath(b.path("../../../../c/settings"));
+    translated.addIncludePath(b.path("../../../../c/configuration"));
     translated.addIncludePath(b.path("../../../../c/view"));
     translated.addIncludePath(b.path("../include"));
     translated.addIncludePath(b.path("../../../common/include"));
@@ -44,7 +44,7 @@ pub fn build(b: *std.Build) void {
     tests.root_module.addIncludePath(b.path("../../../../c/part"));
     tests.root_module.addIncludePath(b.path("../../../../c/render"));
     tests.root_module.addIncludePath(b.path("../../../../c/result"));
-    tests.root_module.addIncludePath(b.path("../../../../c/settings"));
+    tests.root_module.addIncludePath(b.path("../../../../c/configuration"));
     tests.root_module.addIncludePath(b.path("../../../../c/view"));
     tests.root_module.addIncludePath(b.path("../include"));
     tests.root_module.addIncludePath(b.path("../../../common/include"));

@@ -27,7 +27,7 @@ pub fn build(b: *std.Build) void {
     translated.addIncludePath(b.path("../include"));
     translated.addIncludePath(b.path("../../../common/include"));
     translated.addIncludePath(b.path("../../../../c/result"));
-    translated.addIncludePath(b.path("../../../../c/settings"));
+    translated.addIncludePath(b.path("../../../../c/configuration"));
     translated.addIncludePath(b.path("../../../../c/spatial"));
     translated.addIncludePath(b.path("../../../../c/view"));
     const tests = b.addTest(.{ .root_module = b.createModule(.{
@@ -50,7 +50,7 @@ pub fn build(b: *std.Build) void {
     tests.root_module.addIncludePath(b.path("../include"));
     tests.root_module.addIncludePath(b.path("../../../common/include"));
     tests.root_module.addIncludePath(b.path("../../../../c/result"));
-    tests.root_module.addIncludePath(b.path("../../../../c/settings"));
+    tests.root_module.addIncludePath(b.path("../../../../c/configuration"));
     tests.root_module.addIncludePath(b.path("../../../../c/spatial"));
     tests.root_module.addIncludePath(b.path("../../../../c/view"));
     b.step("test", "Check the render_camera_factory ABI against its headers").dependOn(&b.addRunArtifact(tests).step);

@@ -1,7 +1,7 @@
 #ifndef KERNEL_ENGINE_RENDER_SCENE_LABEL_RESOLVE_CREATE_H_
 #define KERNEL_ENGINE_RENDER_SCENE_LABEL_RESOLVE_CREATE_H_
 
-#include <kernel_engine/settings/settings.h>
+#include <kernel_engine/configuration/settings.h>
 #include <kernel_engine/asset/asset_resolver.h>
 #include <kernel_engine/result/result.h>
 #include <kernel_engine/ecs/ecs.h>

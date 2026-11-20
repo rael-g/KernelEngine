@@ -2,7 +2,7 @@
 #define KERNEL_ENGINE_FRAMEWORK_INPUT_ACTIONS_CREATE_H_
 
 #include <kernel_engine/framework/input_actions.h>
-#include <kernel_engine/settings/settings.h>
+#include <kernel_engine/configuration/settings.h>
 
 #ifdef __cplusplus
 extern "C"

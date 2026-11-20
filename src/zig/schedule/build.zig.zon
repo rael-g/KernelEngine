@@ -8,7 +8,7 @@
         .abi_scheduler = .{ .path = "../abi/scheduler" },
         .ke_part = .{ .path = "../part" },
         .abi_settings = .{ .path = "../abi/settings" },
-        .ke_settings_schema = .{ .path = "../settings/schema" },
+        .ke_settings_schema = .{ .path = "../configuration/settings_schema" },
         .abi_ecs = .{ .path = "../abi/ecs" },
         .abi_result = .{ .path = "../abi/result" },
         .abi_schedule = .{ .path = "../abi/schedule" },

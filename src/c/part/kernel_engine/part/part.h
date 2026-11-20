@@ -4,7 +4,7 @@
 #include <kernel_engine/completion/completion.h>
 #include <kernel_engine/logger/log_callback.h>
 #include <kernel_engine/result/result.h>
-#include <kernel_engine/settings/settings.h>
+#include <kernel_engine/configuration/settings.h>
 
 #include <stddef.h>
 

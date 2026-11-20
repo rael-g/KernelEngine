@@ -4,7 +4,7 @@
 #include <kernel_engine/math/math.h>
 #include <kernel_engine/result/result.h>
 #include <kernel_engine/io/io.h>
-#include <kernel_engine/settings/settings.h>
+#include <kernel_engine/configuration/settings.h>
 #include <kernel_engine/render/gpu/gpu_device.h>
 #include <kernel_engine/render/gpu/gpu_render_target.h>
 #include <kernel_engine/render/service/render_service.h>

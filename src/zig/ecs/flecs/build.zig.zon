@@ -12,7 +12,7 @@
         .abi_part = .{ .path = "../../abi/part" },
         .ke_part = .{ .path = "../../abi/../part" },
         .abi_settings = .{ .path = "../../abi/settings" },
-        .ke_settings_schema = .{ .path = "../../settings/schema" },
+        .ke_settings_schema = .{ .path = "../../configuration/settings_schema" },
         .abi_ecs_flecs_factory = .{ .path = "abi" },
         .ke_common = .{ .path = "../../common" },
         .ke_build = .{ .path = "../../build" },

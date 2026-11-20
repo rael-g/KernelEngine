@@ -16,7 +16,7 @@
     <ProjectReference Include="..\..\part\KernelEngine.Part\KernelEngine.Part.csproj" />
     <ProjectReference Include="..\..\scheduler\KernelEngine.Scheduler\KernelEngine.Scheduler.csproj" />
     <ProjectReference Include="..\..\input\KernelEngine.Input\KernelEngine.Input.csproj" />
-    <ProjectReference Include="..\..\settings\KernelEngine.Settings\KernelEngine.Settings.csproj" />
+    <ProjectReference Include="..\..\configuration\KernelEngine.Settings\KernelEngine.Settings.csproj" />
     <ProjectReference Include="..\..\logger\KernelEngine.Logger\KernelEngine.Logger.csproj" />
     <ProjectReference Include="..\..\logger\KernelEngine.Logger.Interop\KernelEngine.Logger.Interop.csproj" />
   </ItemGroup>

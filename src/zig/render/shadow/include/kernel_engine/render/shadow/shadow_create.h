@@ -1,7 +1,7 @@
 #ifndef KERNEL_ENGINE_RENDER_SHADOW_SHADOW_CREATE_H_
 #define KERNEL_ENGINE_RENDER_SHADOW_SHADOW_CREATE_H_
 
-#include <kernel_engine/settings/settings.h>
+#include <kernel_engine/configuration/settings.h>
 #include <kernel_engine/result/result.h>
 #include <stdbool.h>
 #include <kernel_engine/ecs/ecs.h>
