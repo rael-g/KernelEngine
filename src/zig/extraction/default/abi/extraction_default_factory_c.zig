@@ -4,7 +4,6 @@ const abi_completion = @import("completion");
 const abi_ecs = @import("ecs");
 const abi_extraction = @import("extraction");
 const abi_logger = @import("logger");
-const abi_module = @import("module");
 const abi_part = @import("part");
 const abi_result = @import("result");
 const abi_schedule = @import("schedule");
@@ -59,11 +58,11 @@ pub extern fn ke_extraction_default_set_log_callback(callback: ke_log_callback, 
 /// out_extraction must outlive the extraction.
 pub extern fn ke_extraction_create(main: ?*abi_ecs.c.ke_ecs, render: ?*abi_ecs.c.ke_ecs, scheduler: ?*abi_scheduler.c.ke_scheduler, render_schedule: ?*abi_schedule.c.ke_schedule, out_extraction: ?*abi_extraction.c.ke_extraction_handle) abi_result.c.ke_result;
 
-/// Creates the module that keeps the previous value of every interpolation of extraction:
-/// attaching it registers, in the fixed schedule's fixed_pre_update set, one system per
-/// interpolation registered before or after, which copies each entity's current value into its
-/// previous one before the step.
-pub extern fn ke_extraction_history_create(extraction: ?*abi_extraction.c.ke_extraction, out_module: ?*abi_module.c.ke_module_handle) abi_result.c.ke_result;
+/// Creates the module that keeps the previous value of every interpolation of extraction: it
+/// registers, in fixed_pre_update_set of fixed_pre_update, one system per interpolation
+/// registered before or after, which copies each entity's current value into its previous one
+/// before the step. Destroying the module removes them.
+pub extern fn ke_extraction_history_create(extraction: ?*abi_extraction.c.ke_extraction, fixed_pre_update: ?*abi_schedule.c.ke_schedule, fixed_pre_update_set: ke_schedule_set_id, out_module: ?*abi_part.c.ke_owner) abi_result.c.ke_result;
 
 /// Gives the parts ke_extraction_default contains: `extraction`, providing ke_extraction and
 /// ke_scheduler_executable, with the slots `main`, `render`, `scheduler` and `render_schedule`.

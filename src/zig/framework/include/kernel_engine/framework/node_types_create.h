@@ -29,9 +29,9 @@ extern "C"
 #endif
 
     /// Creates the node types of `ecs`, whose nodes live in `scene_tree` and whose axis and pressed
-    /// read `input_actions`. Their systems run once the node types module is attached; a node's exit
-    /// request goes to `scheduler`, which runs each schedule of the module's targets as an executable
-    /// whose user is the schedule. Every argument but `input_actions` and `out_types` must outlive
+    /// read `input_actions`. Their systems run once the node types systems module is created; a
+    /// node's exit request goes to `scheduler`, which runs each schedule a hook of that module names
+    /// as an executable whose user is the schedule. Every argument but `input_actions` and `out_types` must outlive
     /// the node types.
     /// @param input_actions [borrowed,optional] Without it, axis answers 0 and pressed false.
     /// @param out_types [out] Receives the node types; left zeroed on failure.

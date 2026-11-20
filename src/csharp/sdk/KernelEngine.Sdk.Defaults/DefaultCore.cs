@@ -73,16 +73,16 @@ public static class DefaultCore
         services.TryAddSingleton<Physics.Physics2D>(sp => new Box2DPhysics2D(Get<Job.JobSystem>(sp), Get<Configuration.Configuration>(sp).Section("runtime.physics_2d")));
         services.TryAddSingleton<Audio.Audio>(sp => new MiniaudioAudio(Get<Io.Io>(sp)));
 
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<Module.Module, SceneHierarchyModule>(sp =>
+        services.AddSingleton<Func<EngineSchedules, EngineSets, IDisposable>>(sp => (schedules, sets) =>
         {
             Get<SceneTree>(sp);
-            return new SceneHierarchyModule(Get<Ecs.EcsRegistry>(sp));
-        }));
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<Module.Module, Physics.PhysicsBody2DModule>(sp => new Physics.PhysicsBody2DModule(Get<Ecs.EcsRegistry>(sp), Get<Physics.Physics2D>(sp), Get<SceneTree>(sp))));
+            return new SceneHierarchy(Get<Ecs.EcsRegistry>(sp), schedules.Update, sets.PostUpdate);
+        });
+        services.AddSingleton<Func<EngineSchedules, EngineSets, IDisposable>>(sp => (schedules, sets) => new Physics.PhysicsBody2D(Get<Ecs.EcsRegistry>(sp), Get<Physics.Physics2D>(sp), Get<SceneTree>(sp), schedules.Fixed, sets.FixedPostUpdate));
         services.TryAddEnumerable(ServiceDescriptor.Singleton<Module.Module, Audio.SoundModule>(sp => new Audio.SoundModule(Get<Ecs.EcsRegistry>(sp), Get<Audio.Audio>(sp))));
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<Module.Module, InputActionsEvaluationModule>(sp => new InputActionsEvaluationModule(Get<InputActions>(sp), Get<Input.Input>(sp))));
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<Module.Module, Extraction.ExtractionHistoryModule>(sp => new Extraction.ExtractionHistoryModule(Get<Extraction.Extraction>(sp))));
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<Module.Module, NodeTypesSystemsModule>(sp => new NodeTypesSystemsModule(Get<NodeTypes>(sp))));
+        services.AddSingleton<Func<EngineSchedules, EngineSets, IDisposable>>(sp => (schedules, sets) => new InputActionsEvaluation(Get<InputActions>(sp), Get<Input.Input>(sp), schedules.PreUpdate, sets.PreUpdate));
+        services.AddSingleton<Func<EngineSchedules, EngineSets, IDisposable>>(sp => (schedules, sets) => new Extraction.ExtractionHistory(Get<Extraction.Extraction>(sp), schedules.Fixed, sets.FixedPreUpdate));
+        services.AddSingleton<Func<EngineSchedules, EngineSets, IDisposable>>(sp => (schedules, sets) => new NodeTypesSystems(Get<NodeTypes>(sp), schedules.PreUpdate, sets.PreUpdate, schedules.Fixed, sets.FixedUpdate, schedules.Update, sets.Update, schedules.Update, sets.PostUpdate));
 
         Ecs.EcsRegistry RenderWorld(IServiceProvider sp) => sp.GetRequiredKeyedService<Ecs.EcsRegistry>("render");
         services.TryAddSingleton<Render.Gpu.RenderResourceBinder>(sp => new GroupedRenderResourceBinder(Get<Render.Gpu.GpuDevice>(sp), Get<Io.Io>(sp), Get<Configuration.Configuration>(sp).Section("render.binder")));

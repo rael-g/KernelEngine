@@ -5,7 +5,7 @@ const abi_completion = @import("abi_completion");
 const abi_ecs = @import("abi_ecs");
 const abi_ecs_variant = @import("abi_ecs_variant");
 const abi_extraction = @import("abi_extraction");
-const abi_module = @import("abi_module");
+const abi_part = @import("abi_part");
 const abi_result = @import("abi_result");
 const abi_schedule = @import("abi_schedule");
 const abi_scheduler = @import("abi_scheduler");
@@ -272,7 +272,7 @@ const Fixture = struct {
 };
 
 extern fn ke_extraction_create(?*e.ke_ecs, ?*e.ke_ecs, ?*abi_scheduler.c.ke_scheduler, ?*abi_schedule.c.ke_schedule, ?*x.ke_extraction_handle) Result;
-extern fn ke_extraction_history_create(?*x.ke_extraction, ?*abi_module.c.ke_module_handle) Result;
+extern fn ke_extraction_history_create(?*x.ke_extraction, ?*abi_schedule.c.ke_schedule, abi_schedule.c.ke_schedule_set_id, ?*abi_part.c.ke_owner) Result;
 
 test "a synced entity gets a pair, the pair carries a copy, and the pair goes when the tag does" {
     var f: Fixture = .{};
@@ -434,7 +434,7 @@ fn keepHistory(args: zsub.For(abi_schedule.c.ke_schedule).Args(.register_system)
     return R.ok;
 }
 
-test "the history module registers one system per interpolation in fixed_pre_update, and detaching removes them" {
+test "the history module registers one system per interpolation in the hook's set, and destroying it removes them" {
     var f: Fixture = .{};
     try f.init();
     defer f.deinit();
@@ -444,18 +444,14 @@ test "the history module registers one system per interpolation in fixed_pre_upd
     try fixed.init();
     defer fixed.deinit();
     _ = fixed.when(.register_system).does(keepHistory);
-    var module: abi_module.c.ke_module_handle = undefined;
-    try R.check(ke_extraction_history_create(f.ref(), &module));
-    var targets = std.mem.zeroes(abi_module.c.ke_module_targets);
-    targets.fixed = @ptrCast(fixed.api());
-    targets.fixed_pre_update_set = 4;
-    try R.check(module.ref.?.attach.?(module.ref, &targets));
+    var module: abi_part.c.ke_owner = undefined;
+    try R.check(ke_extraction_history_create(f.ref(), fixed.api(), 4, &module));
     try testing.expectEqual(@as(abi_schedule.c.ke_schedule_set_id, 4), history_desc.sets.?[0]);
     module.destroy.?(module.ref);
     try fixed.received(.unregister_system).where(zsub.argIs(1, @as(abi_schedule.c.ke_schedule_system_id, 9))).times(1);
 
     var foreign = std.mem.zeroes(x.ke_extraction);
-    try testing.expectEqual(R.code(error.InvalidArgument), ke_extraction_history_create(&foreign, &module));
+    try testing.expectEqual(R.code(error.InvalidArgument), ke_extraction_history_create(&foreign, fixed.api(), 4, &module));
 }
 
 test "the extraction's part provides the extraction and, after it, the executable a scheduler runs, named by the extraction" {

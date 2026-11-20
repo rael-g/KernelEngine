@@ -12,11 +12,11 @@ only through its vtable.
 | piece | contract | factory | receives | hands on |
 |---|---|---|---|---|
 | input actions | `ke_input_actions` | `ke_input_actions_create` | a configuration and the section it reads | named actions |
-| action evaluation | `ke_module` | `ke_input_actions_evaluation_create` | `ke_input_actions`, `ke_input`, then the standard schedules at attach | the "input.actions" system, evaluating the actions once per tick |
-| scene hierarchy | `ke_module` | `ke_scene_hierarchy_create` | `ke_ecs` holding a scene tree's components, then the standard schedules at attach | world matrices, through one system |
+| action evaluation | `ke_owner` | `ke_input_actions_evaluation_create` | `ke_input_actions`, `ke_input`, then the schedule and set its system joins | the "input.actions" system, evaluating the actions once per tick |
+| scene hierarchy | `ke_owner` | `ke_scene_hierarchy_create` | `ke_ecs` holding a scene tree's components, then the schedule and set its system joins | world matrices, through one system |
 | scene tree | `ke_scene_tree` | `ke_scene_tree_create` | `ke_ecs` | nodes as entities |
 | node types | `ke_node_types` | `ke_node_types_create` | `ke_scheduler`, `ke_ecs`, `ke_scene_tree`, an optional `ke_input_actions` | node types and event types |
-| node systems | `ke_module` | `ke_node_types_systems_create` | `ke_node_types`, then the standard schedules at attach | each behaviour a system of its schedule, for every type registered before or after |
+| node systems | `ke_owner` | `ke_node_types_systems_create` | `ke_node_types`, then a schedule and set for each of its four groups of systems | each behaviour a system of its schedule, for every type registered before or after |
 | scene files | `ke_scene_files` | `ke_scene_files_create` | `ke_ecs`, `ke_node_types`, `ke_asset_resolver`, `ke_io` | the nodes a scene file describes, the `scene_slot` node type, and `open` for the first slot |
 | asset resolver | `ke_asset_resolver` | `ke_asset_resolver_create` | `ke_image_loader`, `ke_font_loader`, a project root, a `ke_io` | textures, meshes, materials, fonts; render service handles |
 
@@ -28,7 +28,7 @@ SDK over `ke_node_types` is mapped in `node-types.md`.
 
 **The tree is a view over the ecs.** A node is an entity carrying the hierarchy, name and world
 transform components. The hierarchy piece is a separate module the host makes over the same ecs and
-attaches to the standard schedules; its system computes the world transforms the tree's nodes carry.
+one of its schedules; its system computes the world transforms the tree's nodes carry.
 
 **The tree is made of nodes.** A node is an entity of one node type, and the type says which
 components it carries: its own fields and the components it names in `with`. A node's children

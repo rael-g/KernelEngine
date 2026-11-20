@@ -5,8 +5,8 @@
 
 namespace KernelEngine.Framework;
 
-/// <summary>Creates the module that keeps every world transform equal to its local transform composed with its parent's world transform; attaching it registers one system in the update schedule's post_update set, which orders the entities parents-before-children each tick and walks them once. The transform and hierarchy components are resolved by the names a scene_tree registers them under, so a scene_tree must exist on ecs first.</summary>
-public sealed unsafe partial class SceneHierarchyModule : KernelEngine.Module.Module
+/// <summary>Creates the module that keeps every world transform equal to its local transform composed with its parent's world transform: it registers one system in post_update_set of post_update, which orders the entities parents-before-children each run and walks them once. The transform and hierarchy components are resolved by the names a scene_tree registers them under, so a scene_tree must exist on ecs first. Destroying the module unregisters the system; components and entities stay.</summary>
+public sealed unsafe partial class SceneHierarchy : IDisposable
 {
 
     /// <summary>Turns a result code into the exception that carries it, and back.</summary>
@@ -50,18 +50,46 @@ public sealed unsafe partial class SceneHierarchyModule : KernelEngine.Module.Mo
         }
     }
 
-    /// <summary>Creates the module that keeps every world transform equal to its local transform composed with its parent's world transform; attaching it registers one system in the update schedule's post_update set, which orders the entities parents-before-children each tick and walks them once. The transform and hierarchy components are resolved by the names a scene_tree registers them under, so a scene_tree must exist on ecs first.</summary>
+    /// <summary>Creates the module that keeps every world transform equal to its local transform composed with its parent's world transform: it registers one system in post_update_set of post_update, which orders the entities parents-before-children each run and walks them once. The transform and hierarchy components are resolved by the names a scene_tree registers them under, so a scene_tree must exist on ecs first. Destroying the module unregisters the system; components and entities stay.</summary>
     /// <param name="ecs">Must outlive the module.</param>
-    public SceneHierarchyModule(KernelEngine.Ecs.INativeEcs ecs) : base(Create(ecs))
+    /// <param name="postUpdate">Must outlive the module.</param>
+    /// <param name="postUpdateSet">The set of post_update the system joins.</param>
+    public SceneHierarchy(KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Schedule.INativeSchedule postUpdate, uint postUpdateSet) : this(Create(ecs, postUpdate, postUpdateSet))
     {
         Hold(ecs.Owner);
+        Hold(postUpdate.Owner);
     }
 
-    private static KernelEngine.Module.Native.ke_module_handle Create(KernelEngine.Ecs.INativeEcs ecs)
+    private KernelEngine.Part.Native.ke_owner _handle;
+
+    private readonly List<global::System.Runtime.InteropServices.SafeHandle> _held = new();
+
+    private SceneHierarchy(KernelEngine.Part.Native.ke_owner handle) => _handle = handle;
+
+    private void Hold(global::System.Runtime.InteropServices.SafeHandle? owner)
+    {
+        if (owner is null) return;
+        var added = false;
+        owner.DangerousAddRef(ref added);
+        _held.Add(owner);
+    }
+
+    /// <summary>Releases the native object, then what it held.</summary>
+    public void Dispose()
+    {
+        if (_handle.@ref == null) return;
+        _handle.destroy(_handle.@ref);
+        _handle = default;
+        foreach (var held in _held) held.DangerousRelease();
+        _held.Clear();
+    }
+
+    private static KernelEngine.Part.Native.ke_owner Create(KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Schedule.INativeSchedule postUpdate, uint postUpdateSet)
     {
         ArgumentNullException.ThrowIfNull(ecs);
-        KernelEngine.Module.Native.ke_module_handle handle;
-        NativeResult.ThrowIfFailed(KernelEngine.Framework.Native.NativeMethods.scene_hierarchy_create(ecs.Native, &handle), "ke_scene_hierarchy_create");
+        ArgumentNullException.ThrowIfNull(postUpdate);
+        KernelEngine.Part.Native.ke_owner handle;
+        NativeResult.ThrowIfFailed(KernelEngine.Framework.Native.NativeMethods.scene_hierarchy_create(ecs.Native, postUpdate.Native, postUpdateSet, &handle), "ke_scene_hierarchy_create");
         return handle;
     }
 }

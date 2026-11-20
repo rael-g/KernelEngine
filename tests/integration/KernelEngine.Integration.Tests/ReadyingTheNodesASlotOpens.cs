@@ -42,8 +42,6 @@ public class ReadyingTheNodesASlotOpens
             Schedules.AddTo(Scheduler);
         }
 
-        public void Attach(Module.Module module) => Schedules.Attach(module, Sets);
-
         public void Dispose()
         {
             Scheduler.Dispose();
@@ -71,8 +69,8 @@ public class ReadyingTheNodesASlotOpens
         using var tree = new DefaultSceneTree(ecs);
         using var actions = new DefaultInputActions(config.Section("input"));
         using var types = new DefaultNodeTypes(scheduler, ecs, tree, actions);
-        using var nodeSystems = new NodeTypesSystemsModule(types);
-        loop.Attach(nodeSystems);
+        using var nodeSystems = new NodeTypesSystems(types, loop.Schedules.PreUpdate, loop.Sets.PreUpdate, loop.Schedules.Fixed, loop.Sets.FixedUpdate,
+            loop.Schedules.Update, loop.Sets.Update, loop.Schedules.Update, loop.Sets.PostUpdate);
         using var scenes = new DefaultSceneFiles(ecs, types, assets, io);
         var nodes = new NodeWorld(types);
         nodes.Register(new Probe());
@@ -103,8 +101,8 @@ public class ReadyingTheNodesASlotOpens
         using var tree = new DefaultSceneTree(ecs);
         using var actions = new DefaultInputActions(config.Section("input"));
         using var types = new DefaultNodeTypes(scheduler, ecs, tree, actions);
-        using var nodeSystems = new NodeTypesSystemsModule(types);
-        loop.Attach(nodeSystems);
+        using var nodeSystems = new NodeTypesSystems(types, loop.Schedules.PreUpdate, loop.Sets.PreUpdate, loop.Schedules.Fixed, loop.Sets.FixedUpdate,
+            loop.Schedules.Update, loop.Sets.Update, loop.Schedules.Update, loop.Sets.PostUpdate);
         using var scenes = new DefaultSceneFiles(ecs, types, assets, io);
         types.RegisterType(name: "node");
         var nodes = new NodeWorld(types);

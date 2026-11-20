@@ -2,7 +2,7 @@
 
 const abi_ecs = @import("ecs");
 const abi_logger = @import("logger");
-const abi_module = @import("module");
+const abi_part = @import("part");
 const abi_physics = @import("physics");
 const abi_result = @import("result");
 const abi_scene_tree = @import("scene_tree");
@@ -20,6 +20,13 @@ pub const ke_schedule_system_id = u64;
 /// queue stops there: the operations recorded after it are dropped.
 pub const ke_defer_fn = ?*const fn (?*abi_ecs.c.ke_ecs, ?*anyopaque) callconv(.c) abi_result.c.ke_result;
 
+/// Receives one line a plugin library logged. Each plugin library exports ` <library
+/// >_set_log_callback(ke_log_callback callback, void *ctx)`, declared in its ` <library
+/// >_log.h`; the host sets it once, before the library logs, and a NULL callback sends the
+/// library's lines to stderr, which is also where they go until it is set. Called on whichever
+/// thread logged.
+pub const ke_log_callback = ?*const fn (?*anyopaque, abi_logger.c.ke_log_level, ?[*:0]const u8, ?[*:0]const u8) callconv(.c) void;
+
 /// One call of a system body, once per run of the schedule, or once per slice when the system is
 /// per_entity. A failure is carried to the caller of run, which fails with it; the rest of the
 /// wave still runs, and no later wave starts.
@@ -29,16 +36,13 @@ pub const ke_schedule_execute_fn = ?*const fn (?*abi_schedule.c.ke_schedule_ctx,
 /// on the thread that called run. A failure fails the run before any wave starts.
 pub const ke_schedule_condition_fn = ?*const fn (?*anyopaque, ?*bool) callconv(.c) abi_result.c.ke_result;
 
-/// Receives one line a plugin library logged. Each plugin library exports ` <library
-/// >_set_log_callback(ke_log_callback callback, void *ctx)`, declared in its ` <library
-/// >_log.h`; the host sets it once, before the library logs, and a NULL callback sends the
-/// library's lines to stderr, which is also where they go until it is set. Called on whichever
-/// thread logged.
-pub const ke_log_callback = ?*const fn (?*anyopaque, abi_logger.c.ke_log_level, ?[*:0]const u8, ?[*:0]const u8) callconv(.c) void;
+/// Receives one key the settings hold.
+pub const ke_settings_key_func = ?*const fn (?[*:0]const u8, ?*anyopaque) callconv(.c) void;
 
-/// Creates the module that creates, steps and syncs 2D bodies; attaching it registers its two
-/// systems in the fixed schedule's fixed_post_update set.
-pub extern fn ke_physics_body2d_create(ecs: ?*abi_ecs.c.ke_ecs, physics: ?*abi_physics.c.ke_physics_2d, scene_tree: ?*abi_scene_tree.c.ke_scene_tree, out_module: ?*abi_module.c.ke_module_handle) abi_result.c.ke_result;
+/// Creates the module that creates, steps and syncs 2D bodies: it registers its two systems in
+/// fixed_post_update_set of fixed_post_update. Destroying the module unregisters them and
+/// destroys the bodies it created.
+pub extern fn ke_physics_body2d_create(ecs: ?*abi_ecs.c.ke_ecs, physics: ?*abi_physics.c.ke_physics_2d, scene_tree: ?*abi_scene_tree.c.ke_scene_tree, fixed_post_update: ?*abi_schedule.c.ke_schedule, fixed_post_update_set: ke_schedule_set_id, out_module: ?*abi_part.c.ke_owner) abi_result.c.ke_result;
 
 /// Sends every line ke_physics_body2d logs to callback, with ctx; a NULL callback sends them
 /// back to stderr, where they go until this is called. Called once, before the library logs.

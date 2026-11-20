@@ -7,7 +7,7 @@ pub fn build(b: *std.Build) void {
     const abi = b.addModule("abi", .{ .root_source_file = b.path("physics_body2d_factory.zig") });
     abi.addImport("ecs", b.dependency("abi_ecs", .{}).module("abi"));
     abi.addImport("logger", b.dependency("abi_logger", .{}).module("abi"));
-    abi.addImport("module", b.dependency("abi_module", .{}).module("abi"));
+    abi.addImport("part", b.dependency("abi_part", .{}).module("abi"));
     abi.addImport("physics", b.dependency("abi_physics", .{}).module("abi"));
     abi.addImport("result", b.dependency("abi_result", .{}).module("abi"));
     abi.addImport("scene_tree", b.dependency("abi_scene_tree", .{}).module("abi"));
@@ -24,7 +24,7 @@ pub fn build(b: *std.Build) void {
     translated.addIncludePath(b.path("../../../../c/job"));
     translated.addIncludePath(b.path("../../../../c/logger"));
     translated.addIncludePath(b.path("../../../../c/math"));
-    translated.addIncludePath(b.path("../../../../c/module"));
+    translated.addIncludePath(b.path("../../../../c/part"));
     translated.addIncludePath(b.path("../../../../c/physics"));
     translated.addIncludePath(b.path("../../../common/include"));
     translated.addIncludePath(b.path("../include"));
@@ -49,7 +49,7 @@ pub fn build(b: *std.Build) void {
     tests.root_module.addIncludePath(b.path("../../../../c/job"));
     tests.root_module.addIncludePath(b.path("../../../../c/logger"));
     tests.root_module.addIncludePath(b.path("../../../../c/math"));
-    tests.root_module.addIncludePath(b.path("../../../../c/module"));
+    tests.root_module.addIncludePath(b.path("../../../../c/part"));
     tests.root_module.addIncludePath(b.path("../../../../c/physics"));
     tests.root_module.addIncludePath(b.path("../../../common/include"));
     tests.root_module.addIncludePath(b.path("../include"));

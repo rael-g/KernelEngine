@@ -41,7 +41,7 @@
         .abi_result = .{ .path = "../abi/result" },
         .abi_scheduler = .{ .path = "../abi/scheduler" },
         .abi_schedule = .{ .path = "../abi/schedule" },
-        .abi_module = .{ .path = "../abi/module" },
+        .abi_part = .{ .path = "../abi/part" },
         .abi_spatial = .{ .path = "../abi/spatial" },
         .abi_text = .{ .path = "../abi/text" },
         .abi_framework_factory = .{ .path = "abi" },

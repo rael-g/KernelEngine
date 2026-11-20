@@ -3,10 +3,10 @@
 
 #nullable enable
 
-namespace KernelEngine.Framework.Nodes;
+namespace KernelEngine.Framework;
 
-/// <summary>Creates the module of types: attaching it registers the ready and exit behaviours and the systems that clear the last tick's events in the pre_update schedule's pre_update set, fixed update behaviours in the fixed schedule's fixed_update set, update behaviours in the update schedule's update set, and event behaviours and the system that frees the nodes that left the tree in its post_update set, for every type and event registered before or after. Detaching removes them all; the types and events stay.</summary>
-public sealed unsafe partial class NodeTypesSystemsModule : KernelEngine.Module.Module
+/// <summary>Creates the module that evaluates actions: it registers the exclusive system "input.actions" in pre_update_set of pre_update, which each run advances input's frame and evaluates the maps against its snapshot. Destroying the module unregisters it.</summary>
+public sealed unsafe partial class InputActionsEvaluation : IDisposable
 {
 
     /// <summary>Turns a result code into the exception that carries it, and back.</summary>
@@ -50,18 +50,49 @@ public sealed unsafe partial class NodeTypesSystemsModule : KernelEngine.Module.
         }
     }
 
-    /// <summary>Creates the module of types: attaching it registers the ready and exit behaviours and the systems that clear the last tick's events in the pre_update schedule's pre_update set, fixed update behaviours in the fixed schedule's fixed_update set, update behaviours in the update schedule's update set, and event behaviours and the system that frees the nodes that left the tree in its post_update set, for every type and event registered before or after. Detaching removes them all; the types and events stay.</summary>
-    /// <param name="types">Created by ke_node_types_create; must outlive the module.</param>
-    public NodeTypesSystemsModule(KernelEngine.Framework.Nodes.INativeNodeTypes types) : base(Create(types))
+    /// <summary>Creates the module that evaluates actions: it registers the exclusive system "input.actions" in pre_update_set of pre_update, which each run advances input's frame and evaluates the maps against its snapshot. Destroying the module unregisters it.</summary>
+    /// <param name="actions">Created by ke_input_actions_create; must outlive the module.</param>
+    /// <param name="input">Must outlive the module.</param>
+    /// <param name="preUpdate">Must outlive the module.</param>
+    /// <param name="preUpdateSet">The set of pre_update the system joins.</param>
+    public InputActionsEvaluation(KernelEngine.Framework.INativeInputActions actions, KernelEngine.Input.INativeInput input, KernelEngine.Schedule.INativeSchedule preUpdate, uint preUpdateSet) : this(Create(actions, input, preUpdate, preUpdateSet))
     {
-        Hold(types.Owner);
+        Hold(actions.Owner);
+        Hold(input.Owner);
+        Hold(preUpdate.Owner);
     }
 
-    private static KernelEngine.Module.Native.ke_module_handle Create(KernelEngine.Framework.Nodes.INativeNodeTypes types)
+    private KernelEngine.Part.Native.ke_owner _handle;
+
+    private readonly List<global::System.Runtime.InteropServices.SafeHandle> _held = new();
+
+    private InputActionsEvaluation(KernelEngine.Part.Native.ke_owner handle) => _handle = handle;
+
+    private void Hold(global::System.Runtime.InteropServices.SafeHandle? owner)
     {
-        ArgumentNullException.ThrowIfNull(types);
-        KernelEngine.Module.Native.ke_module_handle handle;
-        NativeResult.ThrowIfFailed(KernelEngine.Framework.Nodes.Native.NativeMethods.node_types_systems_create(types.Native, &handle), "ke_node_types_systems_create");
+        if (owner is null) return;
+        var added = false;
+        owner.DangerousAddRef(ref added);
+        _held.Add(owner);
+    }
+
+    /// <summary>Releases the native object, then what it held.</summary>
+    public void Dispose()
+    {
+        if (_handle.@ref == null) return;
+        _handle.destroy(_handle.@ref);
+        _handle = default;
+        foreach (var held in _held) held.DangerousRelease();
+        _held.Clear();
+    }
+
+    private static KernelEngine.Part.Native.ke_owner Create(KernelEngine.Framework.INativeInputActions actions, KernelEngine.Input.INativeInput input, KernelEngine.Schedule.INativeSchedule preUpdate, uint preUpdateSet)
+    {
+        ArgumentNullException.ThrowIfNull(actions);
+        ArgumentNullException.ThrowIfNull(input);
+        ArgumentNullException.ThrowIfNull(preUpdate);
+        KernelEngine.Part.Native.ke_owner handle;
+        NativeResult.ThrowIfFailed(KernelEngine.Framework.Native.NativeMethods.input_actions_evaluation_create(actions.Native, input.Native, preUpdate.Native, preUpdateSet, &handle), "ke_input_actions_evaluation_create");
         return handle;
     }
 }

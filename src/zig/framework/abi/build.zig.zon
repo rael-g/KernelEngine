@@ -13,7 +13,7 @@
         .abi_input_actions = .{ .path = "../../abi/input_actions" },
         .abi_io = .{ .path = "../../abi/io" },
         .abi_logger = .{ .path = "../../abi/logger" },
-        .abi_module = .{ .path = "../../abi/module" },
+        .abi_part = .{ .path = "../../abi/part" },
         .abi_result = .{ .path = "../../abi/result" },
         .abi_scene_tree = .{ .path = "../../abi/scene_tree" },
         .abi_schedule = .{ .path = "../../abi/schedule" },

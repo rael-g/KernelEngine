@@ -10,7 +10,6 @@ const abi_completion = @import("abi_completion");
 const abi_ecs = @import("abi_ecs");
 const abi_ecs_variant = @import("abi_ecs_variant");
 const abi_extraction = @import("abi_extraction");
-const abi_module = @import("abi_module");
 const abi_result = @import("abi_result");
 const abi_schedule = @import("abi_schedule");
 const abi_scheduler = @import("abi_scheduler");
@@ -54,12 +53,11 @@ const Custom = struct { extract: x.ke_extraction_custom_fn, user: ?*anyopaque };
 
 /// The state behind the handle, whose `api.handle` points back at it. `to_render` and `to_main` are the pairs
 /// both ways; `synced`, `interpolated` and `teleported` are the tags of the main world and `frame_local` that of
-/// the render world, each read through a query of its one tag. `history` is the schedule the history module
-/// attached to, null while it is detached.
+/// the render world, each read through a query of its one tag. `history` is the schedule of the history
+/// module's hook while the module lives, null otherwise.
 const State = struct {
     api: x.ke_extraction,
     executable: abi_scheduler.c.ke_scheduler_executable = .{ .run = &runAsExecutable },
-    module: abi_module.c.ke_module = undefined,
     main: *Ecs,
     render: *Ecs,
     scheduler: *abi_scheduler.c.ke_scheduler,
@@ -400,42 +398,38 @@ fn detachHistory(s: *State) void {
     s.history = null;
 }
 
-/// Slot `attach` of the history module: one system per interpolation in the fixed schedule's
-/// fixed_pre_update set; a failure leaves none registered.
-fn historyAttach(self: ?*abi_module.c.ke_module, targets_in: ?*const abi_module.c.ke_module_targets) callconv(.c) Result {
-    const s: *State = @ptrCast(@alignCast((self orelse return R.code(error.InvalidArgument)).handle));
-    const targets = targets_in orelse return R.code(error.InvalidArgument);
-    if (s.history != null) return R.code(error.NotSupported);
-    s.history = @ptrCast(targets.fixed orelse return R.code(error.InvalidArgument));
-    s.history_set = .{targets.fixed_pre_update_set};
-    for (s.interps.items) |i| registerHistory(s, i) catch |err| {
-        detachHistory(s);
-        log.warn("attaching the extraction history failed: {t}", .{err});
-        return R.code(err);
-    };
-    return R.ok;
+/// The history module owner's `destroy`: unregisters its systems; the state stays with the extraction.
+fn historyDestroy(ref: ?*anyopaque) callconv(.c) void {
+    detachHistory(@ptrCast(@alignCast(ref orelse return)));
 }
 
-/// Slot `detach` of the history module.
-fn historyDetach(self: ?*abi_module.c.ke_module) callconv(.c) void {
-    detachHistory(@ptrCast(@alignCast((self orelse return).handle)));
-}
-
-/// The history module handle's `destroy`: detaches; the state stays with the extraction.
-fn historyDestroy(self: ?*abi_module.c.ke_module) callconv(.c) void {
-    historyDetach(self);
-}
-
-export fn ke_extraction_history_create(extraction: ?*x.ke_extraction, out_module: ?*abi_module.c.ke_module_handle) callconv(.c) Result {
+/// Factory of the history module: one system per interpolation, registered before or after, in
+/// `fixed_pre_update_set` of `fixed_pre_update`; a failure leaves none registered. A second module over
+/// the same extraction while the first lives is not supported.
+export fn ke_extraction_history_create(
+    extraction: ?*x.ke_extraction,
+    fixed_pre_update: ?*abi_schedule.c.ke_schedule,
+    fixed_pre_update_set: abi_schedule.c.ke_schedule_set_id,
+    out_module: ?*abi_part.c.ke_owner,
+) callconv(.c) Result {
     const out = out_module orelse return R.code(error.InvalidArgument);
-    out.* = std.mem.zeroes(abi_module.c.ke_module_handle);
+    out.* = std.mem.zeroes(abi_part.c.ke_owner);
     const given = extraction orelse return R.code(error.InvalidArgument);
+    const schedule = fixed_pre_update orelse return R.code(error.InvalidArgument);
     if (given.extract != &extract) {
         log.warn("extraction history: the extraction was not created by this library", .{});
         return R.code(error.InvalidArgument);
     }
     const s = stateOf(given) orelse return R.code(error.InvalidArgument);
-    out.* = .{ .ref = &s.module, .destroy = historyDestroy };
+    if (s.history != null) return R.code(error.NotSupported);
+    s.history = schedule;
+    s.history_set = .{fixed_pre_update_set};
+    for (s.interps.items) |i| registerHistory(s, i) catch |err| {
+        detachHistory(s);
+        log.warn("creating the extraction history failed: {t}", .{err});
+        return R.code(err);
+    };
+    out.* = .{ .ref = s, .destroy = historyDestroy };
     return R.ok;
 }
 
@@ -504,7 +498,6 @@ fn create(main: *Ecs, render: *Ecs, scheduler: *abi_scheduler.c.ke_scheduler, re
     };
     s.api.handle = s;
     s.executable.user = &s.api;
-    s.module = .{ .handle = s, .attach = historyAttach, .detach = historyDetach };
     s.synced = try tag(main, x.KE_COMPONENT_NAME_RENDER_SYNCED);
     s.interpolated = try tag(main, x.KE_COMPONENT_NAME_INTERPOLATED);
     s.teleported = try tag(main, x.KE_COMPONENT_NAME_TELEPORTED);

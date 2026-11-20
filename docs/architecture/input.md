@@ -13,7 +13,7 @@ part works inside is on the generated page of its file. Contracts are under `src
 | managed input | `IInput` | `Input` in `KernelEngine.Input` | the native `ke_input` | live queries, and one `InputSnapshot` through `GetSnapshot` |
 | action maps | `ke_input_actions`, `InputActions` | framework | maps and actions added through its slots, from code or from the `input` section of a configuration; one snapshot per frame | polled action values |
 | node field | `ke_action_ref` | framework | an action name, written by a scene or by code | the action's value through `axis` and `pressed` of `ke_node_ctx` |
-| system | the "input.actions" system of the module `ke_input_actions_evaluation_create` returns | framework | the `ke_input_actions` and the `ke_input` it was given, then the standard schedules at attach | the actions evaluated for the tick |
+| system | the "input.actions" system of the module `ke_input_actions_evaluation_create` returns | framework | the `ke_input_actions` and the `ke_input` it was given, then the schedule and set the system joins | the actions evaluated for the tick |
 
 **The window feeds the sinks.** `ke_window_glfw_create` takes a borrowed, nullable `ke_input`.
 While the window polls, each key, button, cursor and scroll event becomes a call to `on_key`,

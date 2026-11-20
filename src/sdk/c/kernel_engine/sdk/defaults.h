@@ -229,8 +229,7 @@ static inline ke_result ke_sdk_assets(ke_sdk_engine *e)
 static inline ke_result ke_sdk_scene_tree(ke_sdk_engine *e)
 {
     ke_result made = ke_scene_tree_create(e->ecs.ref, &e->scene_tree);
-    if (made == KE_OK) made = ke_scene_hierarchy_create(e->ecs.ref, &e->hierarchy);
-    if (made == KE_OK) made = ke_sdk_add_module(e, e->hierarchy.ref);
+    if (made == KE_OK) made = ke_scene_hierarchy_create(e->ecs.ref, e->schedules.update.ref, e->sets.post_update, &e->hierarchy);
     return made;
 }
 
@@ -334,8 +333,7 @@ static inline ke_result ke_sdk_labels(ke_sdk_engine *e)
 static inline ke_result ke_sdk_physics_box2d(ke_sdk_engine *e)
 {
     ke_result made = ke_physics_2d_box2d_create(e->job_system.ref, ke_sdk_settings(e, "runtime.physics_2d"), &e->physics);
-    if (made == KE_OK) made = ke_physics_body2d_create(e->ecs.ref, e->physics.ref, e->scene_tree.ref, &e->bodies);
-    if (made == KE_OK) made = ke_sdk_add_module(e, e->bodies.ref);
+    if (made == KE_OK) made = ke_physics_body2d_create(e->ecs.ref, e->physics.ref, e->scene_tree.ref, e->schedules.fixed.ref, e->sets.fixed_post_update, &e->bodies);
     return made;
 }
 
@@ -352,8 +350,7 @@ static inline ke_result ke_sdk_audio_miniaudio(ke_sdk_engine *e)
 static inline ke_result ke_sdk_actions(ke_sdk_engine *e)
 {
     ke_result made = ke_input_actions_create(ke_sdk_settings(e, "input"), &e->actions);
-    if (made == KE_OK) made = ke_input_actions_evaluation_create(e->actions.ref, e->input.ref, &e->action_evaluation);
-    if (made == KE_OK) made = ke_sdk_add_module(e, e->action_evaluation.ref);
+    if (made == KE_OK) made = ke_input_actions_evaluation_create(e->actions.ref, e->input.ref, e->schedules.pre_update.ref, e->sets.pre_update, &e->action_evaluation);
     return made;
 }
 
@@ -361,8 +358,9 @@ static inline ke_result ke_sdk_actions(ke_sdk_engine *e)
 static inline ke_result ke_sdk_node_types(ke_sdk_engine *e)
 {
     ke_result made = ke_node_types_create(e->scheduler.ref, e->ecs.ref, e->scene_tree.ref, e->actions.ref, &e->node_types);
-    if (made == KE_OK) made = ke_node_types_systems_create(e->node_types.ref, &e->node_systems);
-    if (made == KE_OK) made = ke_sdk_add_module(e, e->node_systems.ref);
+    if (made == KE_OK) made = ke_node_types_systems_create(e->node_types.ref, e->schedules.pre_update.ref, e->sets.pre_update,
+        e->schedules.fixed.ref, e->sets.fixed_update, e->schedules.update.ref, e->sets.update, e->schedules.update.ref, e->sets.post_update,
+        &e->node_systems);
     return made;
 }
 
@@ -388,8 +386,7 @@ static inline ke_result ke_sdk_extraction(ke_sdk_engine *e)
     if (made == KE_OK) made = ke_sdk_set(e->render_schedule.ref, "render_submit", &sets->render_queue, &sets->render_submit);
     if (made == KE_OK) made = ke_extraction_create(e->ecs.ref, e->render_world.ref, e->scheduler.ref, e->render_schedule.ref, &e->extraction);
     if (made == KE_OK) made = e->scheduler.ref->add(e->scheduler.ref, (ke_scheduler_run_fn)e->extraction.ref->run, e->extraction.ref, KE_SCHEDULER_CADENCE_EVERY_TICK);
-    if (made == KE_OK) made = ke_extraction_history_create(e->extraction.ref, &e->extraction_history);
-    if (made == KE_OK) made = ke_sdk_add_module(e, e->extraction_history.ref);
+    if (made == KE_OK) made = ke_extraction_history_create(e->extraction.ref, e->schedules.fixed.ref, e->sets.fixed_pre_update, &e->extraction_history);
     return made;
 }
 

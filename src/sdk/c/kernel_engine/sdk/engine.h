@@ -18,6 +18,7 @@
 #include <kernel_engine/io/io.h>
 #include <kernel_engine/job/job_system.h>
 #include <kernel_engine/module/module.h>
+#include <kernel_engine/part/part.h>
 #include <kernel_engine/physics/physics_2d.h>
 #include <kernel_engine/render/gpu/gpu_device.h>
 #include <kernel_engine/render/gpu/gpu_render_target.h>
@@ -100,20 +101,20 @@ typedef struct ke_sdk_engine
     ke_font_loader_handle          fonts;
     ke_asset_resolver_handle       assets;
     ke_scene_tree_handle           scene_tree;
-    ke_module_handle               hierarchy;
+    ke_owner                       hierarchy;
     ke_physics_2d_handle           physics;
-    ke_module_handle               bodies;
+    ke_owner                       bodies;
     ke_audio_handle                audio;
     ke_module_handle               sounds;
     ke_input_actions_handle        actions;
-    ke_module_handle               action_evaluation;
+    ke_owner                       action_evaluation;
     ke_node_types_handle           node_types;
-    ke_module_handle               node_systems;
+    ke_owner                       node_systems;
     ke_scene_files_handle          scene_files;
     ke_ecs_handle                  render_world;
     ke_schedule_handle             render_schedule;
     ke_extraction_handle           extraction;
-    ke_module_handle               extraction_history;
+    ke_owner                       extraction_history;
 
     /** The modules ke_sdk_engine_run attaches once every completion in pending finished; borrowed. */
     ke_module                     *modules[KE_SDK_ENGINE_LIST_CAPACITY];

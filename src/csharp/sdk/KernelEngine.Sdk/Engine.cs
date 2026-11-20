@@ -10,13 +10,17 @@ namespace KernelEngine;
 
 /// <summary>
 /// A running engine, made by a container from the contracts of its parts: the standard schedules made by the
-/// registered schedule factory and added to the scheduler, and the engine's node types registered. Running it waits
-/// until every registered <see cref="EngineReadiness"/> finished, attaches every registered module to the schedules
-/// in the order it was registered, and ticks until the window closes or a node asks to exit. Disposing it detaches the modules and releases the schedules; the container releases the parts.
+/// registered schedule factory and added to the scheduler, every registered module that takes the schedules and their
+/// sets created on them, in the order it was registered, and the engine's node types registered. Running it waits
+/// until every registered <see cref="EngineReadiness"/> finished, attaches every registered <see cref="Module.Module"/>
+/// to the schedules in the order it was registered, and ticks until the window closes or a node asks to exit.
+/// Disposing it detaches the attached modules, releases the created ones, the last first, and releases the schedules;
+/// the container releases the parts.
 /// </summary>
 public sealed class Engine : IDisposable
 {
     readonly Module.Module[] _modules;
+    readonly List<IDisposable> _hooked = [];
     readonly List<EngineReadiness> _pending;
     bool _attached;
     bool _disposed;
@@ -31,6 +35,7 @@ public sealed class Engine : IDisposable
         Sets = EngineSets.Register(Schedules);
         Schedules.AddTo(Scheduler);
         if (services.GetService<Extraction.Extraction>() is { } extraction) EngineSchedules.AddRender(Scheduler, extraction);
+        foreach (var create in services.GetServices<Func<EngineSchedules, EngineSets, IDisposable>>()) _hooked.Add(create(Schedules, Sets));
         _modules = [.. services.GetServices<Module.Module>()];
         _pending = [.. services.GetServices<EngineReadiness>()];
         Types = services.GetRequiredService<NodeTypes>();
@@ -97,7 +102,8 @@ public sealed class Engine : IDisposable
         }
     }
 
-    /// <summary>Shuts the loop down, detaches every module, the last attached first, and releases the schedules.</summary>
+    /// <summary>Shuts the loop down, detaches every attached module, the last attached first, releases every created
+    /// module, the last created first, and releases the schedules.</summary>
     public void Dispose()
     {
         if (_disposed) return;
@@ -105,6 +111,7 @@ public sealed class Engine : IDisposable
         Scheduler.Shutdown();
         if (_attached)
             for (var i = _modules.Length - 1; i >= 0; i--) _modules[i].Detach();
+        for (var i = _hooked.Count - 1; i >= 0; i--) _hooked[i].Dispose();
         Schedules.Shutdown.Dispose();
         Schedules.Update.Dispose();
         Schedules.Fixed.Dispose();

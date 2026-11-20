@@ -4,7 +4,6 @@ const abi_completion = @import("completion");
 const abi_ecs = @import("ecs");
 const abi_extraction = @import("extraction");
 const abi_logger = @import("logger");
-const abi_module = @import("module");
 const abi_part = @import("part");
 const abi_result = @import("result");
 const abi_schedule = @import("schedule");
@@ -32,13 +31,13 @@ pub fn extractionCreate(main: ?*abi_ecs.c.ke_ecs, render: ?*abi_ecs.c.ke_ecs, sc
     return written;
 }
 
-/// Creates the module that keeps the previous value of every interpolation of extraction:
-/// attaching it registers, in the fixed schedule's fixed_pre_update set, one system per
-/// interpolation registered before or after, which copies each entity's current value into its
-/// previous one before the step.
-pub fn extractionHistoryCreate(extraction: ?*abi_extraction.c.ke_extraction) Error!abi_module.c.ke_module_handle {
-    var written: abi_module.c.ke_module_handle = undefined;
-    try checkResult(c.ke_extraction_history_create(extraction, &written));
+/// Creates the module that keeps the previous value of every interpolation of extraction: it
+/// registers, in fixed_pre_update_set of fixed_pre_update, one system per interpolation
+/// registered before or after, which copies each entity's current value into its previous one
+/// before the step. Destroying the module removes them.
+pub fn extractionHistoryCreate(extraction: ?*abi_extraction.c.ke_extraction, fixed_pre_update: ?*abi_schedule.c.ke_schedule, fixed_pre_update_set: c.ke_schedule_set_id) Error!abi_part.c.ke_owner {
+    var written: abi_part.c.ke_owner = undefined;
+    try checkResult(c.ke_extraction_history_create(extraction, fixed_pre_update, fixed_pre_update_set, &written));
     return written;
 }
 

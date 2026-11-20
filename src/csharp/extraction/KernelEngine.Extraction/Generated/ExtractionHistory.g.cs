@@ -5,8 +5,8 @@
 
 namespace KernelEngine.Extraction;
 
-/// <summary>Creates the module that keeps the previous value of every interpolation of extraction: attaching it registers, in the fixed schedule's fixed_pre_update set, one system per interpolation registered before or after, which copies each entity's current value into its previous one before the step.</summary>
-public sealed unsafe partial class ExtractionHistoryModule : KernelEngine.Module.Module
+/// <summary>Creates the module that keeps the previous value of every interpolation of extraction: it registers, in fixed_pre_update_set of fixed_pre_update, one system per interpolation registered before or after, which copies each entity's current value into its previous one before the step. Destroying the module removes them.</summary>
+public sealed unsafe partial class ExtractionHistory : IDisposable
 {
 
     /// <summary>Turns a result code into the exception that carries it, and back.</summary>
@@ -50,18 +50,46 @@ public sealed unsafe partial class ExtractionHistoryModule : KernelEngine.Module
         }
     }
 
-    /// <summary>Creates the module that keeps the previous value of every interpolation of extraction: attaching it registers, in the fixed schedule's fixed_pre_update set, one system per interpolation registered before or after, which copies each entity's current value into its previous one before the step.</summary>
+    /// <summary>Creates the module that keeps the previous value of every interpolation of extraction: it registers, in fixed_pre_update_set of fixed_pre_update, one system per interpolation registered before or after, which copies each entity's current value into its previous one before the step. Destroying the module removes them.</summary>
     /// <param name="extraction">Created by ke_extraction_create; must outlive the module.</param>
-    public ExtractionHistoryModule(KernelEngine.Extraction.INativeExtraction extraction) : base(Create(extraction))
+    /// <param name="fixedPreUpdate">Must outlive the module.</param>
+    /// <param name="fixedPreUpdateSet">The set of fixed_pre_update the systems join.</param>
+    public ExtractionHistory(KernelEngine.Extraction.INativeExtraction extraction, KernelEngine.Schedule.INativeSchedule fixedPreUpdate, uint fixedPreUpdateSet) : this(Create(extraction, fixedPreUpdate, fixedPreUpdateSet))
     {
         Hold(extraction.Owner);
+        Hold(fixedPreUpdate.Owner);
     }
 
-    private static KernelEngine.Module.Native.ke_module_handle Create(KernelEngine.Extraction.INativeExtraction extraction)
+    private KernelEngine.Part.Native.ke_owner _handle;
+
+    private readonly List<global::System.Runtime.InteropServices.SafeHandle> _held = new();
+
+    private ExtractionHistory(KernelEngine.Part.Native.ke_owner handle) => _handle = handle;
+
+    private void Hold(global::System.Runtime.InteropServices.SafeHandle? owner)
+    {
+        if (owner is null) return;
+        var added = false;
+        owner.DangerousAddRef(ref added);
+        _held.Add(owner);
+    }
+
+    /// <summary>Releases the native object, then what it held.</summary>
+    public void Dispose()
+    {
+        if (_handle.@ref == null) return;
+        _handle.destroy(_handle.@ref);
+        _handle = default;
+        foreach (var held in _held) held.DangerousRelease();
+        _held.Clear();
+    }
+
+    private static KernelEngine.Part.Native.ke_owner Create(KernelEngine.Extraction.INativeExtraction extraction, KernelEngine.Schedule.INativeSchedule fixedPreUpdate, uint fixedPreUpdateSet)
     {
         ArgumentNullException.ThrowIfNull(extraction);
-        KernelEngine.Module.Native.ke_module_handle handle;
-        NativeResult.ThrowIfFailed(KernelEngine.Extraction.Native.NativeMethods.extraction_history_create(extraction.Native, &handle), "ke_extraction_history_create");
+        ArgumentNullException.ThrowIfNull(fixedPreUpdate);
+        KernelEngine.Part.Native.ke_owner handle;
+        NativeResult.ThrowIfFailed(KernelEngine.Extraction.Native.NativeMethods.extraction_history_create(extraction.Native, fixedPreUpdate.Native, fixedPreUpdateSet, &handle), "ke_extraction_history_create");
         return handle;
     }
 }

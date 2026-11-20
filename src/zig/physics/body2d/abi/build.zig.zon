@@ -6,7 +6,7 @@
     .dependencies = .{
         .abi_ecs = .{ .path = "../../../abi/ecs" },
         .abi_logger = .{ .path = "../../../abi/logger" },
-        .abi_module = .{ .path = "../../../abi/module" },
+        .abi_part = .{ .path = "../../../abi/part" },
         .abi_physics = .{ .path = "../../../abi/physics" },
         .abi_result = .{ .path = "../../../abi/result" },
         .abi_scene_tree = .{ .path = "../../../abi/scene_tree" },

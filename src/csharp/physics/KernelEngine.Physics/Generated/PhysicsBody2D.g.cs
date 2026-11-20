@@ -3,10 +3,10 @@
 
 #nullable enable
 
-namespace KernelEngine.Framework;
+namespace KernelEngine.Physics;
 
-/// <summary>Creates the module that evaluates actions each tick: attaching it registers the exclusive system "input.actions" in the pre_update schedule's pre_update set, which advances input's frame and evaluates the maps against its snapshot.</summary>
-public sealed unsafe partial class InputActionsEvaluationModule : KernelEngine.Module.Module
+/// <summary>Creates the module that creates, steps and syncs 2D bodies: it registers its two systems in fixed_post_update_set of fixed_post_update. Destroying the module unregisters them and destroys the bodies it created.</summary>
+public sealed unsafe partial class PhysicsBody2D : IDisposable
 {
 
     /// <summary>Turns a result code into the exception that carries it, and back.</summary>
@@ -50,21 +50,52 @@ public sealed unsafe partial class InputActionsEvaluationModule : KernelEngine.M
         }
     }
 
-    /// <summary>Creates the module that evaluates actions each tick: attaching it registers the exclusive system "input.actions" in the pre_update schedule's pre_update set, which advances input's frame and evaluates the maps against its snapshot.</summary>
-    /// <param name="actions">Created by ke_input_actions_create; must outlive the module.</param>
-    /// <param name="input">Must outlive the module.</param>
-    public InputActionsEvaluationModule(KernelEngine.Framework.INativeInputActions actions, KernelEngine.Input.INativeInput input) : base(Create(actions, input))
+    /// <summary>Creates the module that creates, steps and syncs 2D bodies: it registers its two systems in fixed_post_update_set of fixed_post_update. Destroying the module unregisters them and destroys the bodies it created.</summary>
+    /// <param name="ecs">Resolves the component ids; borrowed.</param>
+    /// <param name="physics">The world to drive; borrowed, must outlive the module.</param>
+    /// <param name="sceneTree">Tells when a collider's ancestors may have changed; borrowed, must outlive the module.</param>
+    /// <param name="fixedPostUpdate">Borrowed, must outlive the module.</param>
+    /// <param name="fixedPostUpdateSet">The set of fixed_post_update the two systems join.</param>
+    public PhysicsBody2D(KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Physics.INativePhysics2d physics, KernelEngine.Framework.INativeSceneTree sceneTree, KernelEngine.Schedule.INativeSchedule fixedPostUpdate, uint fixedPostUpdateSet) : this(Create(ecs, physics, sceneTree, fixedPostUpdate, fixedPostUpdateSet))
     {
-        Hold(actions.Owner);
-        Hold(input.Owner);
+        Hold(ecs.Owner);
+        Hold(physics.Owner);
+        Hold(sceneTree.Owner);
+        Hold(fixedPostUpdate.Owner);
     }
 
-    private static KernelEngine.Module.Native.ke_module_handle Create(KernelEngine.Framework.INativeInputActions actions, KernelEngine.Input.INativeInput input)
+    private KernelEngine.Part.Native.ke_owner _handle;
+
+    private readonly List<global::System.Runtime.InteropServices.SafeHandle> _held = new();
+
+    private PhysicsBody2D(KernelEngine.Part.Native.ke_owner handle) => _handle = handle;
+
+    private void Hold(global::System.Runtime.InteropServices.SafeHandle? owner)
     {
-        ArgumentNullException.ThrowIfNull(actions);
-        ArgumentNullException.ThrowIfNull(input);
-        KernelEngine.Module.Native.ke_module_handle handle;
-        NativeResult.ThrowIfFailed(KernelEngine.Framework.Native.NativeMethods.input_actions_evaluation_create(actions.Native, input.Native, &handle), "ke_input_actions_evaluation_create");
+        if (owner is null) return;
+        var added = false;
+        owner.DangerousAddRef(ref added);
+        _held.Add(owner);
+    }
+
+    /// <summary>Releases the native object, then what it held.</summary>
+    public void Dispose()
+    {
+        if (_handle.@ref == null) return;
+        _handle.destroy(_handle.@ref);
+        _handle = default;
+        foreach (var held in _held) held.DangerousRelease();
+        _held.Clear();
+    }
+
+    private static KernelEngine.Part.Native.ke_owner Create(KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Physics.INativePhysics2d physics, KernelEngine.Framework.INativeSceneTree sceneTree, KernelEngine.Schedule.INativeSchedule fixedPostUpdate, uint fixedPostUpdateSet)
+    {
+        ArgumentNullException.ThrowIfNull(ecs);
+        ArgumentNullException.ThrowIfNull(physics);
+        ArgumentNullException.ThrowIfNull(sceneTree);
+        ArgumentNullException.ThrowIfNull(fixedPostUpdate);
+        KernelEngine.Part.Native.ke_owner handle;
+        NativeResult.ThrowIfFailed(KernelEngine.Physics.Native.NativeMethods.physics_body2d_create(ecs.Native, physics.Native, sceneTree.Native, fixedPostUpdate.Native, fixedPostUpdateSet, &handle), "ke_physics_body2d_create");
         return handle;
     }
 }

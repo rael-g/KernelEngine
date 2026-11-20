@@ -11,8 +11,9 @@ using KernelEngine.Audio.Native;
 using KernelEngine.Ecs.Native;
 using KernelEngine.Framework.Native;
 using KernelEngine.Io.Native;
-using KernelEngine.Module.Native;
+using KernelEngine.Part.Native;
 using KernelEngine.Result.Native;
+using KernelEngine.Schedule.Native;
 using KernelEngine.Scheduler.Native;
 
 namespace KernelEngine.Framework.Nodes.Native;
@@ -25,7 +26,7 @@ public static unsafe partial class NativeMethods
 
     [DllImport("ke_framework", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_node_types_systems_create", ExactSpelling = true)]
     [return: NativeTypeName("ke_result")]
-    public static extern KernelEngine.Result.Native.Result node_types_systems_create(ke_node_types* types, [NativeTypeName("ke_module_handle *")] KernelEngine.Module.Native.ke_module_handle* out_module);
+    public static extern KernelEngine.Result.Native.Result node_types_systems_create(ke_node_types* types, [NativeTypeName("ke_schedule *")] KernelEngine.Schedule.Native.ke_schedule* pre_update, [NativeTypeName("ke_schedule_set_id")] uint pre_update_set, [NativeTypeName("ke_schedule *")] KernelEngine.Schedule.Native.ke_schedule* fixed_update, [NativeTypeName("ke_schedule_set_id")] uint fixed_update_set, [NativeTypeName("ke_schedule *")] KernelEngine.Schedule.Native.ke_schedule* update, [NativeTypeName("ke_schedule_set_id")] uint update_set, [NativeTypeName("ke_schedule *")] KernelEngine.Schedule.Native.ke_schedule* post_update, [NativeTypeName("ke_schedule_set_id")] uint post_update_set, [NativeTypeName("ke_owner *")] KernelEngine.Part.Native.ke_owner* out_module);
 
     [DllImport("ke_framework", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_scene_files_create", ExactSpelling = true)]
     [return: NativeTypeName("ke_result")]

@@ -9,7 +9,7 @@ const abi_input = @import("input");
 const abi_input_actions = @import("input_actions");
 const abi_io = @import("io");
 const abi_logger = @import("logger");
-const abi_module = @import("module");
+const abi_part = @import("part");
 const abi_result = @import("result");
 const abi_scene_tree = @import("scene_tree");
 const abi_schedule = @import("schedule");
@@ -53,23 +53,24 @@ pub fn inputActionsCreate(settings: ?*abi_settings.c.ke_settings) Error!abi_inpu
     return written;
 }
 
-/// Creates the module that evaluates actions each tick: attaching it registers the exclusive
-/// system "input.actions" in the pre_update schedule's pre_update set, which advances input's
-/// frame and evaluates the maps against its snapshot.
-pub fn inputActionsEvaluationCreate(actions: ?*abi_input_actions.c.ke_input_actions, input: ?*abi_input.c.ke_input) Error!abi_module.c.ke_module_handle {
-    var written: abi_module.c.ke_module_handle = undefined;
-    try checkResult(c.ke_input_actions_evaluation_create(actions, input, &written));
+/// Creates the module that evaluates actions: it registers the exclusive system "input.actions"
+/// in pre_update_set of pre_update, which each run advances input's frame and evaluates the maps
+/// against its snapshot. Destroying the module unregisters it.
+pub fn inputActionsEvaluationCreate(actions: ?*abi_input_actions.c.ke_input_actions, input: ?*abi_input.c.ke_input, pre_update: ?*abi_schedule.c.ke_schedule, pre_update_set: c.ke_schedule_set_id) Error!abi_part.c.ke_owner {
+    var written: abi_part.c.ke_owner = undefined;
+    try checkResult(c.ke_input_actions_evaluation_create(actions, input, pre_update, pre_update_set, &written));
     return written;
 }
 
 /// Creates the module that keeps every world transform equal to its local transform composed
-/// with its parent's world transform; attaching it registers one system in the update schedule's
-/// post_update set, which orders the entities parents-before-children each tick and walks them
-/// once. The transform and hierarchy components are resolved by the names a scene_tree registers
-/// them under, so a scene_tree must exist on ecs first.
-pub fn sceneHierarchyCreate(ecs: ?*abi_ecs.c.ke_ecs) Error!abi_module.c.ke_module_handle {
-    var written: abi_module.c.ke_module_handle = undefined;
-    try checkResult(c.ke_scene_hierarchy_create(ecs, &written));
+/// with its parent's world transform: it registers one system in post_update_set of post_update,
+/// which orders the entities parents-before-children each run and walks them once. The transform
+/// and hierarchy components are resolved by the names a scene_tree registers them under, so a
+/// scene_tree must exist on ecs first. Destroying the module unregisters the system; components
+/// and entities stay.
+pub fn sceneHierarchyCreate(ecs: ?*abi_ecs.c.ke_ecs, post_update: ?*abi_schedule.c.ke_schedule, post_update_set: c.ke_schedule_set_id) Error!abi_part.c.ke_owner {
+    var written: abi_part.c.ke_owner = undefined;
+    try checkResult(c.ke_scene_hierarchy_create(ecs, post_update, post_update_set, &written));
     return written;
 }
 
@@ -84,25 +85,25 @@ pub fn sceneTreeCreate(ecs: ?*abi_ecs.c.ke_ecs) Error!abi_scene_tree.c.ke_scene_
 }
 
 /// Creates the node types of `ecs`, whose nodes live in `scene_tree` and whose axis and pressed
-/// read `input_actions`. Their systems run once the node types module is attached; a node's exit
-/// request goes to `scheduler`, which runs each schedule of the module's targets as an
-/// executable whose user is the schedule. Every argument but `input_actions` and `out_types`
-/// must outlive the node types.
+/// read `input_actions`. Their systems run once the node types systems module is created; a
+/// node's exit request goes to `scheduler`, which runs each schedule a hook of that module names
+/// as an executable whose user is the schedule. Every argument but `input_actions` and
+/// `out_types` must outlive the node types.
 pub fn nodeTypesCreate(scheduler: ?*abi_scheduler.c.ke_scheduler, ecs: ?*abi_ecs.c.ke_ecs, scene_tree: ?*abi_scene_tree.c.ke_scene_tree, input_actions: ?*abi_input_actions.c.ke_input_actions) Error!abi_framework.c.ke_node_types_handle {
     var written: abi_framework.c.ke_node_types_handle = undefined;
     try checkResult(c.ke_node_types_create(scheduler, ecs, scene_tree, input_actions, &written));
     return written;
 }
 
-/// Creates the module of types: attaching it registers the ready and exit behaviours and the
-/// systems that clear the last tick's events in the pre_update schedule's pre_update set, fixed
-/// update behaviours in the fixed schedule's fixed_update set, update behaviours in the update
-/// schedule's update set, and event behaviours and the system that frees the nodes that left the
-/// tree in its post_update set, for every type and event registered before or after. Detaching
+/// Creates the module of types: it registers the ready and exit behaviours and the systems that
+/// clear the last tick's events in pre_update_set of pre_update, fixed update behaviours in
+/// fixed_update_set of fixed_update, update behaviours in update_set of update, and event
+/// behaviours and the system that frees the nodes that left the tree in post_update_set of
+/// post_update, for every type and event registered before or after. Destroying the module
 /// removes them all; the types and events stay.
-pub fn nodeTypesSystemsCreate(types: ?*abi_framework.c.ke_node_types) Error!abi_module.c.ke_module_handle {
-    var written: abi_module.c.ke_module_handle = undefined;
-    try checkResult(c.ke_node_types_systems_create(types, &written));
+pub fn nodeTypesSystemsCreate(types: ?*abi_framework.c.ke_node_types, pre_update: ?*abi_schedule.c.ke_schedule, pre_update_set: c.ke_schedule_set_id, fixed_update: ?*abi_schedule.c.ke_schedule, fixed_update_set: c.ke_schedule_set_id, update: ?*abi_schedule.c.ke_schedule, update_set: c.ke_schedule_set_id, post_update: ?*abi_schedule.c.ke_schedule, post_update_set: c.ke_schedule_set_id) Error!abi_part.c.ke_owner {
+    var written: abi_part.c.ke_owner = undefined;
+    try checkResult(c.ke_node_types_systems_create(types, pre_update, pre_update_set, fixed_update, fixed_update_set, update, update_set, post_update, post_update_set, &written));
     return written;
 }
 

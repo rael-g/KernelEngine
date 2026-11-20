@@ -29,11 +29,9 @@ var sets = EngineSets.Register(schedules);
 using var scheduler = new DefaultScheduler(jobs, asyncs, config.Section("scheduler"));
 schedules.AddTo(scheduler);
 using var tree = new DefaultSceneTree(ecs);
-using var hierarchy = new SceneHierarchyModule(ecs);
-schedules.Attach(hierarchy, sets);
+using var hierarchy = new SceneHierarchy(ecs, update, sets.PostUpdate);
 using var types = new DefaultNodeTypes(scheduler, ecs, tree, null);
-using var nodeSystems = new NodeTypesSystemsModule(types);
-schedules.Attach(nodeSystems, sets);
+using var nodeSystems = new NodeTypesSystems(types, preUpdate, sets.PreUpdate, fixedSchedule, sets.FixedUpdate, update, sets.Update, update, sets.PostUpdate);
 
 var world = new NodeWorld(types);
 world.RegisterEvent<Crossed>();

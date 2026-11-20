@@ -11,8 +11,9 @@ using KernelEngine.Audio.Native;
 using KernelEngine.Ecs.Native;
 using KernelEngine.Framework.Native;
 using KernelEngine.Io.Native;
-using KernelEngine.Module.Native;
+using KernelEngine.Part.Native;
 using KernelEngine.Result.Native;
+using KernelEngine.Schedule.Native;
 using KernelEngine.Scheduler.Native;
 
 namespace KernelEngine.Framework.Nodes.Native;

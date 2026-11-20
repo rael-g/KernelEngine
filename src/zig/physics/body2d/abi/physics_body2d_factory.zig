@@ -2,7 +2,7 @@
 
 const abi_ecs = @import("ecs");
 const abi_logger = @import("logger");
-const abi_module = @import("module");
+const abi_part = @import("part");
 const abi_physics = @import("physics");
 const abi_result = @import("result");
 const abi_scene_tree = @import("scene_tree");
@@ -15,11 +15,12 @@ pub const Error = abi_result.Error;
 const checkResult = abi_result.checkResult;
 const resultOf = abi_result.resultOf;
 
-/// Creates the module that creates, steps and syncs 2D bodies; attaching it registers its two
-/// systems in the fixed schedule's fixed_post_update set.
-pub fn physicsBody2dCreate(ecs: ?*abi_ecs.c.ke_ecs, physics: ?*abi_physics.c.ke_physics_2d, scene_tree: ?*abi_scene_tree.c.ke_scene_tree) Error!abi_module.c.ke_module_handle {
-    var written: abi_module.c.ke_module_handle = undefined;
-    try checkResult(c.ke_physics_body2d_create(ecs, physics, scene_tree, &written));
+/// Creates the module that creates, steps and syncs 2D bodies: it registers its two systems in
+/// fixed_post_update_set of fixed_post_update. Destroying the module unregisters them and
+/// destroys the bodies it created.
+pub fn physicsBody2dCreate(ecs: ?*abi_ecs.c.ke_ecs, physics: ?*abi_physics.c.ke_physics_2d, scene_tree: ?*abi_scene_tree.c.ke_scene_tree, fixed_post_update: ?*abi_schedule.c.ke_schedule, fixed_post_update_set: c.ke_schedule_set_id) Error!abi_part.c.ke_owner {
+    var written: abi_part.c.ke_owner = undefined;
+    try checkResult(c.ke_physics_body2d_create(ecs, physics, scene_tree, fixed_post_update, fixed_post_update_set, &written));
     return written;
 }
 

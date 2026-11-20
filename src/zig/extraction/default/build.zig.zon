@@ -10,7 +10,6 @@
         .abi_ecs = .{ .path = "../../abi/ecs" },
         .abi_ecs_variant = .{ .path = "../../abi/ecs_variant" },
         .abi_extraction = .{ .path = "../../abi/extraction" },
-        .abi_module = .{ .path = "../../abi/module" },
         .abi_result = .{ .path = "../../abi/result" },
         .abi_schedule = .{ .path = "../../abi/schedule" },
         .abi_scheduler = .{ .path = "../../abi/scheduler" },
