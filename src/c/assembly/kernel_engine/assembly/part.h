@@ -1,5 +1,5 @@
-#ifndef KERNEL_ENGINE_PART_PART_H_
-#define KERNEL_ENGINE_PART_PART_H_
+#ifndef KERNEL_ENGINE_ASSEMBLY_PART_H_
+#define KERNEL_ENGINE_ASSEMBLY_PART_H_
 
 #include <kernel_engine/completion/completion.h>
 #include <kernel_engine/logger/log_callback.h>

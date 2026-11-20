@@ -9,7 +9,7 @@
 #include <kernel_engine/render/service/render_service.h>
 #include <kernel_engine/render/ui/ui.h>
 #include <kernel_engine/render/ui/ui_create.h>
-#include <kernel_engine/part/part.h>
+#include <kernel_engine/assembly/part.h>
 #include <kernel_engine/schedule/schedule.h>
 
 #ifndef KE_RENDER_SCENE_API

@@ -11,7 +11,7 @@
         .abi_async_enki_factory = .{ .path = "abi" },
         .abi_result = .{ .path = "../../abi/result" },
         .abi_part = .{ .path = "../../abi/part" },
-        .ke_part = .{ .path = "../../abi/../part" },
+        .ke_part = .{ .path = "../../assembly/part" },
         .ke_completion_graph = .{ .path = "../../completion/graph" },
         .ke_async_suite = .{ .path = "../../test/async_suite" },
         .ke_common = .{ .path = "../../common" },

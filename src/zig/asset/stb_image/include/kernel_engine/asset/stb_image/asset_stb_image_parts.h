@@ -2,7 +2,7 @@
 #define KERNEL_ENGINE_ASSET_STB_IMAGE_ASSET_STB_IMAGE_PARTS_H_
 
 #include <kernel_engine/asset/stb_image/stb_image_loader.h>
-#include <kernel_engine/part/part.h>
+#include <kernel_engine/assembly/part.h>
 
 #include <stddef.h>
 

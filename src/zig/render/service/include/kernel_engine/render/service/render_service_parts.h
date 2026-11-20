@@ -2,7 +2,7 @@
 #define KERNEL_ENGINE_RENDER_SERVICE_RENDER_SERVICE_PARTS_H_
 
 #include <kernel_engine/render/service/render_service_create.h>
-#include <kernel_engine/part/part.h>
+#include <kernel_engine/assembly/part.h>
 
 #include <stddef.h>
 

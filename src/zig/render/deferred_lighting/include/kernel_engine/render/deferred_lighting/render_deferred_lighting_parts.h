@@ -2,7 +2,7 @@
 #define KERNEL_ENGINE_RENDER_DEFERRED_LIGHTING_RENDER_DEFERRED_LIGHTING_PARTS_H_
 
 #include <kernel_engine/render/deferred_lighting/deferred_lighting_create.h>
-#include <kernel_engine/part/part.h>
+#include <kernel_engine/assembly/part.h>
 
 #include <stddef.h>
 

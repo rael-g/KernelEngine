@@ -9,7 +9,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\framework\KernelEngine.Framework.Nodes\KernelEngine.Framework.Nodes.csproj" />
-    <ProjectReference Include="..\..\part\KernelEngine.Part\KernelEngine.Part.csproj" />
+    <ProjectReference Include="..\..\assembly\KernelEngine.Part\KernelEngine.Part.csproj" />
     <ProjectReference Include="..\..\physics\KernelEngine.Physics\KernelEngine.Physics.csproj" />
     <ProjectReference Include="..\..\audio\KernelEngine.Audio\KernelEngine.Audio.csproj" />
     <ProjectReference Include="..\..\render\KernelEngine.Render\KernelEngine.Render.csproj" />

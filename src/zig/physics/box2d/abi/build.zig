@@ -22,7 +22,7 @@ pub fn build(b: *std.Build) void {
     translated.addIncludePath(b.path("../../../../c/job"));
     translated.addIncludePath(b.path("../../../../c/logger"));
     translated.addIncludePath(b.path("../../../../c/math"));
-    translated.addIncludePath(b.path("../../../../c/part"));
+    translated.addIncludePath(b.path("../../../../c/assembly"));
     translated.addIncludePath(b.path("../../../../c/physics"));
     translated.addIncludePath(b.path("../../../common/include"));
     translated.addIncludePath(b.path("../include"));
@@ -43,7 +43,7 @@ pub fn build(b: *std.Build) void {
     tests.root_module.addIncludePath(b.path("../../../../c/job"));
     tests.root_module.addIncludePath(b.path("../../../../c/logger"));
     tests.root_module.addIncludePath(b.path("../../../../c/math"));
-    tests.root_module.addIncludePath(b.path("../../../../c/part"));
+    tests.root_module.addIncludePath(b.path("../../../../c/assembly"));
     tests.root_module.addIncludePath(b.path("../../../../c/physics"));
     tests.root_module.addIncludePath(b.path("../../../common/include"));
     tests.root_module.addIncludePath(b.path("../include"));

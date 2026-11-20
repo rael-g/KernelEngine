@@ -9,7 +9,7 @@
         .abi_part = .{ .path = "../abi/part" },
         .abi_result = .{ .path = "../abi/result" },
         .abi_engine_nodes_factory = .{ .path = "abi" },
-        .ke_part = .{ .path = "../part" },
+        .ke_part = .{ .path = "../assembly/part" },
         .ke_common = .{ .path = "../common" },
         .ke_build = .{ .path = "../build" },
         .ke_logger = .{ .path = "../logger" },

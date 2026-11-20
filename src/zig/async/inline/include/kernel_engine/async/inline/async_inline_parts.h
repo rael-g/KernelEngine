@@ -2,7 +2,7 @@
 #define KERNEL_ENGINE_ASYNC_INLINE_ASYNC_INLINE_PARTS_H_
 
 #include <kernel_engine/async/inline/async_inline_create.h>
-#include <kernel_engine/part/part.h>
+#include <kernel_engine/assembly/part.h>
 
 #include <stddef.h>
 

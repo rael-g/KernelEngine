@@ -3,7 +3,7 @@
 
 #include <kernel_engine/common/export.h>
 #include <kernel_engine/framework/node_types.h>
-#include <kernel_engine/part/part.h>
+#include <kernel_engine/assembly/part.h>
 
 #ifdef __cplusplus
 extern "C"

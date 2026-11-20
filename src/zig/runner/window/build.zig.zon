@@ -12,7 +12,7 @@
         .ke_common = .{ .path = "../../common" },
         .ke_build = .{ .path = "../../build" },
         .ke_logger = .{ .path = "../../logger" },
-        .ke_part = .{ .path = "../../part" },
+        .ke_part = .{ .path = "../../assembly/part" },
         .ke_result = .{ .path = "../../result" },
         .zsub = .{
             .url = "https://github.com/rael-g/zsub/archive/10fee26318ed2ef628f6fada5f3c39f4572381ba.tar.gz",

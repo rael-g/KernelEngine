@@ -8,7 +8,7 @@
         .ke_io_pending_reads = .{ .path = "src/zig/io/pending_reads" },
         .ke_input_names = .{ .path = "src/zig/input/names" },
         .ke_settings_schema = .{ .path = "src/zig/configuration/settings_schema" },
-        .ke_part = .{ .path = "src/zig/part" },
+        .ke_part = .{ .path = "src/zig/assembly/part" },
         .ke_assembly_default = .{ .path = "src/zig/assembly/default" },
         .ke_assembly_toml = .{ .path = "src/zig/assembly/toml" },
         .ke_runner_headless = .{ .path = "src/zig/runner/headless" },

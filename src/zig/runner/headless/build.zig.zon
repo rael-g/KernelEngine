@@ -14,7 +14,7 @@
         .ke_build = .{ .path = "../../build" },
         .ke_input_names = .{ .path = "../../input/names" },
         .ke_logger = .{ .path = "../../logger" },
-        .ke_part = .{ .path = "../../part" },
+        .ke_part = .{ .path = "../../assembly/part" },
         .ke_result = .{ .path = "../../result" },
         .ke_settings_schema = .{ .path = "../../configuration/settings_schema" },
         .zsub = .{

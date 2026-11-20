@@ -2,7 +2,7 @@
 #define KERNEL_ENGINE_RUNNER_WINDOW_RUNNER_WINDOW_PARTS_H_
 
 #include <kernel_engine/runner/window/runner_window_create.h>
-#include <kernel_engine/part/part.h>
+#include <kernel_engine/assembly/part.h>
 
 #include <stddef.h>
 

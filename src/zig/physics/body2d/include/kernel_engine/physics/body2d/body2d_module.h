@@ -5,7 +5,7 @@
 #include <kernel_engine/ecs/ecs.h>
 #include <kernel_engine/framework/scene_tree.h>
 #include <kernel_engine/physics/physics_2d.h>
-#include <kernel_engine/part/part.h>
+#include <kernel_engine/assembly/part.h>
 #include <kernel_engine/schedule/schedule.h>
 
 #ifndef KE_PHYSICS_BODY2D_API

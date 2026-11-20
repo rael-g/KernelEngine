@@ -2,7 +2,7 @@
 #define KERNEL_ENGINE_RENDER_SHADOW_RENDER_SHADOW_PARTS_H_
 
 #include <kernel_engine/render/shadow/shadow_create.h>
-#include <kernel_engine/part/part.h>
+#include <kernel_engine/assembly/part.h>
 
 #include <stddef.h>
 

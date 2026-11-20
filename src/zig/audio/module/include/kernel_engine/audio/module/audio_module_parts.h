@@ -2,7 +2,7 @@
 #define KERNEL_ENGINE_AUDIO_MODULE_AUDIO_MODULE_PARTS_H_
 
 #include <kernel_engine/audio/module/sound_module.h>
-#include <kernel_engine/part/part.h>
+#include <kernel_engine/assembly/part.h>
 
 #include <stddef.h>
 

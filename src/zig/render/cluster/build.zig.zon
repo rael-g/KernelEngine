@@ -4,7 +4,7 @@
     .fingerprint = 0xb20ef2791ab2a860,
     .minimum_zig_version = "0.14.0",
     .dependencies = .{
-        .ke_part = .{ .path = "../../part" },
+        .ke_part = .{ .path = "../../assembly/part" },
         .abi_settings = .{ .path = "../../abi/settings" },
         .ke_settings_schema = .{ .path = "../../configuration/settings_schema" },
         .ke_hooked_systems = .{ .path = "../../hooked_systems" },

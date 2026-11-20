@@ -19,7 +19,7 @@
     <ProjectReference Include="..\..\configuration\KernelEngine.Settings\KernelEngine.Settings.csproj" />
     <ProjectReference Include="..\KernelEngine.Ecs.Abstractions\KernelEngine.Ecs.Abstractions.csproj" />
     <ProjectReference Include="..\..\common\KernelEngine.Common\KernelEngine.Common.csproj" />
-    <ProjectReference Include="..\..\part\KernelEngine.Part\KernelEngine.Part.csproj" />
+    <ProjectReference Include="..\..\assembly\KernelEngine.Part\KernelEngine.Part.csproj" />
     <ProjectReference Include="..\..\ecs\KernelEngine.Ecs\KernelEngine.Ecs.csproj" />
     <ProjectReference Include="..\..\logger\KernelEngine.Logger\KernelEngine.Logger.csproj" />
   </ItemGroup>

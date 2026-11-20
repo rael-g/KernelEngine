@@ -2,7 +2,7 @@
 #define KERNEL_ENGINE_RENDER_GBUFFER_RENDER_GBUFFER_PARTS_H_
 
 #include <kernel_engine/render/gbuffer/gbuffer_create.h>
-#include <kernel_engine/part/part.h>
+#include <kernel_engine/assembly/part.h>
 
 #include <stddef.h>
 

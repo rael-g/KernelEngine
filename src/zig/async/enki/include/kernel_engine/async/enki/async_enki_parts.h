@@ -2,7 +2,7 @@
 #define KERNEL_ENGINE_ASYNC_ENKI_ASYNC_ENKI_PARTS_H_
 
 #include <kernel_engine/async/enki/async_enki_create.h>
-#include <kernel_engine/part/part.h>
+#include <kernel_engine/assembly/part.h>
 
 #include <stddef.h>
 

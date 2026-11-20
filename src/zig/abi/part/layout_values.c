@@ -1,5 +1,5 @@
 #include <stddef.h>
-#include <kernel_engine/part/part.h>
+#include <kernel_engine/assembly/part.h>
 const unsigned long long layout_values[] = {
     sizeof(ke_part_slot),
     offsetof(ke_part_slot, name),

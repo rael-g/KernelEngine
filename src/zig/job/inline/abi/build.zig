@@ -22,7 +22,7 @@ pub fn build(b: *std.Build) void {
     translated.addIncludePath(b.path("../include"));
     translated.addIncludePath(b.path("../../../common/include"));
     translated.addIncludePath(b.path("../../../../c/logger"));
-    translated.addIncludePath(b.path("../../../../c/part"));
+    translated.addIncludePath(b.path("../../../../c/assembly"));
     translated.addIncludePath(b.path("../../../../c/result"));
     translated.addIncludePath(b.path("../../../../c/configuration"));
     const tests = b.addTest(.{ .root_module = b.createModule(.{
@@ -41,7 +41,7 @@ pub fn build(b: *std.Build) void {
     tests.root_module.addIncludePath(b.path("../include"));
     tests.root_module.addIncludePath(b.path("../../../common/include"));
     tests.root_module.addIncludePath(b.path("../../../../c/logger"));
-    tests.root_module.addIncludePath(b.path("../../../../c/part"));
+    tests.root_module.addIncludePath(b.path("../../../../c/assembly"));
     tests.root_module.addIncludePath(b.path("../../../../c/result"));
     tests.root_module.addIncludePath(b.path("../../../../c/configuration"));
     b.step("test", "Check the job_system_inline_factory ABI against its headers").dependOn(&b.addRunArtifact(tests).step);

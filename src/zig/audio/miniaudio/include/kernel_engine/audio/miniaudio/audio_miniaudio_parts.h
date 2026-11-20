@@ -2,7 +2,7 @@
 #define KERNEL_ENGINE_AUDIO_MINIAUDIO_AUDIO_MINIAUDIO_PARTS_H_
 
 #include <kernel_engine/audio/miniaudio/miniaudio_audio.h>
-#include <kernel_engine/part/part.h>
+#include <kernel_engine/assembly/part.h>
 
 #include <stddef.h>
 

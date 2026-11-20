@@ -3,7 +3,7 @@
 
 #include <kernel_engine/extraction/extraction.h>
 #include <kernel_engine/extraction/default/extraction_default_log.h>
-#include <kernel_engine/part/part.h>
+#include <kernel_engine/assembly/part.h>
 #include <kernel_engine/schedule/schedule.h>
 
 #ifdef __cplusplus

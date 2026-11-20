@@ -12,7 +12,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\configuration\KernelEngine.Settings\KernelEngine.Settings.csproj" />
-    <ProjectReference Include="..\..\part\KernelEngine.Part\KernelEngine.Part.csproj" />
+    <ProjectReference Include="..\..\assembly\KernelEngine.Part\KernelEngine.Part.csproj" />
     <ProjectReference Include="..\..\common\KernelEngine.Common\KernelEngine.Common.csproj" />
     <ProjectReference Include="..\KernelEngine.Job\KernelEngine.Job.csproj" />
     <ProjectReference Include="..\..\completion\KernelEngine.Completion\KernelEngine.Completion.csproj" />

@@ -9,7 +9,7 @@
         .abi_io_std_factory = .{ .path = "abi" },
         .abi_result = .{ .path = "../../abi/result" },
         .abi_part = .{ .path = "../../abi/part" },
-        .ke_part = .{ .path = "../../abi/../part" },
+        .ke_part = .{ .path = "../../assembly/part" },
         .abi_settings = .{ .path = "../../abi/settings" },
         .ke_settings_schema = .{ .path = "../../configuration/settings_schema" },
         .abi_completion = .{ .path = "../../abi/completion" },

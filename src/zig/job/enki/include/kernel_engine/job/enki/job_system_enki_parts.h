@@ -2,7 +2,7 @@
 #define KERNEL_ENGINE_JOB_ENKI_JOB_SYSTEM_ENKI_PARTS_H_
 
 #include <kernel_engine/job/enki/job_system_enki_create.h>
-#include <kernel_engine/part/part.h>
+#include <kernel_engine/assembly/part.h>
 
 #include <stddef.h>
 

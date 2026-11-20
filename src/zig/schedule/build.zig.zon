@@ -6,7 +6,7 @@
     .dependencies = .{
         .abi_part = .{ .path = "../abi/part" },
         .abi_scheduler = .{ .path = "../abi/scheduler" },
-        .ke_part = .{ .path = "../part" },
+        .ke_part = .{ .path = "../assembly/part" },
         .abi_settings = .{ .path = "../abi/settings" },
         .ke_settings_schema = .{ .path = "../configuration/settings_schema" },
         .abi_ecs = .{ .path = "../abi/ecs" },

@@ -2,7 +2,7 @@
 #define KERNEL_ENGINE_WINDOW_GLFW_WINDOW_GLFW_PARTS_H_
 
 #include <kernel_engine/window/glfw/glfw_window.h>
-#include <kernel_engine/part/part.h>
+#include <kernel_engine/assembly/part.h>
 
 #include <stddef.h>
 

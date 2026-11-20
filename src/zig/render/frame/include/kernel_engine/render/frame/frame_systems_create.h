@@ -1,7 +1,7 @@
 #ifndef KERNEL_ENGINE_RENDER_FRAME_FRAME_SYSTEMS_CREATE_H_
 #define KERNEL_ENGINE_RENDER_FRAME_FRAME_SYSTEMS_CREATE_H_
 
-#include <kernel_engine/part/part.h>
+#include <kernel_engine/assembly/part.h>
 #include <kernel_engine/schedule/schedule.h>
 #include <kernel_engine/result/result.h>
 #include <kernel_engine/render/frame.h>

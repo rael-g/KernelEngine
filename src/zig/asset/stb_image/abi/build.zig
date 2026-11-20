@@ -26,7 +26,7 @@ pub fn build(b: *std.Build) void {
     translated.addIncludePath(b.path("../../../../c/logger"));
     translated.addIncludePath(b.path("../../../../c/math"));
     translated.addIncludePath(b.path("../../../../c/render"));
-    translated.addIncludePath(b.path("../../../../c/part"));
+    translated.addIncludePath(b.path("../../../../c/assembly"));
     translated.addIncludePath(b.path("../../../../c/result"));
     translated.addIncludePath(b.path("../../../../c/configuration"));
     const tests = b.addTest(.{ .root_module = b.createModule(.{
@@ -49,7 +49,7 @@ pub fn build(b: *std.Build) void {
     tests.root_module.addIncludePath(b.path("../../../../c/logger"));
     tests.root_module.addIncludePath(b.path("../../../../c/math"));
     tests.root_module.addIncludePath(b.path("../../../../c/render"));
-    tests.root_module.addIncludePath(b.path("../../../../c/part"));
+    tests.root_module.addIncludePath(b.path("../../../../c/assembly"));
     tests.root_module.addIncludePath(b.path("../../../../c/result"));
     tests.root_module.addIncludePath(b.path("../../../../c/configuration"));
     b.step("test", "Check the asset_stb_image_factory ABI against its headers").dependOn(&b.addRunArtifact(tests).step);

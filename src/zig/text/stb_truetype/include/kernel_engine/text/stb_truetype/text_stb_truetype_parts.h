@@ -2,7 +2,7 @@
 #define KERNEL_ENGINE_TEXT_STB_TRUETYPE_TEXT_STB_TRUETYPE_PARTS_H_
 
 #include <kernel_engine/text/stb_truetype/stb_font.h>
-#include <kernel_engine/part/part.h>
+#include <kernel_engine/assembly/part.h>
 
 #include <stddef.h>
 

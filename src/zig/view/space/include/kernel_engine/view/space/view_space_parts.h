@@ -3,7 +3,7 @@
 
 #include <kernel_engine/view/space/view_space_lh_create.h>
 #include <kernel_engine/view/space/view_space_rh_create.h>
-#include <kernel_engine/part/part.h>
+#include <kernel_engine/assembly/part.h>
 
 #include <stddef.h>
 

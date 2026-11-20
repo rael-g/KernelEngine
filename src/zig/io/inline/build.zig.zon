@@ -5,7 +5,7 @@
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
         .abi_part = .{ .path = "../../abi/part" },
-        .ke_part = .{ .path = "../../abi/../part" },
+        .ke_part = .{ .path = "../../assembly/part" },
         .abi_file_system = .{ .path = "../../abi/file_system" },
         .abi_io = .{ .path = "../../abi/io" },
         .abi_io_inline_factory = .{ .path = "abi" },

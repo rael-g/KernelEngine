@@ -2,7 +2,7 @@
 #define KERNEL_ENGINE_FRAMEWORK_SCENE_HIERARCHY_CREATE_H_
 
 #include <kernel_engine/ecs/ke_ecs.h>
-#include <kernel_engine/part/part.h>
+#include <kernel_engine/assembly/part.h>
 #include <kernel_engine/schedule/schedule.h>
 
 #ifdef __cplusplus
