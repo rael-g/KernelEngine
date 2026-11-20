@@ -64,6 +64,8 @@ pub extern fn ke_extraction_create(main: ?*abi_ecs.c.ke_ecs, render: ?*abi_ecs.c
 /// before the step. Destroying the module removes them.
 pub extern fn ke_extraction_history_create(extraction: ?*abi_extraction.c.ke_extraction, fixed_pre_update: ?*abi_schedule.c.ke_schedule, fixed_pre_update_set: ke_schedule_set_id, out_module: ?*abi_part.c.ke_owner) abi_result.c.ke_result;
 
-/// Gives the parts ke_extraction_default contains: `extraction`, providing ke_extraction and
-/// ke_scheduler_executable, with the slots `main`, `render` and `scheduler`.
+/// Gives the parts ke_extraction_default contains, each named after its factory and with its
+/// slots named after the factory's parameters: `extraction` (ke_extraction and
+/// ke_scheduler_executable; `main`, `render` and `scheduler`); `extraction_history` (nothing;
+/// `extraction` and `fixed_pre_update`).
 pub extern fn ke_extraction_default_parts(out_count: ?*usize) ?*const abi_part.c.ke_part;

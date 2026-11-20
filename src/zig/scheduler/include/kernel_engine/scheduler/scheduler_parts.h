@@ -20,7 +20,10 @@ extern "C"
 #endif
 
 /**
- * Gives the parts ke_scheduler contains: `scheduler`, providing ke_scheduler, with the slots `job` and `async` and the cadence slots `startup`, `every_tick`, `fixed` and `shutdown`, each taking any number of ke_scheduler_executable, added in the order of their positions with the slot's cadence.
+ * Gives the parts ke_scheduler contains: `scheduler`, providing ke_scheduler, with the slots `job` and `async`; and
+ * `scheduler_layout`, providing nothing, with the slot `scheduler` and the cadence slots `startup`, `every_tick`,
+ * `fixed` and `shutdown`, each taking any number of ke_scheduler_executable, added to the scheduler in the order of
+ * their positions with the slot's cadence. Destroying the layout runs the scheduler's shutdown executables.
  * @param out_count [out] Receives how many parts the returned array holds.
  * @return [borrowed] The parts, valid while the library is loaded.
  */

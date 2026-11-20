@@ -41,8 +41,10 @@ pub fn extractionHistoryCreate(extraction: ?*abi_extraction.c.ke_extraction, fix
     return written;
 }
 
-/// Gives the parts ke_extraction_default contains: `extraction`, providing ke_extraction and
-/// ke_scheduler_executable, with the slots `main`, `render` and `scheduler`.
+/// Gives the parts ke_extraction_default contains, each named after its factory and with its
+/// slots named after the factory's parameters: `extraction` (ke_extraction and
+/// ke_scheduler_executable; `main`, `render` and `scheduler`); `extraction_history` (nothing;
+/// `extraction` and `fixed_pre_update`).
 pub fn extractionDefaultParts(out_count: ?*usize) ?*const abi_part.c.ke_part {
     return c.ke_extraction_default_parts(out_count);
 }

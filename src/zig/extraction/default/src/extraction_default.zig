@@ -532,6 +532,7 @@ fn provided(instance: ?*anyopaque, index: usize) callconv(.c) ?*anyopaque {
 
 pub const parts = [_]abi_part.c.ke_part{
     part.of(ke_extraction_create, .{ .name = "extraction", .slots = &.{ "main", "render", "scheduler" }, .also = &.{"ke_scheduler_executable"}, .provided = provided, .set_log = @ptrCast(&@import("log").Destination("ke_extraction_default").setLogCallback) }),
+    part.of(ke_extraction_history_create, .{ .name = "extraction_history", .slots = &.{"extraction"}, .hooks = &.{"fixed_pre_update"}, .set_log = @ptrCast(&@import("log").Destination("ke_extraction_default").setLogCallback) }),
 };
 
 /// The library's parts.

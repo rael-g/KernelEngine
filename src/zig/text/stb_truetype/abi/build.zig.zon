@@ -6,6 +6,7 @@
     .dependencies = .{
         .abi_io = .{ .path = "../../../abi/io" },
         .abi_logger = .{ .path = "../../../abi/logger" },
+        .abi_part = .{ .path = "../../../abi/part" },
         .abi_result = .{ .path = "../../../abi/result" },
         .abi_text = .{ .path = "../../../abi/text" },
     },

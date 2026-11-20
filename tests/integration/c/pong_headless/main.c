@@ -116,6 +116,7 @@ static void compose(ke_assembly *a)
         { "post_update", "schedule", "schedule" },
         { "shutdown", "schedule", "schedule" },
         { "scheduler", "scheduler", "scheduler" },
+        { "layout", "scheduler_layout", NULL },
         { "scene_tree", "scene_tree", NULL },
         { "hierarchy", "scene_hierarchy", NULL },
         { "physics", "physics_2d_box2d", "physics" },
@@ -138,12 +139,12 @@ static void compose(ke_assembly *a)
         { "fixed", "fixed_update" },     { "fixed", "fixed_post_update" }, { "every_tick", "update" },
         { "every_tick", "post_update" }, { "shutdown", "shutdown" },
     };
-    for (size_t i = 0; i < sizeof cadences / sizeof cadences[0]; ++i) check("bind", a->bind(a, "scheduler", cadences[i][0], cadences[i][1]));
+    for (size_t i = 0; i < sizeof cadences / sizeof cadences[0]; ++i) check("bind", a->bind(a, "layout", cadences[i][0], cadences[i][1]));
 
     static const char *const phases[] = {
         "startup", "pre_update", "fixed_pre_update", "fixed_update", "fixed_post_update", "update", "post_update", "shutdown",
     };
-    for (size_t i = 1; i < sizeof phases / sizeof phases[0]; ++i) check("order", a->order(a, "scheduler", NULL, phases[i - 1], phases[i]));
+    for (size_t i = 1; i < sizeof phases / sizeof phases[0]; ++i) check("order", a->order(a, "layout", NULL, phases[i - 1], phases[i]));
 
     static const char *const hooks[][3] = {
         { "hierarchy", "post_update", "post_update" },

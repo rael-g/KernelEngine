@@ -43,7 +43,8 @@ pub extern fn ke_scheduler_create(job_system: ?*abi_job.c.ke_job_system, async: 
 pub extern fn ke_scheduler_set_log_callback(callback: ke_log_callback, ctx: ?*anyopaque) void;
 
 /// Gives the parts ke_scheduler contains: `scheduler`, providing ke_scheduler, with the slots
-/// `job` and `async` and the cadence slots `startup`, `every_tick`, `fixed` and `shutdown`, each
-/// taking any number of ke_scheduler_executable, added in the order of their positions with the
-/// slot's cadence.
+/// `job` and `async`; and `scheduler_layout`, providing nothing, with the slot `scheduler` and
+/// the cadence slots `startup`, `every_tick`, `fixed` and `shutdown`, each taking any number of
+/// ke_scheduler_executable, added to the scheduler in the order of their positions with the
+/// slot's cadence. Destroying the layout runs the scheduler's shutdown executables.
 pub extern fn ke_scheduler_parts(out_count: ?*usize) ?*const abi_part.c.ke_part;

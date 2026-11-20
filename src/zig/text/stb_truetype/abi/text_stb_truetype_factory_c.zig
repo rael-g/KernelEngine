@@ -2,6 +2,7 @@
 
 const abi_io = @import("io");
 const abi_logger = @import("logger");
+const abi_part = @import("part");
 const abi_result = @import("result");
 const abi_text = @import("text");
 
@@ -13,6 +14,9 @@ const abi_text = @import("text");
 /// thread logged.
 pub const ke_log_callback = ?*const fn (?*anyopaque, abi_logger.c.ke_log_level, ?[*:0]const u8, ?[*:0]const u8) callconv(.c) void;
 
+/// Receives one key the settings hold.
+pub const ke_settings_key_func = ?*const fn (?[*:0]const u8, ?*anyopaque) callconv(.c) void;
+
 /// Creates a ke_font_loader that reads font files through io. Callable from any thread (CPU
 /// only).
 pub extern fn ke_font_loader_stb_create(io: ?*abi_io.c.ke_io, out_loader: ?*abi_text.c.ke_font_loader_handle) abi_result.c.ke_result;
@@ -20,3 +24,7 @@ pub extern fn ke_font_loader_stb_create(io: ?*abi_io.c.ke_io, out_loader: ?*abi_
 /// Sends every line ke_text_stb_truetype logs to callback, with ctx; a NULL callback sends them
 /// back to stderr, where they go until this is called. Called once, before the library logs.
 pub extern fn ke_text_stb_truetype_set_log_callback(callback: ke_log_callback, ctx: ?*anyopaque) void;
+
+/// Gives the parts ke_text_stb_truetype contains: `font_loader_stb`, providing ke_font_loader,
+/// with the slot `io`.
+pub extern fn ke_text_stb_truetype_parts(out_count: ?*usize) ?*const abi_part.c.ke_part;

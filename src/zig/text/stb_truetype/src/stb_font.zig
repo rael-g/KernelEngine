@@ -2,6 +2,8 @@
 //! into an RGBA atlas with a metrics record per glyph.
 
 const std = @import("std");
+const abi_part = @import("abi_part");
+const part = @import("part");
 
 pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @import("log").Destination("ke_text_stb_truetype").logFn };
 
@@ -188,6 +190,16 @@ export fn ke_font_loader_stb_create(io_in: ?*abi_io.c.ke_io, out_loader: ?*abi_t
     state.* = .{ .api = .{ .handle = state, .load_font = &loadFont, .free_font = &freeFont }, .io = io, .reads = .{ .gpa = gpa } };
     out.* = .{ .ref = &state.api, .destroy = &destroy };
     return R.ok;
+}
+
+pub const parts = [_]abi_part.c.ke_part{
+    part.of(ke_font_loader_stb_create, .{ .name = "font_loader_stb", .slots = &.{"io"}, .set_log = @ptrCast(&@import("log").Destination("ke_text_stb_truetype").setLogCallback) }),
+};
+
+/// The library's parts.
+export fn ke_text_stb_truetype_parts(out_count: ?*usize) callconv(.c) ?*const abi_part.c.ke_part {
+    if (out_count) |n| n.* = parts.len;
+    return &parts[0];
 }
 
 const testing = std.testing;
@@ -389,4 +401,12 @@ test "creating and destroying the font loader leaves no block allocated" {
     const h = try served_io.loader();
     h.destroy.?(h.ref);
     try heap.expectNoLeaks();
+}
+
+test "the library's parts name font_loader_stb and their slots" {
+    var count: usize = 0;
+    const all = ke_text_stb_truetype_parts(&count).?;
+    try std.testing.expectEqual(@as(usize, 1), count);
+    try std.testing.expectEqualStrings("font_loader_stb", std.mem.span(@as([*]const abi_part.c.ke_part, @ptrCast(all))[0].name.?));
+    try std.testing.expectEqual(@as(usize, 1), @as([*]const abi_part.c.ke_part, @ptrCast(all))[0].slot_count);
 }
