@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <NativeTarget>ke_runner_window</NativeTarget>
+  </PropertyGroup>
+
+  <Import Project="../../NativeDependencies.targets" />
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\common\KernelEngine.Common\KernelEngine.Common.csproj" />
+    <ProjectReference Include="..\KernelEngine.Runner\KernelEngine.Runner.csproj" />
+    <ProjectReference Include="..\..\part\KernelEngine.Part\KernelEngine.Part.csproj" />
+    <ProjectReference Include="..\..\scheduler\KernelEngine.Scheduler\KernelEngine.Scheduler.csproj" />
+    <ProjectReference Include="..\..\window\KernelEngine.Window\KernelEngine.Window.csproj" />
+    <ProjectReference Include="..\..\logger\KernelEngine.Logger\KernelEngine.Logger.csproj" />
+    <ProjectReference Include="..\..\logger\KernelEngine.Logger.Interop\KernelEngine.Logger.Interop.csproj" />
+  </ItemGroup>
+
+</Project>
