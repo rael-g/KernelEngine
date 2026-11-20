@@ -104,10 +104,9 @@ pub extern fn ke_input_actions_evaluation_create(actions: ?*abi_input_actions.c.
 
 /// Creates the module that keeps every world transform equal to its local transform composed
 /// with its parent's world transform: it registers one system in post_update_set of post_update,
-/// which orders the entities parents-before-children each run and walks them once. The transform
-/// and hierarchy components are resolved by the names a scene_tree registers them under, so a
-/// scene_tree must exist on ecs first. Destroying the module unregisters the system; components
-/// and entities stay.
+/// which orders the entities parents-before-children each run and walks them once. It registers
+/// the transform and hierarchy components on ecs as a scene_tree does, so either may be created
+/// first. Destroying the module unregisters the system; components and entities stay.
 pub extern fn ke_scene_hierarchy_create(ecs: ?*abi_ecs.c.ke_ecs, post_update: ?*abi_schedule.c.ke_schedule, post_update_set: ke_schedule_set_id, out_module: ?*abi_part.c.ke_owner) abi_result.c.ke_result;
 
 /// Creates a scene_tree backed by the supplied ecs. Registers the transform, hierarchy and name

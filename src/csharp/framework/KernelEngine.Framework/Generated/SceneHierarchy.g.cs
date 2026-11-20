@@ -5,7 +5,7 @@
 
 namespace KernelEngine.Framework;
 
-/// <summary>Creates the module that keeps every world transform equal to its local transform composed with its parent's world transform: it registers one system in post_update_set of post_update, which orders the entities parents-before-children each run and walks them once. The transform and hierarchy components are resolved by the names a scene_tree registers them under, so a scene_tree must exist on ecs first. Destroying the module unregisters the system; components and entities stay.</summary>
+/// <summary>Creates the module that keeps every world transform equal to its local transform composed with its parent's world transform: it registers one system in post_update_set of post_update, which orders the entities parents-before-children each run and walks them once. It registers the transform and hierarchy components on ecs as a scene_tree does, so either may be created first. Destroying the module unregisters the system; components and entities stay.</summary>
 public sealed unsafe partial class SceneHierarchy : IDisposable
 {
 
@@ -50,7 +50,7 @@ public sealed unsafe partial class SceneHierarchy : IDisposable
         }
     }
 
-    /// <summary>Creates the module that keeps every world transform equal to its local transform composed with its parent's world transform: it registers one system in post_update_set of post_update, which orders the entities parents-before-children each run and walks them once. The transform and hierarchy components are resolved by the names a scene_tree registers them under, so a scene_tree must exist on ecs first. Destroying the module unregisters the system; components and entities stay.</summary>
+    /// <summary>Creates the module that keeps every world transform equal to its local transform composed with its parent's world transform: it registers one system in post_update_set of post_update, which orders the entities parents-before-children each run and walks them once. It registers the transform and hierarchy components on ecs as a scene_tree does, so either may be created first. Destroying the module unregisters the system; components and entities stay.</summary>
     /// <param name="ecs">Must outlive the module.</param>
     /// <param name="postUpdate">Must outlive the module.</param>
     /// <param name="postUpdateSet">The set of post_update the system joins.</param>

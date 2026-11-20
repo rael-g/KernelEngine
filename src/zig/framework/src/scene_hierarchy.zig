@@ -16,6 +16,7 @@ const R = @import("result").Result(.{});
 const log = std.log.scoped(.framework);
 const heap = @import("heap");
 const mat4 = @import("mat4.zig");
+const scene_tree = @import("scene_tree.zig");
 
 /// Created by `ke_scene_hierarchy_create`, owned by the owner it returns, and freed by `ownerDestroy`,
 /// which unregisters first. `schedule` keeps its address as the user data of `propagateSystem`, so the
@@ -139,11 +140,11 @@ fn ownerDestroy(ref: ?*anyopaque) callconv(.c) void {
     heap.gpa.destroy(s);
 }
 
-/// Factory. Resolves the scene tree components, registers `scene.propagate_transforms` in `post_update_set`
-/// of `post_update`, and writes an owner of the `State`. A null argument fails as an invalid argument; a
-/// transform, 2D transform, world transform or hierarchy component not registered on the ecs fails as not
-/// found; a failed allocation fails as out of memory; a refused system fails with the schedule's code. Each
-/// leaves the owner zeroed.
+/// Factory. Registers the transform, 2D transform, world transform and hierarchy components as a scene
+/// tree does, registers `scene.propagate_transforms` in `post_update_set` of `post_update`, and writes an
+/// owner of the `State`. A null argument fails as an invalid argument; a refused component fails with the
+/// ecs's code; a failed allocation fails as out of memory; a refused system fails with the schedule's code.
+/// Each leaves the owner zeroed.
 export fn ke_scene_hierarchy_create(
     ecs_in: ?*abi_ecs.c.ke_ecs,
     post_update_in: ?*abi_schedule.c.ke_schedule,
@@ -159,18 +160,10 @@ export fn ke_scene_hierarchy_create(
 }
 
 fn create(ecs: *abi_ecs.c.ke_ecs, post_update: *abi_schedule.c.ke_schedule, post_update_set: abi_schedule.c.ke_schedule_set_id) R.Error!abi_part.c.ke_owner {
-    var transform_meta: abi_ecs.c.ke_component_meta = undefined;
-    var transform2d_meta: abi_ecs.c.ke_component_meta = undefined;
-    var world_transform_meta: abi_ecs.c.ke_component_meta = undefined;
-    var hierarchy_meta: abi_ecs.c.ke_component_meta = undefined;
-    if (!ecs.component_lookup.?(ecs, abi_spatial_contract.c.KE_COMPONENT_NAME_TRANSFORM, &transform_meta) or
-        !ecs.component_lookup.?(ecs, abi_spatial_contract.c.KE_COMPONENT_NAME_TRANSFORM2D, &transform2d_meta) or
-        !ecs.component_lookup.?(ecs, abi_spatial_contract.c.KE_COMPONENT_NAME_WORLD_TRANSFORM, &world_transform_meta) or
-        !ecs.component_lookup.?(ecs, abi_framework_components.c.KE_COMPONENT_NAME_HIERARCHY, &hierarchy_meta))
-    {
-        log.warn("scene hierarchy: the scene tree components are not registered on this ecs", .{});
-        return error.NotFound;
-    }
+    const transform_cid = try scene_tree.registerComponent(ecs, abi_spatial_contract.c.KE_COMPONENT_NAME_TRANSFORM, abi_spatial.c.ke_transform_component, &abi_spatial_contract.c.ke_transform_component_fields);
+    const transform2d_cid = try scene_tree.registerComponent(ecs, abi_spatial_contract.c.KE_COMPONENT_NAME_TRANSFORM2D, abi_spatial.c.ke_transform2d_component, &abi_spatial_contract.c.ke_transform2d_component_fields);
+    const world_transform_cid = try scene_tree.registerComponent(ecs, abi_spatial_contract.c.KE_COMPONENT_NAME_WORLD_TRANSFORM, abi_spatial.c.ke_world_transform_component, &.{});
+    const hierarchy_cid = try scene_tree.registerComponent(ecs, abi_framework_components.c.KE_COMPONENT_NAME_HIERARCHY, abi_framework_components.c.ke_hierarchy_component, &.{});
 
     const s = try heap.gpa.create(State);
     errdefer heap.gpa.destroy(s);
@@ -178,10 +171,10 @@ fn create(ecs: *abi_ecs.c.ke_ecs, post_update: *abi_schedule.c.ke_schedule, post
         .schedule = post_update,
         .set = .{post_update_set},
         .ecs = ecs,
-        .transform_cid = transform_meta.cid,
-        .transform2d_cid = transform2d_meta.cid,
-        .world_transform_cid = world_transform_meta.cid,
-        .hierarchy_cid = hierarchy_meta.cid,
+        .transform_cid = transform_cid,
+        .transform2d_cid = transform2d_cid,
+        .world_transform_cid = world_transform_cid,
+        .hierarchy_cid = hierarchy_cid,
     };
     s.queries_terms = .{ .{ .component = s.hierarchy_cid, .access = abi_ecs.c.KE_ECS_ACCESS_READ } };
     s.queries = .{ .{ .terms = s.queries_terms[0..].ptr, .term_count = 1 } };
@@ -213,18 +206,12 @@ fn create(ecs: *abi_ecs.c.ke_ecs, post_update: *abi_schedule.c.ke_schedule, post
 const testing = std.testing;
 const zsub = @import("zsub");
 
-fn lookupFound(args: zsub.For(abi_ecs.c.ke_ecs).Args(.component_lookup)) bool {
-    const meta = args[2] orelse return false;
-    meta.* = std.mem.zeroes(abi_ecs.c.ke_component_meta);
-    meta.cid = 1;
-    return true;
-}
 
 test "creating registers the system, and destroying unregisters it" {
     var ecs: zsub.For(abi_ecs.c.ke_ecs) = undefined;
     try ecs.init();
     defer ecs.deinit();
-    _ = ecs.when(.component_lookup).does(lookupFound);
+    _ = ecs.when(.component_register).writesFresh(2);
     var rt: zsub.For(abi_schedule.c.ke_schedule) = undefined;
     try rt.init();
     defer rt.deinit();
@@ -235,4 +222,5 @@ test "creating registers the system, and destroying unregisters it" {
     try rt.received(.register_system).times(1);
     try rt.received(.unregister_system).where(zsub.argIs(1, @as(abi_schedule.c.ke_schedule_system_id, 0))).never();
     try rt.received(.unregister_system).sameAs(rt.received(.register_system));
+    try ecs.received(.component_register).times(4);
 }

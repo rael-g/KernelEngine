@@ -68,10 +68,10 @@ fn getWorldTransform(s: *State, e: abi_asset_resolver.c.ke_entity) ?*abi_spatial
     return @ptrCast(@alignCast(s.ecs.component_get.?(s.ecs, e, s.world_transform_cid)));
 }
 
-/// Registers a component the tree writes with the field table its header generates, or none when
+/// Registers a component the tree, or the hierarchy, writes with the field table its header generates, or none when
 /// no field of it is written by a scene. A component the ecs already knows keeps its id, so trees
 /// created on one ecs share their ids, and its table is checked against the one registered first.
-fn registerComponent(ecs: *abi_ecs.c.ke_ecs, name: [*c]const u8, comptime T: type, fields: []const abi_ecs.c.ke_component_field) R.Error!abi_asset_resolver.c.ke_component_id {
+pub fn registerComponent(ecs: *abi_ecs.c.ke_ecs, name: [*c]const u8, comptime T: type, fields: []const abi_ecs.c.ke_component_field) R.Error!abi_asset_resolver.c.ke_component_id {
     var cid: abi_asset_resolver.c.ke_component_id = 0;
     try R.check(ecs.component_register.?(ecs, &abi_ecs.c.ke_component_desc{ .name = name, .size = @sizeOf(T), .alignment = @alignOf(T), .fields = if (fields.len > 0) fields.ptr else null, .field_count = @intCast(fields.len) }, &cid));
     return cid;

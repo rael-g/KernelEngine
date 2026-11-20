@@ -13,7 +13,7 @@ only through its vtable.
 |---|---|---|---|---|
 | input actions | `ke_input_actions` | `ke_input_actions_create` | a configuration and the section it reads | named actions |
 | action evaluation | `ke_owner` | `ke_input_actions_evaluation_create` | `ke_input_actions`, `ke_input`, then the schedule and set its system joins | the "input.actions" system, evaluating the actions once per tick |
-| scene hierarchy | `ke_owner` | `ke_scene_hierarchy_create` | `ke_ecs` holding a scene tree's components, then the schedule and set its system joins | world matrices, through one system |
+| scene hierarchy | `ke_owner` | `ke_scene_hierarchy_create` | `ke_ecs`, then the schedule and set its system joins | world matrices, through one system |
 | scene tree | `ke_scene_tree` | `ke_scene_tree_create` | `ke_ecs` | nodes as entities |
 | node types | `ke_node_types` | `ke_node_types_create` | `ke_scheduler`, `ke_ecs`, `ke_scene_tree`, an optional `ke_input_actions` | node types and event types |
 | node systems | `ke_owner` | `ke_node_types_systems_create` | `ke_node_types`, then a schedule and set for each of its four groups of systems | each behaviour a system of its schedule, for every type registered before or after |
