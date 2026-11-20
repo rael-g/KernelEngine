@@ -30,17 +30,17 @@
     <Project Path="src/csharp/render/KernelEngine.Render.Native/KernelEngine.Render.Native.csproj" />
     <Project Path="src/csharp/render/KernelEngine.Render.Webgpu/KernelEngine.Render.Webgpu.csproj" />
     <Project Path="src/csharp/result/KernelEngine.Result/KernelEngine.Result.csproj" />
-    <Project Path="src/csharp/scheduler/KernelEngine.Scheduler/KernelEngine.Scheduler.csproj" />
-    <Project Path="src/csharp/schedule/KernelEngine.Schedule/KernelEngine.Schedule.csproj" />
+    <Project Path="src/csharp/scheduling/KernelEngine.Scheduler/KernelEngine.Scheduler.csproj" />
+    <Project Path="src/csharp/scheduling/KernelEngine.Schedule/KernelEngine.Schedule.csproj" />
     <Project Path="src/csharp/tasks/KernelEngine.Completion/KernelEngine.Completion.csproj" />
     <Project Path="src/csharp/configuration/KernelEngine.Settings/KernelEngine.Settings.csproj" />
     <Project Path="src/csharp/assembly/KernelEngine.Part/KernelEngine.Part.csproj" />
     <Project Path="src/csharp/assembly/KernelEngine.Assembly/KernelEngine.Assembly.csproj" />
     <Project Path="src/csharp/assembly/KernelEngine.Assembly.Default/KernelEngine.Assembly.Default.csproj" />
     <Project Path="src/csharp/assembly/KernelEngine.Assembly.Toml/KernelEngine.Assembly.Toml.csproj" />
-    <Project Path="src/csharp/runner/KernelEngine.Runner/KernelEngine.Runner.csproj" />
-    <Project Path="src/csharp/runner/KernelEngine.Runner.Headless/KernelEngine.Runner.Headless.csproj" />
-    <Project Path="src/csharp/runner/KernelEngine.Runner.Window/KernelEngine.Runner.Window.csproj" />
+    <Project Path="src/csharp/scheduling/KernelEngine.Runner/KernelEngine.Runner.csproj" />
+    <Project Path="src/csharp/scheduling/KernelEngine.Runner.Headless/KernelEngine.Runner.Headless.csproj" />
+    <Project Path="src/csharp/scheduling/KernelEngine.Runner.Window/KernelEngine.Runner.Window.csproj" />
     <Project Path="src/csharp/extraction/KernelEngine.Extraction/KernelEngine.Extraction.csproj" />
     <Project Path="src/csharp/render_graph/KernelEngine.RenderGraph/KernelEngine.RenderGraph.csproj" />
     <Project Path="src/csharp/render_graph/KernelEngine.RenderGraph.Simple/KernelEngine.RenderGraph.Simple.csproj" />
@@ -66,8 +66,8 @@
     <Project Path="src/csharp/logger/KernelEngine.Logger.Interop/KernelEngine.Logger.Interop.csproj" />
     <Project Path="src/csharp/physics/KernelEngine.Physics.Abstractions/KernelEngine.Physics.Abstractions.csproj" />
     <Project Path="src/csharp/render/KernelEngine.Render.Abstractions/KernelEngine.Render.Abstractions.csproj" />
-    <Project Path="src/csharp/scheduler/KernelEngine.Scheduler.Abstractions/KernelEngine.Scheduler.Abstractions.csproj" />
-    <Project Path="src/csharp/schedule/KernelEngine.Schedule.Abstractions/KernelEngine.Schedule.Abstractions.csproj" />
+    <Project Path="src/csharp/scheduling/KernelEngine.Scheduler.Abstractions/KernelEngine.Scheduler.Abstractions.csproj" />
+    <Project Path="src/csharp/scheduling/KernelEngine.Schedule.Abstractions/KernelEngine.Schedule.Abstractions.csproj" />
     <Project Path="src/csharp/text/KernelEngine.Text.StbTrueType/KernelEngine.Text.StbTrueType.csproj" />
   </Folder>
   <Folder Name="/tests/">

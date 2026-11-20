@@ -5,7 +5,7 @@
 #include <kernel_engine/ecs/ecs.h>
 #include <kernel_engine/result/result.h>
 #include <kernel_engine/assembly/part.h>
-#include <kernel_engine/schedule/schedule.h>
+#include <kernel_engine/scheduling/schedule.h>
 
 #ifndef KE_AUDIO_MODULE_API
 #  if defined(_WIN32) || defined(__CYGWIN__)

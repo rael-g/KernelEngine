@@ -1,5 +1,5 @@
 #include <stddef.h>
-#include <kernel_engine/scheduler/scheduler.h>
+#include <kernel_engine/scheduling/scheduler.h>
 #include <kernel_engine/scheduler/scheduler_create.h>
 const unsigned long long layout_values[] = {
     sizeof(ke_scheduler_executable),

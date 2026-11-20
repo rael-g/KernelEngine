@@ -4,7 +4,7 @@
 #include <kernel_engine/ecs/ke_ecs.h>
 #include <kernel_engine/extraction/extraction.h>
 #include <kernel_engine/extraction/default/extraction_default_log.h>
-#include <kernel_engine/scheduler/scheduler.h>
+#include <kernel_engine/scheduling/scheduler.h>
 
 #ifdef __cplusplus
 extern "C"

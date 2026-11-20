@@ -4,7 +4,7 @@
 #include <kernel_engine/framework/input_actions.h>
 #include <kernel_engine/input/input.h>
 #include <kernel_engine/assembly/part.h>
-#include <kernel_engine/schedule/schedule.h>
+#include <kernel_engine/scheduling/schedule.h>
 
 #ifdef __cplusplus
 extern "C"

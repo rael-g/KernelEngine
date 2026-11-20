@@ -3,7 +3,7 @@
 
 #include <kernel_engine/ecs/ke_ecs.h>
 #include <kernel_engine/assembly/part.h>
-#include <kernel_engine/schedule/schedule.h>
+#include <kernel_engine/scheduling/schedule.h>
 
 #ifdef __cplusplus
 extern "C"

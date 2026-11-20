@@ -13,7 +13,7 @@
     <ProjectReference Include="..\..\framework\KernelEngine.Framework.Nodes\KernelEngine.Framework.Nodes.csproj" />
     <ProjectReference Include="..\..\engine_nodes\KernelEngine.EngineNodes\KernelEngine.EngineNodes.csproj" />
     <ProjectReference Include="..\..\assembly\KernelEngine.Assembly\KernelEngine.Assembly.csproj" />
-    <ProjectReference Include="..\..\runner\KernelEngine.Runner\KernelEngine.Runner.csproj" />
+    <ProjectReference Include="..\..\scheduling\KernelEngine.Runner\KernelEngine.Runner.csproj" />
   </ItemGroup>
 
   <ItemGroup>

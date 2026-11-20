@@ -2,7 +2,7 @@
 #define KERNEL_ENGINE_RENDER_SCENE_SCENE_RESOLVE_SYSTEMS_CREATE_H_
 
 #include <kernel_engine/assembly/part.h>
-#include <kernel_engine/schedule/schedule.h>
+#include <kernel_engine/scheduling/schedule.h>
 #include <kernel_engine/result/result.h>
 #include <kernel_engine/render/scene_resolve.h>
 

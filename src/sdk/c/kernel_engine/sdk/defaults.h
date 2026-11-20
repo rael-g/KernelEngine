@@ -30,7 +30,7 @@
 #include <kernel_engine/render/ui/render_ui_parts.h>
 #include <kernel_engine/render/webgpu/gpu_device_webgpu_parts.h>
 #include <kernel_engine/render_graph/simple/render_graph_simple_parts.h>
-#include <kernel_engine/runner/runner.h>
+#include <kernel_engine/scheduling/runner.h>
 #include <kernel_engine/runner/window/runner_window_parts.h>
 #include <kernel_engine/schedule/schedule_parts.h>
 #include <kernel_engine/scheduler/scheduler_parts.h>

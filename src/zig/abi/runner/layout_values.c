@@ -1,5 +1,5 @@
 #include <stddef.h>
-#include <kernel_engine/runner/runner.h>
+#include <kernel_engine/scheduling/runner.h>
 const unsigned long long layout_values[] = {
     sizeof(ke_runner),
     offsetof(ke_runner, handle),

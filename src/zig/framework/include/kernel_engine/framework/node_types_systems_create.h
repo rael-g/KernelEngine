@@ -2,7 +2,7 @@
 #define KERNEL_ENGINE_FRAMEWORK_NODE_TYPES_SYSTEMS_CREATE_H_
 #include <kernel_engine/framework/node_types.h>
 #include <kernel_engine/assembly/part.h>
-#include <kernel_engine/schedule/schedule.h>
+#include <kernel_engine/scheduling/schedule.h>
 
 
 #ifdef __cplusplus

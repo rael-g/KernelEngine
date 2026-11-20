@@ -27,8 +27,8 @@ pub fn build(b: *std.Build) void {
     translated.addIncludePath(b.path("../../../../c/math"));
     translated.addIncludePath(b.path("../../../../c/assembly"));
     translated.addIncludePath(b.path("../../../../c/result"));
-    translated.addIncludePath(b.path("../../../../c/schedule"));
-    translated.addIncludePath(b.path("../../../schedule/include"));
+    translated.addIncludePath(b.path("../../../../c/scheduling"));
+    translated.addIncludePath(b.path("../../../scheduling/schedule/include"));
     translated.addIncludePath(b.path("../../../../c/configuration"));
     const tests = b.addTest(.{ .root_module = b.createModule(.{
         .root_source_file = b.path("layout_test.zig"),
@@ -50,8 +50,8 @@ pub fn build(b: *std.Build) void {
     tests.root_module.addIncludePath(b.path("../../../../c/math"));
     tests.root_module.addIncludePath(b.path("../../../../c/assembly"));
     tests.root_module.addIncludePath(b.path("../../../../c/result"));
-    tests.root_module.addIncludePath(b.path("../../../../c/schedule"));
-    tests.root_module.addIncludePath(b.path("../../../schedule/include"));
+    tests.root_module.addIncludePath(b.path("../../../../c/scheduling"));
+    tests.root_module.addIncludePath(b.path("../../../scheduling/schedule/include"));
     tests.root_module.addIncludePath(b.path("../../../../c/configuration"));
     b.step("test", "Check the audio_module_factory ABI against its headers").dependOn(&b.addRunArtifact(tests).step);
 }

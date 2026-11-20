@@ -13,8 +13,8 @@
     <ProjectReference Include="..\..\result\KernelEngine.Result\KernelEngine.Result.csproj" />
     <ProjectReference Include="..\..\ecs\KernelEngine.Ecs\KernelEngine.Ecs.csproj" />
     <ProjectReference Include="..\..\tasks\KernelEngine.Completion\KernelEngine.Completion.csproj" />
-    <ProjectReference Include="..\..\schedule\KernelEngine.Schedule\KernelEngine.Schedule.csproj" />
-    <ProjectReference Include="..\..\scheduler\KernelEngine.Scheduler\KernelEngine.Scheduler.csproj" />
+    <ProjectReference Include="..\..\scheduling\KernelEngine.Schedule\KernelEngine.Schedule.csproj" />
+    <ProjectReference Include="..\..\scheduling\KernelEngine.Scheduler\KernelEngine.Scheduler.csproj" />
     <ProjectReference Include="..\..\logger\KernelEngine.Logger.Interop\KernelEngine.Logger.Interop.csproj" />
   </ItemGroup>
 

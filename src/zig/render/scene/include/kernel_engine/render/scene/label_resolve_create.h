@@ -10,7 +10,7 @@
 #include <kernel_engine/render/ui/ui.h>
 #include <kernel_engine/render/ui/ui_create.h>
 #include <kernel_engine/assembly/part.h>
-#include <kernel_engine/schedule/schedule.h>
+#include <kernel_engine/scheduling/schedule.h>
 
 #ifndef KE_RENDER_SCENE_API
     #if defined(_WIN32) || defined(__CYGWIN__)

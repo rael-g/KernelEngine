@@ -29,8 +29,8 @@
     <ProjectReference Include="..\..\render\KernelEngine.Render.Frame\KernelEngine.Render.Frame.csproj" />
     <ProjectReference Include="..\..\audio\KernelEngine.Audio\KernelEngine.Audio.csproj" />
     <ProjectReference Include="..\..\view\KernelEngine.View\KernelEngine.View.csproj" />
-    <ProjectReference Include="..\..\runner\KernelEngine.Runner.Window\KernelEngine.Runner.Window.csproj" />
-    <ProjectReference Include="..\..\runner\KernelEngine.Runner.Headless\KernelEngine.Runner.Headless.csproj" />
+    <ProjectReference Include="..\..\scheduling\KernelEngine.Runner.Window\KernelEngine.Runner.Window.csproj" />
+    <ProjectReference Include="..\..\scheduling\KernelEngine.Runner.Headless\KernelEngine.Runner.Headless.csproj" />
   </ItemGroup>
 
   <ItemGroup>

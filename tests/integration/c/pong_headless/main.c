@@ -14,7 +14,7 @@
 #include <kernel_engine/physics/body2d/physics_body2d_parts.h>
 #include <kernel_engine/physics/box2d/physics_2d_box2d_parts.h>
 #include <kernel_engine/runner/headless/runner_headless_parts.h>
-#include <kernel_engine/runner/runner.h>
+#include <kernel_engine/scheduling/runner.h>
 #include <kernel_engine/schedule/schedule_parts.h>
 #include <kernel_engine/scheduler/scheduler_parts.h>
 #include <kernel_engine/sdk/node.h>
