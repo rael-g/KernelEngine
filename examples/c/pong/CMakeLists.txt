@@ -32,13 +32,14 @@ target_link_libraries(c_pong PRIVATE
     KernelEngine::ke_render_camera
     KernelEngine::ke_render_scene
     KernelEngine::ke_render_frame
-    KernelEngine::ke_render_shadow
-    KernelEngine::ke_render_cluster
     KernelEngine::ke_render_gbuffer
     KernelEngine::ke_render_deferred_lighting
     KernelEngine::ke_render_forward
     KernelEngine::ke_render_tonemap
-    KernelEngine::ke_render_ui)
+    KernelEngine::ke_render_ui
+    KernelEngine::ke_assembly_default
+    KernelEngine::ke_runner_window
+    KernelEngine::ke_engine_nodes)
 if(NOT WIN32)
     target_link_libraries(c_pong PRIVATE m)
 endif()
