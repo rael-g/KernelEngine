@@ -38,6 +38,7 @@ target_link_libraries(c_pong PRIVATE
     KernelEngine::ke_render_tonemap
     KernelEngine::ke_render_ui
     KernelEngine::ke_assembly_default
+    KernelEngine::ke_assembly_toml
     KernelEngine::ke_runner_window
     KernelEngine::ke_engine_nodes)
 if(NOT WIN32)
