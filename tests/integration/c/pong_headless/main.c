@@ -2,10 +2,10 @@
 
 #include <kernel_engine/assembly/default/assembly_default_create.h>
 #include <kernel_engine/async/enki/async_enki_parts.h>
+#include <kernel_engine/audio/module/audio_module_parts.h>
 #include <kernel_engine/configuration/configuration_create.h>
 #include <kernel_engine/configuration/toml/configuration_toml.h>
 #include <kernel_engine/ecs/ecs_flecs_parts.h>
-#include <kernel_engine/engine_nodes/engine_nodes_parts.h>
 #include <kernel_engine/file_system/std/file_system_std_create.h>
 #include <kernel_engine/framework/framework_parts.h>
 #include <kernel_engine/input/default/input_default_parts.h>
@@ -13,10 +13,12 @@
 #include <kernel_engine/job/enki/job_system_enki_parts.h>
 #include <kernel_engine/physics/body2d/physics_body2d_parts.h>
 #include <kernel_engine/physics/box2d/physics_2d_box2d_parts.h>
+#include <kernel_engine/render/scene/render_scene_parts.h>
+#include <kernel_engine/render/ui/render_ui_parts.h>
 #include <kernel_engine/runner/headless/runner_headless_parts.h>
-#include <kernel_engine/runner/runner.h>
-#include <kernel_engine/schedule/schedule_parts.h>
 #include <kernel_engine/scheduler/scheduler_parts.h>
+#include <kernel_engine/schedule/schedule_parts.h>
+#include <kernel_engine/scheduling/runner.h>
 #include <kernel_engine/sdk/node.h>
 #include <kernel_engine/sdk/paths.h>
 
@@ -95,8 +97,8 @@ static void compose(ke_assembly *a)
 {
     static const parts_fn libraries[] = {
         ke_job_system_enki_parts, ke_async_enki_parts, ke_io_std_parts, ke_input_default_parts, ke_ecs_flecs_parts,
-        ke_schedule_parts, ke_scheduler_parts, ke_framework_parts, ke_engine_nodes_parts, ke_physics_2d_box2d_parts,
-        ke_physics_body2d_parts, ke_runner_headless_parts,
+        ke_schedule_parts, ke_scheduler_parts, ke_framework_parts, ke_physics_2d_box2d_parts,
+        ke_physics_body2d_parts, ke_render_scene_parts, ke_render_ui_parts, ke_audio_module_parts, ke_runner_headless_parts,
     };
     for (size_t i = 0; i < sizeof libraries / sizeof libraries[0]; ++i) add_parts(a, libraries[i]);
     check("add_part", a->add_part(a, &pong_part));
@@ -125,7 +127,11 @@ static void compose(ke_assembly *a)
         { "action_evaluation", "input_actions_evaluation", NULL },
         { "node_types", "node_types", NULL },
         { "node_systems", "node_types_systems", NULL },
-        { "engine_nodes", "engine_nodes", NULL },
+        { "spatial_nodes", "spatial_nodes", NULL },
+        { "render_nodes", "render_nodes", NULL },
+        { "ui_nodes", "ui_nodes", NULL },
+        { "audio_nodes", "audio_nodes", NULL },
+        { "physics_nodes", "physics_nodes", NULL },
         { "pong_nodes", "pong_nodes", NULL },
         { "assets", "asset_resolver", NULL },
         { "scene_files", "scene_files", "scene_files" },

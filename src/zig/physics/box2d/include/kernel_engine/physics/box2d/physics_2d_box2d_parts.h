@@ -2,7 +2,7 @@
 #define KERNEL_ENGINE_PHYSICS_BOX2D_PHYSICS_2D_BOX2D_PARTS_H_
 
 #include <kernel_engine/physics/box2d/box2d_physics.h>
-#include <kernel_engine/part/part.h>
+#include <kernel_engine/assembly/part.h>
 
 #include <stddef.h>
 

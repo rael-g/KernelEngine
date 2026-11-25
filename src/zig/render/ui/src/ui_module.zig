@@ -3,7 +3,6 @@
 //! fonts. It owns the creation and teardown of that pass and of its systems, behind two factories.
 
 const abi_render_contract = @import("abi_render_contract");
-const abi_asset_resolver = @import("abi_asset_resolver");
 const abi_render_gpu = @import("abi_render_gpu");
 const abi_render_handles = @import("abi_render_handles");
 const abi_ui_components = @import("abi_ui_components");
@@ -75,24 +74,24 @@ const UiState = struct {
     ndc: abi_render_gpu.c.ke_ndc_convention = undefined,
     pipeline_params: abi_render_gpu.c.ke_gpu_render_pipeline_desc = undefined,
     binder: *abi_render_gpu.c.ke_render_resource_binder = undefined,
-    layout: abi_asset_resolver.c.ke_render_shader_layout = abi_render_gpu.c.KE_RENDER_BINDING_INVALID,
-    frame_uniform: abi_asset_resolver.c.ke_gpu_buffer = abi_render_gpu.c.KE_GPU_INVALID_HANDLE,
-    frame_set: abi_asset_resolver.c.ke_render_resource_set = abi_render_gpu.c.KE_RENDER_BINDING_INVALID,
-    vbo: abi_asset_resolver.c.ke_gpu_buffer = abi_render_gpu.c.KE_GPU_INVALID_HANDLE,
+    layout: abi_render.c.ke_render_shader_layout = abi_render_gpu.c.KE_RENDER_BINDING_INVALID,
+    frame_uniform: abi_render.c.ke_gpu_buffer = abi_render_gpu.c.KE_GPU_INVALID_HANDLE,
+    frame_set: abi_render.c.ke_render_resource_set = abi_render_gpu.c.KE_RENDER_BINDING_INVALID,
+    vbo: abi_render.c.ke_gpu_buffer = abi_render_gpu.c.KE_GPU_INVALID_HANDLE,
     vbo_bytes: usize = 0,
     output: rg.ke_render_graph_resource = rg.KE_RENDER_GRAPH_RESOURCE_INVALID,
 
     vertices: std.ArrayList(UiVertex) = .empty,
     batches: std.ArrayList(UiBatch) = .empty,
-    set_cache: std.AutoHashMapUnmanaged(u32, abi_asset_resolver.c.ke_render_resource_set) = .empty,
+    set_cache: std.AutoHashMapUnmanaged(u32, abi_render.c.ke_render_resource_set) = .empty,
 
     fonts: std.ArrayList(UiFont) = .empty,
 
     access: [1]abi_ecs.c.ke_ecs_query_term = undefined,
     queries_terms: [2]abi_ecs.c.ke_ecs_query_term = undefined,
     queries: [2]abi_ecs.c.ke_ecs_query_desc = undefined,
-    quad_cid: abi_asset_resolver.c.ke_component_id = 0,
-    label_cid: abi_asset_resolver.c.ke_component_id = 0,
+    quad_cid: abi_ecs.c.ke_component_id = 0,
+    label_cid: abi_ecs.c.ke_component_id = 0,
     label_shape_queries_terms: [1]abi_ecs.c.ke_ecs_query_term = undefined,
     label_shape_queries: [1]abi_ecs.c.ke_ecs_query_desc = undefined,
 };
@@ -213,14 +212,14 @@ const shader_layout = abi_render_gpu.c.ke_render_shader_layout_desc{
 /// Called by `system` for each batch, with the set of a texture built on first use and cached by
 /// the texture's index. A set that cannot be created is not kept, and the next draw of that slot
 /// creates it again.
-fn uiSetFor(ui: *UiState, tex: abi_render_handles.c.ke_texture_handle) abi_asset_resolver.c.ke_render_resource_set {
+fn uiSetFor(ui: *UiState, tex: abi_render_handles.c.ke_texture_handle) abi_render.c.ke_render_resource_set {
     if (ui.set_cache.get(tex.bits)) |cached| return cached;
 
     const view = ui.core.*.texture_view.?(ui.core, tex);
     const bindings = [_]abi_render_gpu.c.ke_render_shader_binding{
         .{ .name = "t_tex", .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = view, .sampler = 0 },
     };
-    var set: abi_asset_resolver.c.ke_render_resource_set = abi_render_gpu.c.KE_RENDER_BINDING_INVALID;
+    var set: abi_render.c.ke_render_resource_set = abi_render_gpu.c.KE_RENDER_BINDING_INVALID;
     if (ui.binder.create_set.?(ui.binder, ui.layout, "tex", "ui.tex_set", &bindings, bindings.len, &set) != R.ok) return abi_render_gpu.c.KE_RENDER_BINDING_INVALID;
     ui.set_cache.put(gpa, tex.bits, set) catch {
         ui.binder.destroy_set.?(ui.binder, set);
@@ -262,7 +261,7 @@ fn ensureVertexBuffer(ui: *UiState, bytes: usize) R.Error!void {
     if (bytes <= ui.vbo_bytes) return;
     const size = std.math.ceilPowerOfTwoAssert(usize, bytes);
     const dev = ui.device;
-    var vbo: abi_asset_resolver.c.ke_gpu_buffer = undefined;
+    var vbo: abi_render.c.ke_gpu_buffer = undefined;
     try R.check(dev.create_buffer.?(dev, &abi_render_gpu.c.ke_gpu_buffer_desc{
         .label = "ui.vbo",
         .initial_data = null,
@@ -423,9 +422,9 @@ fn setup(ui: *UiState, core: *abi_render.c.ke_render_service, dev: *abi_render_g
     ui.frame = frame;
     const format = ui.frame.output_format.?(ui.frame);
 
-    var vs: abi_asset_resolver.c.ke_gpu_shader_module = undefined;
+    var vs: abi_render.c.ke_gpu_shader_module = undefined;
     try R.check(core.*.load_shader.?(core, "ui", abi_render_gpu.c.KE_GPU_SHADER_STAGE_VERTEX, &vs));
-    var fs: abi_asset_resolver.c.ke_gpu_shader_module = undefined;
+    var fs: abi_render.c.ke_gpu_shader_module = undefined;
     try R.check(core.*.load_shader.?(core, "ui", abi_render_gpu.c.KE_GPU_SHADER_STAGE_FRAGMENT, &fs));
 
     ui.binder = core.*.resource_binder.?(core).?;
@@ -567,7 +566,7 @@ export fn ke_render_ui_create(
     return R.ok;
 }
 
-fn registerUi(e: *abi_ecs.c.ke_ecs, quad: *abi_asset_resolver.c.ke_component_id, label: *abi_asset_resolver.c.ke_component_id) R.Error!void {
+fn registerUi(e: *abi_ecs.c.ke_ecs, quad: *abi_ecs.c.ke_component_id, label: *abi_ecs.c.ke_component_id) R.Error!void {
     quad.* = abi_ecs.c.KE_COMPONENT_INVALID;
     try R.check(e.component_register.?(e, &abi_render_contract.c.ke_ui_quad_component_desc, quad));
     label.* = abi_ecs.c.KE_COMPONENT_INVALID;
@@ -577,8 +576,8 @@ fn registerUi(e: *abi_ecs.c.ke_ecs, quad: *abi_asset_resolver.c.ke_component_id,
 fn register(ui: *UiState, main: *abi_ecs.c.ke_ecs, render: *abi_ecs.c.ke_ecs, extraction: *abi_extraction.c.ke_extraction, service: *abi_render.c.ke_render_service, device: *abi_render_gpu.c.ke_gpu_device, frame: *abi_render_frame.c.ke_render_frame) R.Error!void {
     try setup(ui, service, device, frame);
 
-    var main_quad: abi_asset_resolver.c.ke_component_id = 0;
-    var main_label: abi_asset_resolver.c.ke_component_id = 0;
+    var main_quad: abi_ecs.c.ke_component_id = 0;
+    var main_label: abi_ecs.c.ke_component_id = 0;
     try registerUi(main, &main_quad, &main_label);
     try registerUi(render, &ui.quad_cid, &ui.label_cid);
     try R.check(extraction.extract_copy.?(extraction, main_quad, ui.quad_cid));
@@ -617,9 +616,14 @@ export fn ke_render_ui_systems_create(
     return R.ok;
 }
 
+comptime {
+    _ = @import("ui_nodes.zig");
+}
+
 pub const parts = [_]abi_part.c.ke_part{
     part.of(ke_render_ui_create, .{ .name = "render_ui", .slots = &.{"main", "render", "extraction", "service", "device", "frame"}, .set_log = @ptrCast(&@import("log").Destination("ke_render_ui").setLogCallback) }),
     part.of(ke_render_ui_systems_create, .{ .name = "render_ui_systems", .slots = &.{"ui"}, .hooks = &.{"render_prepare", "render_queue"}, .set_log = @ptrCast(&@import("log").Destination("ke_render_ui").setLogCallback) }),
+    part.of(@import("ui_nodes.zig").ke_ui_nodes_create, .{ .name = "ui_nodes", .slots = &.{"types"}, .set_log = @ptrCast(&@import("log").Destination("ke_render_ui").setLogCallback) }),
 };
 
 /// The library's parts.
@@ -805,7 +809,7 @@ test "creating and destroying ui passes leaves no block allocated" {
 test "the library's parts name render_ui, render_ui_systems and their slots" {
     var count: usize = 0;
     const all = ke_render_ui_parts(&count).?;
-    try std.testing.expectEqual(@as(usize, 2), count);
+    try std.testing.expectEqual(@as(usize, 3), count);
     try std.testing.expectEqualStrings("render_ui", std.mem.span(@as([*]const abi_part.c.ke_part, @ptrCast(all))[0].name.?));
     try std.testing.expectEqual(@as(usize, 6), @as([*]const abi_part.c.ke_part, @ptrCast(all))[0].slot_count);
     try std.testing.expectEqualStrings("render_ui_systems", std.mem.span(@as([*]const abi_part.c.ke_part, @ptrCast(all))[1].name.?));

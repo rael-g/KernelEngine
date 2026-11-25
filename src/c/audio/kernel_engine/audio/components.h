@@ -2,7 +2,7 @@
 #define KERNEL_ENGINE_AUDIO_COMPONENTS_H_
 
 #include <kernel_engine/audio/audio.h>
-#include <kernel_engine/spatial/transform.h>
+#include <kernel_engine/ecs/transform.h>
 #include <stdbool.h>
 #include <stdint.h>
 

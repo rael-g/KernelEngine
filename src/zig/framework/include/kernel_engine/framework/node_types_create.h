@@ -5,7 +5,7 @@
 #include <kernel_engine/framework/input_actions.h>
 #include <kernel_engine/framework/node_types.h>
 #include <kernel_engine/framework/scene_tree.h>
-#include <kernel_engine/scheduler/scheduler.h>
+#include <kernel_engine/scheduling/scheduler.h>
 
 #ifdef __cplusplus
 extern "C"

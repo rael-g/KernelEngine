@@ -2,6 +2,7 @@
 
 const abi_ecs = @import("ecs");
 const abi_extraction = @import("extraction");
+const abi_framework = @import("framework");
 const abi_logger = @import("logger");
 const abi_part = @import("part");
 const abi_render = @import("render");
@@ -50,4 +51,12 @@ pub fn renderUiSystemsCreate(ui: ?*abi_render_ui.c.ke_render_ui, render_prepare:
 /// `render_queue`).
 pub fn renderUiParts(out_count: ?*usize) ?*const abi_part.c.ke_part {
     return c.ke_render_ui_parts(out_count);
+}
+
+/// Registers every type of `ke_ui_node_types` through types, each with the components its `with`
+/// describes.
+pub fn uiNodesCreate(types: ?*abi_framework.c.ke_node_types) Error!abi_part.c.ke_owner {
+    var written: abi_part.c.ke_owner = undefined;
+    try checkResult(c.ke_ui_nodes_create(types, &written));
+    return written;
 }

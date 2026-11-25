@@ -10,6 +10,7 @@ const abi_input_actions = @import("input_actions");
 const abi_io = @import("io");
 const abi_logger = @import("logger");
 const abi_part = @import("part");
+const abi_render = @import("render");
 const abi_result = @import("result");
 const abi_scene_tree = @import("scene_tree");
 const abi_schedule = @import("schedule");
@@ -84,6 +85,9 @@ pub const ke_scheduler_run_fn = ?*const fn (?*anyopaque, f32, ?*?*abi_completion
 /// the root of its file system; any other path is passed on as written.
 pub extern fn ke_asset_resolver_create(image_loader: ?*abi_image_loader.c.ke_image_loader, font_loader: ?*abi_text.c.ke_font_loader, io: ?*abi_io.c.ke_io, out_resolver: ?*abi_asset_resolver.c.ke_asset_resolver_handle) abi_result.c.ke_result;
 
+/// Allocates render assets over a resolver and a render service, neither of which it owns.
+pub extern fn ke_render_assets_create(resolver: ?*abi_asset_resolver.c.ke_asset_resolver, service: ?*abi_render.c.ke_render_service, out_assets: ?*abi_render.c.ke_render_assets_handle) abi_result.c.ke_result;
+
 /// Sends every line ke_framework logs to callback, with ctx; a NULL callback sends them back to
 /// stderr, where they go until this is called. Called once, before the library logs.
 pub extern fn ke_framework_set_log_callback(callback: ke_log_callback, ctx: ?*anyopaque) void;
@@ -150,3 +154,7 @@ pub extern fn ke_scene_files_create(ecs: ?*abi_ecs.c.ke_ecs, node_types: ?*abi_f
 /// `ecs`, `node_types`, `assets`, `io`, `first_scene`). A slot named after a phase takes the
 /// ke_schedule_set its systems join.
 pub extern fn ke_framework_parts(out_count: ?*usize) ?*const abi_part.c.ke_part;
+
+/// Registers every type of `ke_spatial_node_types` through types, each with the components its
+/// `with` describes.
+pub extern fn ke_spatial_nodes_create(types: ?*abi_framework.c.ke_node_types, out_owner: ?*abi_part.c.ke_owner) abi_result.c.ke_result;

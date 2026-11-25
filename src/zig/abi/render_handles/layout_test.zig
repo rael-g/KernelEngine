@@ -30,13 +30,6 @@ test "every record is laid out as the header lays it out" {
     try expectSameLayout(abi.c.ke_shadow_map_handle, translated("ke_shadow_map_handle"));
 }
 
-test "every enum value is the header's value" {
-    @setEvalBranchQuota(100_000_000);
-    try std.testing.expectEqual(@as(i64, c.KE_ALPHA_MODE_OPAQUE), @as(i64, abi.c.KE_ALPHA_MODE_OPAQUE));
-    try std.testing.expectEqual(@as(i64, c.KE_ALPHA_MODE_MASK), @as(i64, abi.c.KE_ALPHA_MODE_MASK));
-    try std.testing.expectEqual(@as(i64, c.KE_ALPHA_MODE_BLEND), @as(i64, abi.c.KE_ALPHA_MODE_BLEND));
-}
-
 test "every constant is the header's value" {
     @setEvalBranchQuota(100_000_000);
     try std.testing.expectEqual(@as(i128, c.KE_HANDLE_INDEX_BITS), @as(i128, abi.c.KE_HANDLE_INDEX_BITS));

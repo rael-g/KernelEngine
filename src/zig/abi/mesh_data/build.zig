@@ -5,16 +5,14 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     const abi = b.addModule("abi", .{ .root_source_file = b.path("mesh_data.zig") });
-    abi.addImport("mesh", b.dependency("abi_mesh", .{}).module("abi"));
     abi.addImport("result", b.dependency("abi_result", .{}).module("abi"));
 
     const headers = b.addWriteFiles().add("layout.h",
         \\#include <kernel_engine/asset/mesh_data.h>
         \\#include <kernel_engine/asset/mesh_shape.h>
+        \\#include <kernel_engine/asset/vertex.h>
     );
     const translated = b.addTranslateC(.{ .root_source_file = headers, .target = target, .optimize = optimize });
-    translated.addIncludePath(b.path("../../../c/math"));
-    translated.addIncludePath(b.path("../../../c/render"));
     translated.addIncludePath(b.path("../../../c/asset"));
     translated.addIncludePath(b.path("../../../c/result"));
     const tests = b.addTest(.{ .root_module = b.createModule(.{
@@ -28,8 +26,6 @@ pub fn build(b: *std.Build) void {
         },
     }) });
     tests.root_module.addCSourceFile(.{ .file = b.path("layout_values.c") });
-    tests.root_module.addIncludePath(b.path("../../../c/math"));
-    tests.root_module.addIncludePath(b.path("../../../c/render"));
     tests.root_module.addIncludePath(b.path("../../../c/asset"));
     tests.root_module.addIncludePath(b.path("../../../c/result"));
     b.step("test", "Check the mesh_data ABI against its headers").dependOn(&b.addRunArtifact(tests).step);

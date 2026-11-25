@@ -2,7 +2,7 @@
 #define KERNEL_ENGINE_RENDER_CLUSTER_RENDER_CLUSTER_PARTS_H_
 
 #include <kernel_engine/render/cluster/cluster_create.h>
-#include <kernel_engine/part/part.h>
+#include <kernel_engine/assembly/part.h>
 
 #include <stddef.h>
 

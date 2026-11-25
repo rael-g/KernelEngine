@@ -1,5 +1,6 @@
 #include <stddef.h>
 #include <kernel_engine/render/service/render_service.h>
+#include <kernel_engine/render/assets.h>
 #include <kernel_engine/render/camera.h>
 #include <kernel_engine/render/scene_resolve.h>
 #include <kernel_engine/render/resource_groups.h>
@@ -75,6 +76,14 @@ const unsigned long long layout_values[] = {
     sizeof(ke_render_service_handle),
     offsetof(ke_render_service_handle, ref),
     offsetof(ke_render_service_handle, destroy),
+    sizeof(ke_render_assets),
+    offsetof(ke_render_assets, handle),
+    offsetof(ke_render_assets, resolve_texture),
+    offsetof(ke_render_assets, resolve_mesh),
+    offsetof(ke_render_assets, resolve_material),
+    sizeof(ke_render_assets_handle),
+    offsetof(ke_render_assets_handle, ref),
+    offsetof(ke_render_assets_handle, destroy),
     sizeof(ke_render_camera),
     offsetof(ke_render_camera, handle),
     offsetof(ke_render_camera, view),

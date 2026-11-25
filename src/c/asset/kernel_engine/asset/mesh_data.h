@@ -1,7 +1,7 @@
 #ifndef KERNEL_ENGINE_ASSET_MESH_DATA_H_
 #define KERNEL_ENGINE_ASSET_MESH_DATA_H_
 
-#include <kernel_engine/render/mesh.h>
+#include <kernel_engine/asset/vertex.h>
 #include <stdint.h>
 
 #ifdef __cplusplus

@@ -1,7 +1,6 @@
 //! The window render target of the webgpu plugin: a `ke_gpu_render_target` whose frames are the
 //! images of a window's surface.
 
-const abi_asset_resolver = @import("abi_asset_resolver");
 const abi_render_gpu = @import("abi_render_gpu");
 const std = @import("std");
 const builtin = @import("builtin");
@@ -149,7 +148,7 @@ fn releaseFrame(t: *WindowTarget) void {
 /// lost texture is not a failure either: the surface is configured again and the invalid handle is
 /// written. A failure after the surface produced a texture releases that texture and leaves no
 /// frame held.
-fn acquire(self: [*c]abi_render_gpu.c.ke_gpu_render_target, out_view: ?*abi_asset_resolver.c.ke_gpu_texture_view) callconv(.c) abi_result.c.ke_result {
+fn acquire(self: [*c]abi_render_gpu.c.ke_gpu_render_target, out_view: ?*abi_render.c.ke_gpu_texture_view) callconv(.c) abi_result.c.ke_result {
     const out = out_view orelse return R.code(error.InvalidArgument);
     out.* = abi_render_gpu.c.KE_GPU_INVALID_HANDLE;
     const t = of(self);

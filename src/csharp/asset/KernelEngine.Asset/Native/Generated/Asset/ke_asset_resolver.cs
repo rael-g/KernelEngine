@@ -1,9 +1,7 @@
 using System.Numerics;
 
-using global::KernelEngine.Ecs;
 using global::KernelEngine.Render;
 
-using KernelEngine.Render.Native;
 using KernelEngine.Result.Native;
 using KernelEngine.Text.Native;
 
@@ -33,15 +31,6 @@ public unsafe partial struct ke_asset_resolver
 
     [NativeTypeName("void (*)(struct ke_asset_resolver *, ke_font_data *)")]
     public delegate* unmanaged[Cdecl]<ke_asset_resolver*, KernelEngine.Text.Native.ke_font_data*, void> free_font;
-
-    [NativeTypeName("ke_result (*)(struct ke_asset_resolver *, ke_render_service *, const char *, ke_texture_handle *)")]
-    public delegate* unmanaged[Cdecl]<ke_asset_resolver*, KernelEngine.Render.Native.ke_render_service*, sbyte*, global::KernelEngine.Render.TextureHandle*, KernelEngine.Result.Native.Result> resolve_texture_into;
-
-    [NativeTypeName("ke_result (*)(struct ke_asset_resolver *, ke_render_service *, const char *, ke_mesh_handle *)")]
-    public delegate* unmanaged[Cdecl]<ke_asset_resolver*, KernelEngine.Render.Native.ke_render_service*, sbyte*, global::KernelEngine.Render.MeshHandle*, KernelEngine.Result.Native.Result> resolve_mesh_into;
-
-    [NativeTypeName("ke_result (*)(struct ke_asset_resolver *, ke_render_service *, const char *, ke_material_handle *)")]
-    public delegate* unmanaged[Cdecl]<ke_asset_resolver*, KernelEngine.Render.Native.ke_render_service*, sbyte*, global::KernelEngine.Render.MaterialHandle*, KernelEngine.Result.Native.Result> resolve_material_into;
 
     [NativeTypeName("ke_result (*)(struct ke_asset_resolver *, const char *, char *, size_t)")]
     public delegate* unmanaged[Cdecl]<ke_asset_resolver*, sbyte*, sbyte*, nuint, KernelEngine.Result.Native.Result> resolve_path;

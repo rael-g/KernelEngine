@@ -1,0 +1,13 @@
+.{
+    .name = .abi_spatial_node_types,
+    .version = "0.1.0",
+    .fingerprint = 0x78e27d965cfb66d8,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .abi_ecs = .{ .path = "../ecs" },
+        .abi_framework = .{ .path = "../framework" },
+        .abi_result = .{ .path = "../result" },
+        .abi_spatial = .{ .path = "../spatial" },
+    },
+    .paths = .{"."},
+}

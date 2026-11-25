@@ -4,7 +4,6 @@
 const abi_framework_components = @import("abi_framework_components");
 const abi_physics_contract = @import("abi_physics_contract");
 const abi_spatial_contract = @import("abi_spatial_contract");
-const abi_asset_resolver = @import("abi_asset_resolver");
 const abi_physics_components = @import("abi_physics_components");
 const abi_scene_tree = @import("abi_scene_tree");
 const std = @import("std");
@@ -44,7 +43,7 @@ const Module = struct {
     body_system: abi_schedule.c.ke_schedule_system_id = 0,
     collider_system: abi_schedule.c.ke_schedule_system_id = 0,
     set: [1]abi_schedule.c.ke_schedule_set_id = .{0},
-    tracked: std.AutoHashMapUnmanaged(abi_asset_resolver.c.ke_entity, Tracked) = .empty,
+    tracked: std.AutoHashMapUnmanaged(abi_ecs.c.ke_entity, Tracked) = .empty,
     update: u64 = 0,
     body_queries_terms: [2]abi_ecs.c.ke_ecs_query_term = undefined,
     body_queries: [1]abi_ecs.c.ke_ecs_query_desc = undefined,
@@ -204,9 +203,9 @@ fn colliderSystem(ctx: ?*abi_schedule.c.ke_schedule_ctx, user: ?*anyopaque, dt: 
     const attempt: Attempt = .{ .hierarchy = m.tree.hierarchy_generation.?(m.tree), .bodies = m.body_generation, .colliders = counted.total };
     if (m.attempt) |last| if (std.meta.eql(last, attempt)) return R.ok;
 
-    var parents = std.AutoHashMap(abi_asset_resolver.c.ke_entity, abi_asset_resolver.c.ke_entity).init(gpa);
+    var parents = std.AutoHashMap(abi_ecs.c.ke_entity, abi_ecs.c.ke_entity).init(gpa);
     defer parents.deinit();
-    var bodies = std.AutoHashMap(abi_asset_resolver.c.ke_entity, abi_physics.c.ke_body_2d).init(gpa);
+    var bodies = std.AutoHashMap(abi_ecs.c.ke_entity, abi_physics.c.ke_body_2d).init(gpa);
     defer bodies.deinit();
 
     var segc: usize = 0;
@@ -274,9 +273,9 @@ fn colliderSystem(ctx: ?*abi_schedule.c.ke_schedule_ctx, user: ?*anyopaque, dt: 
 /// on that chain, or null when the chain ends first. The shape's own entity is not checked, only
 /// its ancestors. The steps are bounded by the size of the parent index, so a cycle ends the walk.
 fn findBody(
-    parents: *std.AutoHashMap(abi_asset_resolver.c.ke_entity, abi_asset_resolver.c.ke_entity),
-    bodies: *std.AutoHashMap(abi_asset_resolver.c.ke_entity, abi_physics.c.ke_body_2d),
-    start: abi_asset_resolver.c.ke_entity,
+    parents: *std.AutoHashMap(abi_ecs.c.ke_entity, abi_ecs.c.ke_entity),
+    bodies: *std.AutoHashMap(abi_ecs.c.ke_entity, abi_physics.c.ke_body_2d),
+    start: abi_ecs.c.ke_entity,
 ) ?abi_physics.c.ke_body_2d {
     var e = parents.get(start) orelse return null;
     var steps: usize = 0;
@@ -356,13 +355,13 @@ fn create(ecs_in: ?*abi_ecs.c.ke_ecs, physics_in: ?*abi_physics.c.ke_physics_2d,
     const m = gpa.create(Module) catch return error.OutOfMemory;
     errdefer gpa.destroy(m);
     m.* = .{ .physics = physics, .scheduler = schedule, .tree = tree, .set = .{set} };
-    var body_cid: abi_asset_resolver.c.ke_component_id = abi_ecs.c.KE_COMPONENT_INVALID;
+    var body_cid: abi_ecs.c.ke_component_id = abi_ecs.c.KE_COMPONENT_INVALID;
     try R.check(ecs.*.component_register.?(ecs, &abi_physics_contract.c.ke_body2d_component_desc, &body_cid));
-    var transform_cid: abi_asset_resolver.c.ke_component_id = abi_ecs.c.KE_COMPONENT_INVALID;
+    var transform_cid: abi_ecs.c.ke_component_id = abi_ecs.c.KE_COMPONENT_INVALID;
     try R.check(ecs.*.component_register.?(ecs, &abi_spatial_contract.c.ke_transform2d_component_desc, &transform_cid));
-    var collider_cid: abi_asset_resolver.c.ke_component_id = abi_ecs.c.KE_COMPONENT_INVALID;
+    var collider_cid: abi_ecs.c.ke_component_id = abi_ecs.c.KE_COMPONENT_INVALID;
     try R.check(ecs.*.component_register.?(ecs, &abi_physics_contract.c.ke_collider2d_component_desc, &collider_cid));
-    var hierarchy_cid: abi_asset_resolver.c.ke_component_id = abi_ecs.c.KE_COMPONENT_INVALID;
+    var hierarchy_cid: abi_ecs.c.ke_component_id = abi_ecs.c.KE_COMPONENT_INVALID;
     try R.check(ecs.*.component_register.?(ecs, &abi_framework_components.c.ke_hierarchy_component_desc, &hierarchy_cid));
 
     const rd = abi_ecs.c.KE_ECS_ACCESS_READ;
@@ -376,8 +375,13 @@ fn create(ecs_in: ?*abi_ecs.c.ke_ecs, physics_in: ?*abi_physics.c.ke_physics_2d,
     return .{ .ref = m, .destroy = destroyHandle };
 }
 
+comptime {
+    _ = @import("physics_nodes.zig");
+}
+
 pub const parts = [_]abi_part.c.ke_part{
     part.of(ke_physics_body2d_create, .{ .name = "physics_body2d", .slots = &.{"ecs", "physics", "scene_tree"}, .hooks = &.{"fixed_post_update"}, .set_log = @ptrCast(&@import("log").Destination("ke_physics_body2d").setLogCallback) }),
+    part.of(@import("physics_nodes.zig").ke_physics_nodes_create, .{ .name = "physics_nodes", .slots = &.{"types"}, .set_log = @ptrCast(&@import("log").Destination("ke_physics_body2d").setLogCallback) }),
 };
 
 /// The library's parts.
@@ -574,7 +578,7 @@ const FakeWorld = struct {
 const BodyView = struct {
     var bodies: [1]abi_physics_components.c.ke_body2d_component = undefined;
     var transforms: [1]abi_spatial.c.ke_transform2d_component = undefined;
-    var entities: [1]abi_asset_resolver.c.ke_entity = .{7};
+    var entities: [1]abi_ecs.c.ke_entity = .{7};
     var columns: [2]?*anyopaque = undefined;
     var segment: abi_ecs.c.ke_ecs_segment = undefined;
     var live: usize = 1;
@@ -657,7 +661,7 @@ const OrphanView = struct {
     var colliders: [1]abi_physics_components.c.ke_collider2d_component = undefined;
     var transforms: [1]abi_spatial.c.ke_transform2d_component = undefined;
     var hierarchies: [1]abi_framework_components.c.ke_hierarchy_component = undefined;
-    var entities: [1]abi_asset_resolver.c.ke_entity = .{9};
+    var entities: [1]abi_ecs.c.ke_entity = .{9};
     var columns: [2]?*anyopaque = undefined;
     var segment: abi_ecs.c.ke_ecs_segment = undefined;
     var hierarchy_reads: usize = 0;
@@ -712,7 +716,7 @@ test "a collider with no body above it is retried only once the hierarchy has mo
 test "the library's part is physics_body2d, built from its factory" {
     var count: usize = 0;
     const p = ke_physics_body2d_parts(&count).?;
-    try std.testing.expectEqual(@as(usize, 1), count);
+    try std.testing.expectEqual(@as(usize, 2), count);
     try std.testing.expectEqualStrings("physics_body2d", std.mem.span(p.name.?));
     try std.testing.expectEqual(@as(usize, 0), p.provides_count);
     try std.testing.expectEqual(@as(usize, 4), p.slot_count);

@@ -8,11 +8,11 @@ pub fn build(b: *std.Build) void {
     abi.addImport("result", b.dependency("abi_result", .{}).module("abi"));
 
     const headers = b.addWriteFiles().add("layout.h",
-        \\#include <kernel_engine/runner/runner.h>
+        \\#include <kernel_engine/scheduling/runner.h>
     );
     const translated = b.addTranslateC(.{ .root_source_file = headers, .target = target, .optimize = optimize });
     translated.addIncludePath(b.path("../../../c/result"));
-    translated.addIncludePath(b.path("../../../c/runner"));
+    translated.addIncludePath(b.path("../../../c/scheduling"));
     const tests = b.addTest(.{ .root_module = b.createModule(.{
         .root_source_file = b.path("layout_test.zig"),
         .link_libc = true,
@@ -25,6 +25,6 @@ pub fn build(b: *std.Build) void {
     }) });
     tests.root_module.addCSourceFile(.{ .file = b.path("layout_values.c") });
     tests.root_module.addIncludePath(b.path("../../../c/result"));
-    tests.root_module.addIncludePath(b.path("../../../c/runner"));
+    tests.root_module.addIncludePath(b.path("../../../c/scheduling"));
     b.step("test", "Check the runner ABI against its headers").dependOn(&b.addRunArtifact(tests).step);
 }

@@ -1,7 +1,6 @@
 //! Converts an Assimp mesh and an Assimp material into the loader's `ke_mesh_data` and
 //! `ke_material_data` records.
 
-const abi_mesh = @import("abi_mesh");
 const abi_mesh_data = @import("abi_mesh_data");
 const std = @import("std");
 
@@ -82,7 +81,7 @@ pub fn convertMesh(gpa: std.mem.Allocator, am: *const c.aiMesh, md: *abi_mesh_da
     var index_count: usize = 0;
     for (0..am.mNumFaces) |fi| index_count += @min(3, am.mFaces[fi].mNumIndices);
 
-    const vertices = gpa.alloc(abi_mesh.c.ke_vertex, am.mNumVertices) catch return false;
+    const vertices = gpa.alloc(abi_mesh_data.c.ke_vertex, am.mNumVertices) catch return false;
     const indices = gpa.alloc(u16, index_count) catch {
         gpa.free(vertices);
         return false;
@@ -92,7 +91,7 @@ pub fn convertMesh(gpa: std.mem.Allocator, am: *const c.aiMesh, md: *abi_mesh_da
 
     for (0..am.mNumVertices) |vi| {
         const v = &vertices[vi];
-        v.* = std.mem.zeroes(abi_mesh.c.ke_vertex);
+        v.* = std.mem.zeroes(abi_mesh_data.c.ke_vertex);
         v.x = am.mVertices[vi].x;
         v.y = am.mVertices[vi].y;
         v.z = am.mVertices[vi].z;

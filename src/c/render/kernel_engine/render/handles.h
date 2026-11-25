@@ -26,13 +26,6 @@ extern "C"
     typedef struct ke_cubemap_handle     { uint32_t bits; } ke_cubemap_handle;
     typedef struct ke_shadow_map_handle  { uint32_t bits; } ke_shadow_map_handle;
 
-    typedef enum ke_alpha_mode
-    {
-        KE_ALPHA_MODE_OPAQUE,
-        KE_ALPHA_MODE_MASK,
-        KE_ALPHA_MODE_BLEND,
-    } ke_alpha_mode;
-
 #ifndef CLANGSHARP
 #define KE_MESH_NONE        ((ke_mesh_handle)      { KE_HANDLE_NONE })
 #define KE_TEXTURE_NONE     ((ke_texture_handle)   { KE_HANDLE_NONE })

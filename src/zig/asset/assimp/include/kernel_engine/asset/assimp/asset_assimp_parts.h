@@ -2,7 +2,7 @@
 #define KERNEL_ENGINE_ASSET_ASSIMP_ASSET_ASSIMP_PARTS_H_
 
 #include <kernel_engine/asset/assimp/assimp_loader.h>
-#include <kernel_engine/part/part.h>
+#include <kernel_engine/assembly/part.h>
 
 #include <stddef.h>
 

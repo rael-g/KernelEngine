@@ -8,10 +8,12 @@ const part = @import("part");
 
 comptime {
     _ = @import("sound.zig");
+    _ = @import("audio_nodes.zig");
 }
 
 pub const parts = [_]abi_part.c.ke_part{
     part.of(@import("sound.zig").ke_sound_create, .{ .name = "sound", .slots = &.{"ecs", "audio"}, .hooks = &.{"post_update"}, .set_log = @ptrCast(&@import("log").Destination("ke_audio_module").setLogCallback) }),
+    part.of(@import("audio_nodes.zig").ke_audio_nodes_create, .{ .name = "audio_nodes", .slots = &.{"types"}, .set_log = @ptrCast(&@import("log").Destination("ke_audio_module").setLogCallback) }),
 };
 
 /// The library's parts.
@@ -27,7 +29,7 @@ test "nothing the module allocated is left behind" {
 test "the library's parts name sound and their slots" {
     var count: usize = 0;
     const all = ke_audio_module_parts(&count).?;
-    try std.testing.expectEqual(@as(usize, 1), count);
+    try std.testing.expectEqual(@as(usize, 2), count);
     try std.testing.expectEqualStrings("sound", std.mem.span(@as([*]const abi_part.c.ke_part, @ptrCast(all))[0].name.?));
     try std.testing.expectEqual(@as(usize, 3), @as([*]const abi_part.c.ke_part, @ptrCast(all))[0].slot_count);
 }

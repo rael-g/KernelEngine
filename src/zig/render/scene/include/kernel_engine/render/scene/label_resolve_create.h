@@ -1,7 +1,7 @@
 #ifndef KERNEL_ENGINE_RENDER_SCENE_LABEL_RESOLVE_CREATE_H_
 #define KERNEL_ENGINE_RENDER_SCENE_LABEL_RESOLVE_CREATE_H_
 
-#include <kernel_engine/settings/settings.h>
+#include <kernel_engine/configuration/settings.h>
 #include <kernel_engine/asset/asset_resolver.h>
 #include <kernel_engine/result/result.h>
 #include <kernel_engine/ecs/ecs.h>
@@ -9,8 +9,8 @@
 #include <kernel_engine/render/service/render_service.h>
 #include <kernel_engine/render/ui/ui.h>
 #include <kernel_engine/render/ui/ui_create.h>
-#include <kernel_engine/part/part.h>
-#include <kernel_engine/schedule/schedule.h>
+#include <kernel_engine/assembly/part.h>
+#include <kernel_engine/scheduling/schedule.h>
 
 #ifndef KE_RENDER_SCENE_API
     #if defined(_WIN32) || defined(__CYGWIN__)

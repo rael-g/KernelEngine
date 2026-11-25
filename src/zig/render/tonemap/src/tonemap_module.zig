@@ -2,7 +2,6 @@
 //! the frame's colour, tonemapped, into the frame's output. It also owns the creation and teardown of
 //! that pass, behind the one factory it exports.
 
-const abi_asset_resolver = @import("abi_asset_resolver");
 const abi_render_gpu = @import("abi_render_gpu");
 const std = @import("std");
 
@@ -41,8 +40,8 @@ const TonemapModule = struct {
 
     pipeline_params: abi_render_gpu.c.ke_gpu_render_pipeline_desc = undefined,
     binder: *abi_render_gpu.c.ke_render_resource_binder = undefined,
-    layout: abi_asset_resolver.c.ke_render_shader_layout = abi_render_gpu.c.KE_RENDER_BINDING_INVALID,
-    set: abi_asset_resolver.c.ke_render_resource_set = abi_render_gpu.c.KE_RENDER_BINDING_INVALID,
+    layout: abi_render.c.ke_render_shader_layout = abi_render_gpu.c.KE_RENDER_BINDING_INVALID,
+    set: abi_render.c.ke_render_resource_set = abi_render_gpu.c.KE_RENDER_BINDING_INVALID,
     color: rg.ke_render_graph_resource = rg.KE_RENDER_GRAPH_RESOURCE_INVALID,
 
     access: [1]abi_ecs.c.ke_ecs_query_term = undefined,
@@ -118,9 +117,9 @@ fn setup(tm: *TonemapModule, core: *abi_render.c.ke_render_service, device: *abi
     tm.frame = frame;
     const format = tm.frame.output_format.?(tm.frame);
 
-    var vs: abi_asset_resolver.c.ke_gpu_shader_module = undefined;
+    var vs: abi_render.c.ke_gpu_shader_module = undefined;
     try R.check(core.*.load_shader.?(core, "tonemap", abi_render_gpu.c.KE_GPU_SHADER_STAGE_VERTEX, &vs));
-    var fs: abi_asset_resolver.c.ke_gpu_shader_module = undefined;
+    var fs: abi_render.c.ke_gpu_shader_module = undefined;
     try R.check(core.*.load_shader.?(core, "tonemap", abi_render_gpu.c.KE_GPU_SHADER_STAGE_FRAGMENT, &fs));
 
     tm.binder = core.*.resource_binder.?(core).?;

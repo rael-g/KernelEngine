@@ -1,0 +1,27 @@
+.{
+    .name = .ke_extraction_default,
+    .version = "0.1.0",
+    .fingerprint = 0xa9c50ad9ce72f740,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .abi_part = .{ .path = "../../abi/part" },
+        .ke_part = .{ .path = "../../assembly/part" },
+        .abi_completion = .{ .path = "../../abi/completion" },
+        .abi_ecs = .{ .path = "../../abi/ecs" },
+        .abi_ecs_variant = .{ .path = "../../abi/ecs_variant" },
+        .abi_extraction = .{ .path = "../../abi/extraction" },
+        .abi_result = .{ .path = "../../abi/result" },
+        .abi_schedule = .{ .path = "../../abi/schedule" },
+        .abi_scheduler = .{ .path = "../../abi/scheduler" },
+        .abi_extraction_default_factory = .{ .path = "abi" },
+        .ke_common = .{ .path = "../../common" },
+        .ke_build = .{ .path = "../../build" },
+        .ke_logger = .{ .path = "../../logger" },
+        .ke_result = .{ .path = "../../result" },
+        .zsub = .{
+            .url = "https://github.com/rael-g/zsub/archive/10fee26318ed2ef628f6fada5f3c39f4572381ba.tar.gz",
+            .hash = "zsub-0.0.0-c8a1QlLVAABkTAwiY20uW_c1jJDIb3Ke92-LuXFWiXmU",
+        },
+    },
+    .paths = .{"."},
+}

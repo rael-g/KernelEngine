@@ -1,7 +1,6 @@
 //! The geometry of the primitive meshes (quad, plane, cube, sphere), baked in memory so that a
 //! primitive needs no file.
 
-const abi_mesh = @import("abi_mesh");
 const abi_mesh_data = @import("abi_mesh_data");
 const std = @import("std");
 
@@ -19,7 +18,7 @@ fn allocArray(comptime T: type, count: u32) ?[*]T {
 }
 
 fn setVertex(
-    v: *abi_mesh.c.ke_vertex,
+    v: *abi_mesh_data.c.ke_vertex,
     x: f32,
     y: f32,
     z: f32,
@@ -52,7 +51,7 @@ const Vec3 = [3]f32;
 /// Writes the four corners in the order given, with one shared normal and tangent, as the two
 /// triangles over corners 0, 1, 2 and 0, 2, 3.
 fn bakeQuadLike(
-    vtx: [*]abi_mesh.c.ke_vertex,
+    vtx: [*]abi_mesh_data.c.ke_vertex,
     idx: [*]u16,
     n: Vec3,
     t: Vec3,
@@ -89,7 +88,7 @@ const cube_faces = [6]CubeFace{
     .{ .n = .{ 0, 0, -1 }, .t = .{ -1, 0, 0 }, .p = .{ .{ 0.5, -0.5, -0.5 }, .{ -0.5, -0.5, -0.5 }, .{ -0.5, 0.5, -0.5 }, .{ 0.5, 0.5, -0.5 } } },
 };
 
-fn bakeCube(vtx: [*]abi_mesh.c.ke_vertex, idx: [*]u16) void {
+fn bakeCube(vtx: [*]abi_mesh_data.c.ke_vertex, idx: [*]u16) void {
     for (cube_faces, 0..) |face, f| {
         const base: u16 = @intCast(f * 4);
         const uv = [4][2]f32{ .{ 0, 0 }, .{ 1, 0 }, .{ 1, 1 }, .{ 0, 1 } };
@@ -133,7 +132,7 @@ fn sphereIndexCount(segments: u32, rings: u32) u32 {
 
 /// Indices are typed u16, so every vertex index of the grid must fit in u16; the baker does not
 /// check this.
-fn bakeSphere(vtx: [*]abi_mesh.c.ke_vertex, idx: [*]u16, segments: u32, rings: u32) void {
+fn bakeSphere(vtx: [*]abi_mesh_data.c.ke_vertex, idx: [*]u16, segments: u32, rings: u32) void {
     var v: usize = 0;
     var r: u32 = 0;
     while (r <= rings) : (r += 1) {
@@ -229,7 +228,7 @@ pub fn ke_mesh_shape_bake_internal(
         else => return false,
     }
 
-    const vbuf = allocArray(abi_mesh.c.ke_vertex, vcount) orelse return false;
+    const vbuf = allocArray(abi_mesh_data.c.ke_vertex, vcount) orelse return false;
     const ibuf = allocArray(u16, icount) orelse {
         heap.gpa.free(vbuf[0..vcount]);
         return false;
@@ -277,7 +276,7 @@ pub fn ke_mesh_shape_bake_internal(
 /// bake and the free.
 pub fn ke_mesh_shape_free_internal(data_in: ?*abi_mesh_data.c.ke_mesh_shape_data) callconv(.c) void {
     const data = data_in orelse return;
-    if (data.vertices) |v| heap.gpa.free(@as([*]abi_mesh.c.ke_vertex, @ptrCast(v))[0..data.vertex_count]);
+    if (data.vertices) |v| heap.gpa.free(@as([*]abi_mesh_data.c.ke_vertex, @ptrCast(v))[0..data.vertex_count]);
     if (data.indices) |i| heap.gpa.free(@as([*]u16, @ptrCast(i))[0..data.index_count]);
     data.vertices = null;
     data.indices = null;

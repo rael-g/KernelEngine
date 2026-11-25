@@ -1,9 +1,9 @@
 //! Creates and looks up the meshes, textures, cubemaps and materials of the render service, and
 //! destroys them when their last reference goes.
 
-const abi_asset_resolver = @import("abi_asset_resolver");
 const abi_render_gpu = @import("abi_render_gpu");
 const abi_render_handles = @import("abi_render_handles");
+const abi_render_material = @import("abi_render_material");
 const std = @import("std");
 const rc = @import("render_service.zig");
 const abi_math = @import("abi_math");
@@ -51,7 +51,7 @@ fn mesh(st: *rc.CoreState, key: [*c]const u8, vertices: [*c]const abi_mesh.c.ke_
     const cached = tryCached(st.mesh_cache, key);
     if (cached != abi_render_handles.c.KE_HANDLE_NONE) return cached;
 
-    var vbo: abi_asset_resolver.c.ke_gpu_buffer = abi_render_gpu.c.KE_GPU_INVALID_HANDLE;
+    var vbo: abi_render.c.ke_gpu_buffer = abi_render_gpu.c.KE_GPU_INVALID_HANDLE;
     try R.check(st.device.create_buffer.?(st.device, &abi_render_gpu.c.ke_gpu_buffer_desc{
         .label = "mesh.vertices",
         .initial_data = vertices,
@@ -61,7 +61,7 @@ fn mesh(st: *rc.CoreState, key: [*c]const u8, vertices: [*c]const abi_mesh.c.ke_
     }, &vbo));
     errdefer st.device.destroy_buffer.?(st.device, vbo);
 
-    var ibo: abi_asset_resolver.c.ke_gpu_buffer = abi_render_gpu.c.KE_GPU_INVALID_HANDLE;
+    var ibo: abi_render.c.ke_gpu_buffer = abi_render_gpu.c.KE_GPU_INVALID_HANDLE;
     try R.check(st.device.create_buffer.?(st.device, &abi_render_gpu.c.ke_gpu_buffer_desc{
         .label = "mesh.indices",
         .initial_data = @ptrCast(indices),
@@ -79,7 +79,7 @@ fn mesh(st: *rc.CoreState, key: [*c]const u8, vertices: [*c]const abi_mesh.c.ke_
 
 /// Writes the buffers and the index count of the mesh through the out-parameters. Returns zero and
 /// writes nothing when the handle no longer names a stored mesh.
-pub fn meshBuffers(self: [*c]abi_render.c.ke_render_service, h: abi_render_handles.c.ke_mesh_handle, out_vbo: [*c]abi_asset_resolver.c.ke_gpu_buffer, out_ibo: [*c]abi_asset_resolver.c.ke_gpu_buffer, out_index_count: [*c]u32) callconv(.c) bool {
+pub fn meshBuffers(self: [*c]abi_render.c.ke_render_service, h: abi_render_handles.c.ke_mesh_handle, out_vbo: [*c]abi_render.c.ke_gpu_buffer, out_ibo: [*c]abi_render.c.ke_gpu_buffer, out_index_count: [*c]u32) callconv(.c) bool {
     const st = rc.coreOf(self);
     const m = st.meshAt(h) orelse return false;
     out_vbo.* = m.vbo;
@@ -119,7 +119,7 @@ fn texture(st: *rc.CoreState, key: [*c]const u8, width: u32, height: u32, layers
     const cached = tryCached(st.texture_cache, key);
     if (cached != abi_render_handles.c.KE_HANDLE_NONE) return cached;
 
-    var tex: abi_asset_resolver.c.ke_gpu_texture = abi_render_gpu.c.KE_GPU_INVALID_HANDLE;
+    var tex: abi_render.c.ke_gpu_texture = abi_render_gpu.c.KE_GPU_INVALID_HANDLE;
     try R.check(st.device.create_texture.?(st.device, &abi_render_gpu.c.ke_gpu_texture_desc{
         .label = key,
         .width = width,
@@ -135,7 +135,7 @@ fn texture(st: *rc.CoreState, key: [*c]const u8, width: u32, height: u32, layers
     }, &tex));
     errdefer st.device.destroy_texture.?(st.device, tex);
 
-    var view: abi_asset_resolver.c.ke_gpu_texture_view = abi_render_gpu.c.KE_GPU_INVALID_HANDLE;
+    var view: abi_render.c.ke_gpu_texture_view = abi_render_gpu.c.KE_GPU_INVALID_HANDLE;
     try R.check(st.device.create_texture_view.?(st.device, tex, &abi_render_gpu.c.ke_gpu_texture_view_desc{
         .label = key,
         .format = abi_render_gpu.c.KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM,
@@ -157,7 +157,7 @@ fn texture(st: *rc.CoreState, key: [*c]const u8, width: u32, height: u32, layers
 /// Returns the view of the texture, or a stand-in when the handle names no stored texture: the
 /// view of `default_cubemap` for the none handle, the view of `white_texture_h` for any other
 /// handle. Returns the invalid view when the stand-in is itself missing.
-pub fn textureView(self: [*c]abi_render.c.ke_render_service, h: abi_render_handles.c.ke_texture_handle) callconv(.c) abi_asset_resolver.c.ke_gpu_texture_view {
+pub fn textureView(self: [*c]abi_render.c.ke_render_service, h: abi_render_handles.c.ke_texture_handle) callconv(.c) abi_render.c.ke_gpu_texture_view {
     const st = rc.coreOf(self);
     if (st.textureAt(h)) |t| return t.view;
     const fallback = if (h.bits == abi_render_handles.c.KE_HANDLE_NONE) st.default_cubemap else st.white_texture_h;
@@ -181,7 +181,7 @@ fn srgbToLinear(cs: f32) f32 {
 /// writes the cached handle. An empty or null key, or a shader name that does not fit the buffer,
 /// fails as an invalid argument. A material the binder cannot keep fails with the binder's code,
 /// and a full store as out of memory, giving the binder's back.
-pub fn createMaterial(self: [*c]abi_render.c.ke_render_service, key: [*c]const u8, base_color: abi_math.c.ke_vec4, metallic: f32, roughness: f32, albedo: abi_render_handles.c.ke_texture_handle, normal: abi_render_handles.c.ke_texture_handle, alpha_mode: abi_render_handles.c.ke_alpha_mode, alpha_cutoff: f32, ior: f32, distortion_strength: f32, shader: [*c]const u8, out_material: [*c]abi_render_handles.c.ke_material_handle) callconv(.c) abi_result.c.ke_result {
+pub fn createMaterial(self: [*c]abi_render.c.ke_render_service, key: [*c]const u8, base_color: abi_math.c.ke_vec4, metallic: f32, roughness: f32, albedo: abi_render_handles.c.ke_texture_handle, normal: abi_render_handles.c.ke_texture_handle, alpha_mode: abi_render_material.c.ke_alpha_mode, alpha_cutoff: f32, ior: f32, distortion_strength: f32, shader: [*c]const u8, out_material: [*c]abi_render_handles.c.ke_material_handle) callconv(.c) abi_result.c.ke_result {
     const out = out_material orelse return R.code(error.InvalidArgument);
     out.* = .{ .bits = abi_render_handles.c.KE_HANDLE_NONE };
     if (self == null or !keyValid(key)) return R.code(error.InvalidArgument);
@@ -207,13 +207,13 @@ pub fn createMaterial(self: [*c]abi_render.c.ke_render_service, key: [*c]const u
         .base_color = .{ srgbToLinear(base_color.x), srgbToLinear(base_color.y), srgbToLinear(base_color.z), base_color.w },
         .metallic = metallic,
         .roughness = roughness,
-        .alpha_cutoff = if (alpha_mode == abi_render_handles.c.KE_ALPHA_MODE_MASK) alpha_cutoff else 0.0,
+        .alpha_cutoff = if (alpha_mode == abi_render_material.c.KE_ALPHA_MODE_MASK) alpha_cutoff else 0.0,
         .ior = ior,
         .distortion_strength = distortion_strength,
         .albedo = st.textureAt(alb).?.view,
         .normal_map = st.textureAt(nrm).?.view,
     };
-    var binding: abi_asset_resolver.c.ke_render_material_binding = abi_render_gpu.c.KE_RENDER_BINDING_INVALID;
+    var binding: abi_render.c.ke_render_material_binding = abi_render_gpu.c.KE_RENDER_BINDING_INVALID;
     const made = st.binder.create_material.?(st.binder, &data, &binding);
     if (made != R.ok) return made;
 
@@ -238,7 +238,7 @@ pub fn createMaterial(self: [*c]abi_render.c.ke_render_service, key: [*c]const u
 
 /// Returns the alpha mode of the material; a handle that names no material answers with the
 /// default white material's.
-pub fn materialAlphaMode(self: [*c]abi_render.c.ke_render_service, h: abi_render_handles.c.ke_material_handle) callconv(.c) abi_render_handles.c.ke_alpha_mode {
+pub fn materialAlphaMode(self: [*c]abi_render.c.ke_render_service, h: abi_render_handles.c.ke_material_handle) callconv(.c) abi_render_material.c.ke_alpha_mode {
     return rc.coreOf(self).materialAt(h).alpha_mode;
 }
 
@@ -256,7 +256,7 @@ pub fn materialShader(self: [*c]abi_render.c.ke_render_service, h: abi_render_ha
 
 /// Returns what the binder holds for the material; a handle that names no material answers with
 /// the default white material's.
-pub fn materialBinding(self: [*c]abi_render.c.ke_render_service, h: abi_render_handles.c.ke_material_handle) callconv(.c) abi_asset_resolver.c.ke_render_material_binding {
+pub fn materialBinding(self: [*c]abi_render.c.ke_render_service, h: abi_render_handles.c.ke_material_handle) callconv(.c) abi_render.c.ke_render_material_binding {
     return rc.coreOf(self).materialAt(h).binding;
 }
 

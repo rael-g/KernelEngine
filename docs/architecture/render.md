@@ -1,8 +1,8 @@
 # Render
 
 This is a map: the parts of the render domain, what each receives and what it hands on. How a
-part works inside is on the generated page of its file. Contracts are under `src/c/render/` and
-`src/c/render_graph/`, plugins under `src/zig/render/` and `src/zig/render_graph/`.
+part works inside is on the generated page of its file. Contracts are under `src/c/render/`,
+plugins under `src/zig/render/`.
 
 ## The parts
 

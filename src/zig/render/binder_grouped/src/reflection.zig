@@ -1,7 +1,6 @@
 //! Reads the reflection the build writes beside each compiled shader, and answers each group of it
 //! as bind group layout entries and as bind group entries matched by name.
 
-const abi_asset_resolver = @import("abi_asset_resolver");
 const abi_render_gpu = @import("abi_render_gpu");
 const std = @import("std");
 const abi_render = @import("abi_render");
@@ -217,7 +216,7 @@ pub fn blockNames(a: std.mem.Allocator, json: []const u8) ReadError![]const []co
 
 /// A layout with one entry per binding of `group`, each visible to the stages that declare it.
 /// Fails when the entries cannot be allocated or the device refuses the layout.
-pub fn createLayout(dev: *abi_render_gpu.c.ke_gpu_device, group: *const Group, label: [*c]const u8) R.Error!abi_asset_resolver.c.ke_gpu_bind_group_layout {
+pub fn createLayout(dev: *abi_render_gpu.c.ke_gpu_device, group: *const Group, label: [*c]const u8) R.Error!abi_render.c.ke_gpu_bind_group_layout {
     const entries = try gpa.alloc(abi_render_gpu.c.ke_gpu_bind_group_layout_entry, group.bindings.items.len);
     defer gpa.free(entries);
     for (group.bindings.items, entries) |b, *e| {
@@ -229,7 +228,7 @@ pub fn createLayout(dev: *abi_render_gpu.c.ke_gpu_device, group: *const Group, l
             .view_dimension = b.view_dimension,
         };
     }
-    var layout: abi_asset_resolver.c.ke_gpu_bind_group_layout = abi_render_gpu.c.KE_GPU_INVALID_HANDLE;
+    var layout: abi_render.c.ke_gpu_bind_group_layout = abi_render_gpu.c.KE_GPU_INVALID_HANDLE;
     try R.check(dev.create_bind_group_layout.?(dev, &abi_render_gpu.c.ke_gpu_bind_group_layout_desc{
         .label = label,
         .entry_count = @intCast(entries.len),
@@ -413,9 +412,9 @@ test "a parameter the binder was given is bound to it when the set leaves it out
     const own = [_]abi_render_gpu.c.ke_render_shader_binding{.{ .name = "own", .buffer = 13, .buffer_offset = 0, .buffer_size = 16, .texture_view = 0, .sampler = 0 }};
     const entries = try matchBindings(&group, &own, &globals);
     defer gpa.free(entries);
-    try std.testing.expectEqual(@as(abi_asset_resolver.c.ke_gpu_buffer, 11), entries[0].buffer);
-    try std.testing.expectEqual(@as(abi_asset_resolver.c.ke_gpu_sampler, 12), entries[1].sampler);
-    try std.testing.expectEqual(@as(abi_asset_resolver.c.ke_gpu_buffer, 13), entries[2].buffer);
+    try std.testing.expectEqual(@as(abi_render.c.ke_gpu_buffer, 11), entries[0].buffer);
+    try std.testing.expectEqual(@as(abi_render.c.ke_gpu_sampler, 12), entries[1].sampler);
+    try std.testing.expectEqual(@as(abi_render.c.ke_gpu_buffer, 13), entries[2].buffer);
 }
 
 test "bindings are placed at their parameters' numbers, and a name the group lacks is refused" {
@@ -430,10 +429,10 @@ test "bindings are placed at their parameters' numbers, and a name the group lac
     const globals = [_]Provided{};
     const entries = try matchBindings(&group, &ok, &globals);
     defer gpa.free(entries);
-    try std.testing.expectEqual(@as(abi_asset_resolver.c.ke_gpu_buffer, 3), entries[0].buffer);
+    try std.testing.expectEqual(@as(abi_render.c.ke_gpu_buffer, 3), entries[0].buffer);
     try std.testing.expectEqual(@as(abi_render_gpu.c.ke_gpu_binding_type, abi_render_gpu.c.KE_GPU_BINDING_TYPE_TEXTURE), entries[1].type);
     try std.testing.expectEqual(@as(u32, 2), entries[2].binding);
-    try std.testing.expectEqual(@as(abi_asset_resolver.c.ke_gpu_sampler, 7), entries[2].sampler);
+    try std.testing.expectEqual(@as(abi_render.c.ke_gpu_sampler, 7), entries[2].sampler);
 
     var wrong = ok;
     wrong[2].name = "albedo_map";

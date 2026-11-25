@@ -5,6 +5,7 @@ using global::KernelEngine.Ecs;
 using global::KernelEngine.Logger;
 
 using KernelEngine.Ecs.Native;
+using KernelEngine.Framework.Nodes.Native;
 using KernelEngine.Part.Native;
 using KernelEngine.Result.Native;
 using KernelEngine.Schedule.Native;
@@ -23,4 +24,8 @@ public static unsafe partial class NativeMethods
     [DllImport("ke_audio_module", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_audio_module_parts", ExactSpelling = true)]
     [return: NativeTypeName("const ke_part *")]
     public static extern KernelEngine.Part.Native.ke_part* audio_module_parts([NativeTypeName("size_t *")] nuint* out_count);
+
+    [DllImport("ke_audio_module", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_audio_nodes_create", ExactSpelling = true)]
+    [return: NativeTypeName("ke_result")]
+    public static extern KernelEngine.Result.Native.Result audio_nodes_create([NativeTypeName("ke_node_types *")] KernelEngine.Framework.Nodes.Native.ke_node_types* types, [NativeTypeName("ke_owner *")] KernelEngine.Part.Native.ke_owner* out_owner);
 }

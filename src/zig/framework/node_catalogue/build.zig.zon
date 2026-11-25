@@ -1,0 +1,18 @@
+.{
+    .name = .ke_node_catalogue,
+    .version = "0.1.0",
+    .fingerprint = 0x52b2dc6f7ececab,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .ke_build = .{ .path = "../../build" },
+        .ke_result = .{ .path = "../../result" },
+        .abi_framework = .{ .path = "../../abi/framework" },
+        .abi_part = .{ .path = "../../abi/part" },
+        .abi_result = .{ .path = "../../abi/result" },
+        .zsub = .{
+            .url = "https://github.com/rael-g/zsub/archive/10fee26318ed2ef628f6fada5f3c39f4572381ba.tar.gz",
+            .hash = "zsub-0.0.0-c8a1QlLVAABkTAwiY20uW_c1jJDIb3Ke92-LuXFWiXmU",
+        },
+    },
+    .paths = .{"."},
+}

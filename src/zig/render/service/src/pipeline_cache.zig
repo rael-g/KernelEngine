@@ -1,7 +1,6 @@
 //! Answers the render service's pipeline requests at once with a placeholder, and upgrades each to
 //! the real pipeline once the device has compiled it.
 
-const abi_asset_resolver = @import("abi_asset_resolver");
 const abi_render_gpu = @import("abi_render_gpu");
 const std = @import("std");
 const heap = @import("heap");
@@ -15,8 +14,8 @@ const MAX_COLOR_TARGETS = 8;
 /// key outlives the params. The entry names and the vertex buffer layouts are kept as digests of
 /// their content, so equal content at any address makes the same key.
 const PsoKey = struct {
-    vertex_module: abi_asset_resolver.c.ke_gpu_shader_module,
-    fragment_module: abi_asset_resolver.c.ke_gpu_shader_module,
+    vertex_module: abi_render.c.ke_gpu_shader_module,
+    fragment_module: abi_render.c.ke_gpu_shader_module,
     vertex_entry: u64,
     fragment_entry: u64,
     primitive_topology: abi_render_gpu.c.ke_gpu_primitive_topology,
@@ -26,7 +25,7 @@ const PsoKey = struct {
     vertex_buffers: u64,
     blend_state: abi_render_gpu.c.ke_gpu_blend_state,
     depth_stencil: abi_render_gpu.c.ke_gpu_depth_stencil_state,
-    bind_group_layouts: [4]abi_asset_resolver.c.ke_gpu_bind_group_layout,
+    bind_group_layouts: [4]abi_render.c.ke_gpu_bind_group_layout,
     bind_group_layout_count: u32,
     alpha_to_coverage_enabled: bool,
     color_target_formats: [MAX_COLOR_TARGETS]abi_render_gpu.c.ke_gpu_texture_format,
@@ -85,12 +84,12 @@ const Entry = struct {
     key: PsoKey,
     hash: u64,
     state: std.atomic.Value(PipelineState),
-    real_pso: abi_asset_resolver.c.ke_gpu_pipeline,
-    fallback_pso: abi_asset_resolver.c.ke_gpu_pipeline,
+    real_pso: abi_render.c.ke_gpu_pipeline,
+    fallback_pso: abi_render.c.ke_gpu_pipeline,
 
     /// The acquire load pairs with the release store in `onRealPipelineReady`, so a reader that
     /// sees the real pipeline as current also sees its handle.
-    fn current(self: *const Entry) abi_asset_resolver.c.ke_gpu_pipeline {
+    fn current(self: *const Entry) abi_render.c.ke_gpu_pipeline {
         return if (self.state.load(.acquire) == .ready) self.real_pso else self.fallback_pso;
     }
 };
@@ -98,7 +97,7 @@ const Entry = struct {
 /// Called by the device, on whichever thread finished the compile, once the asynchronous request
 /// made by `getOrCreatePipeline` finishes. An invalid pipeline is dropped, leaving the entry on its
 /// fallback.
-fn onRealPipelineReady(result: abi_result.c.ke_result, pso: abi_asset_resolver.c.ke_gpu_pipeline, user: ?*anyopaque) callconv(.c) void {
+fn onRealPipelineReady(result: abi_result.c.ke_result, pso: abi_render.c.ke_gpu_pipeline, user: ?*anyopaque) callconv(.c) void {
     const entry: *Entry = @ptrCast(@alignCast(user.?));
     if (result != abi_result.c.KE_OK) return;
     entry.real_pso = pso;
@@ -186,7 +185,7 @@ const Insert = union(enum) {
 pub const PipelineCache = struct {
     current: std.atomic.Value(?*Snapshot),
     retired: std.atomic.Value(?*Snapshot),
-    magenta_fs: [MAX_COLOR_TARGETS]std.atomic.Value(abi_asset_resolver.c.ke_gpu_shader_module),
+    magenta_fs: [MAX_COLOR_TARGETS]std.atomic.Value(abi_render.c.ke_gpu_shader_module),
 
     pub fn init() PipelineCache {
         var cache: PipelineCache = .{
@@ -257,7 +256,7 @@ pub const PipelineCache = struct {
 
 /// Every fallback of one target count shares one module, created on the first request for that
 /// count and destroyed by `destroyAll`.
-fn magentaFragmentModule(st: *rc.CoreState, target_count: u32) abi_asset_resolver.c.ke_gpu_shader_module {
+fn magentaFragmentModule(st: *rc.CoreState, target_count: u32) abi_render.c.ke_gpu_shader_module {
     const n = @max(@min(target_count, MAX_COLOR_TARGETS), 1);
     const slot = &st.pipeline_cache.magenta_fs[n - 1];
     const existing = slot.load(.acquire);
@@ -275,7 +274,7 @@ fn magentaFragmentModule(st: *rc.CoreState, target_count: u32) abi_asset_resolve
         w.writeAll("  return o;\n}\n") catch {};
     }
     const src = w.buffered();
-    var made: abi_asset_resolver.c.ke_gpu_shader_module = abi_render_gpu.c.KE_GPU_INVALID_HANDLE;
+    var made: abi_render.c.ke_gpu_shader_module = abi_render_gpu.c.KE_GPU_INVALID_HANDLE;
     if (st.device.create_shader_module.?(st.device, &abi_render_gpu.c.ke_gpu_shader_module_desc{
         .code = src.ptr,
         .byte_size = src.len,
@@ -290,7 +289,7 @@ fn magentaFragmentModule(st: *rc.CoreState, target_count: u32) abi_asset_resolve
 
 /// The result is returned as it is, even when the device failed to create it: nothing here or in
 /// `getOrCreatePipeline` checks it.
-fn buildFallback(st: *rc.CoreState, params: [*c]const abi_render_gpu.c.ke_gpu_render_pipeline_desc) abi_asset_resolver.c.ke_gpu_pipeline {
+fn buildFallback(st: *rc.CoreState, params: [*c]const abi_render_gpu.c.ke_gpu_render_pipeline_desc) abi_render.c.ke_gpu_pipeline {
     const p = @as(*const abi_render_gpu.c.ke_gpu_render_pipeline_desc, @ptrCast(params));
     var fallback_params = p.*;
     fallback_params.fragment_module = magentaFragmentModule(st, p.color_target_count);
@@ -300,8 +299,8 @@ fn buildFallback(st: *rc.CoreState, params: [*c]const abi_render_gpu.c.ke_gpu_re
 
 /// The pipeline the device creates for `params` synchronously; the invalid handle, its reason
 /// logged by the device, when it refuses it.
-fn createNow(st: *rc.CoreState, params: [*c]const abi_render_gpu.c.ke_gpu_render_pipeline_desc) abi_asset_resolver.c.ke_gpu_pipeline {
-    var made: abi_asset_resolver.c.ke_gpu_pipeline = abi_render_gpu.c.KE_GPU_INVALID_HANDLE;
+fn createNow(st: *rc.CoreState, params: [*c]const abi_render_gpu.c.ke_gpu_render_pipeline_desc) abi_render.c.ke_gpu_pipeline {
+    var made: abi_render.c.ke_gpu_pipeline = abi_render_gpu.c.KE_GPU_INVALID_HANDLE;
     if (st.device.create_render_pipeline.?(st.device, params, &made) != abi_result.c.KE_OK) return abi_render_gpu.c.KE_GPU_INVALID_HANDLE;
     return made;
 }
@@ -314,7 +313,7 @@ fn createNow(st: *rc.CoreState, params: [*c]const abi_render_gpu.c.ke_gpu_render
 /// its entry destroys the fallback it built, never starts its compile, and answers with the
 /// entry that won. A pipeline the device fails to compile leaves the entry on its fallback for
 /// good.
-pub fn getOrCreatePipeline(self: [*c]abi_render.c.ke_render_service, params: [*c]const abi_render_gpu.c.ke_gpu_render_pipeline_desc) callconv(.c) abi_asset_resolver.c.ke_gpu_pipeline {
+pub fn getOrCreatePipeline(self: [*c]abi_render.c.ke_render_service, params: [*c]const abi_render_gpu.c.ke_gpu_render_pipeline_desc) callconv(.c) abi_render.c.ke_gpu_pipeline {
     const st = rc.coreOf(self);
     const key = PsoKey.fromParams(params);
     const hash = hashKey({}, key);

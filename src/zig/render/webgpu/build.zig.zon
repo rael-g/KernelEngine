@@ -5,10 +5,10 @@
     .minimum_zig_version = "0.14.0",
 
     .dependencies = .{
-        .ke_part = .{ .path = "../../part" },
+        .ke_part = .{ .path = "../../assembly/part" },
         .abi_part = .{ .path = "../../abi/part" },
         .abi_settings = .{ .path = "../../abi/settings" },
-        .ke_settings_schema = .{ .path = "../../settings/schema" },
+        .ke_settings_schema = .{ .path = "../../configuration/settings_schema" },
         .abi_render_gpu = .{ .path = "../../abi/render_gpu" },
         .abi_asset_resolver = .{ .path = "../../abi/asset_resolver" },
         .abi_render = .{ .path = "../../abi/render" },

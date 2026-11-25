@@ -1,7 +1,21 @@
 #include <stddef.h>
 #include <kernel_engine/asset/mesh_data.h>
 #include <kernel_engine/asset/mesh_shape.h>
+#include <kernel_engine/asset/vertex.h>
 const unsigned long long layout_values[] = {
+    sizeof(ke_vertex),
+    offsetof(ke_vertex, x),
+    offsetof(ke_vertex, y),
+    offsetof(ke_vertex, z),
+    offsetof(ke_vertex, nx),
+    offsetof(ke_vertex, ny),
+    offsetof(ke_vertex, nz),
+    offsetof(ke_vertex, u),
+    offsetof(ke_vertex, v),
+    offsetof(ke_vertex, tx),
+    offsetof(ke_vertex, ty),
+    offsetof(ke_vertex, tz),
+    offsetof(ke_vertex, tw),
     sizeof(ke_mesh_data),
     offsetof(ke_mesh_data, vertices),
     offsetof(ke_mesh_data, vertex_count),

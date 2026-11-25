@@ -5,10 +5,10 @@ pub fn build(b: *std.Build) void {
     _ = ke_build.plugin(b, .{
         .name = "ke_framework",
         .root = "src/framework_root.zig",
-        .abi = &.{ "abi_framework_components", "abi_spatial_contract", "abi_framework", "abi_scene_tree", "abi_render_material", "abi_render_handles", "abi_mesh_data", "abi_mesh", "abi_input_actions", "abi_configuration", "abi_settings", "abi_image_loader", "abi_ecs_variant", "abi_asset_resolver", "abi_ecs", "abi_framework_factory", "abi_input", "abi_io", "abi_math", "abi_render", "abi_result", "abi_scheduler", "abi_schedule", "abi_part", "abi_spatial", "abi_text" },
+        .abi = &.{ "abi_framework_components", "abi_spatial_contract", "abi_framework", "abi_scene_tree", "abi_render_material", "abi_render_handles", "abi_mesh_data", "abi_mesh", "abi_input_actions", "abi_configuration", "abi_settings", "abi_image_loader", "abi_ecs_variant", "abi_asset_resolver", "abi_ecs", "abi_framework_factory", "abi_input", "abi_io", "abi_math", "abi_render", "abi_result", "abi_scheduler", "abi_schedule", "abi_part", "abi_spatial", "abi_text", "abi_spatial_node_types" },
         .common = &.{"heap"},
         .translations = &.{.{ .name = "c", .header = "src/c.h" }},
-        .packages = &.{ .{ .name = "part", .dependency = "ke_part", .module = "part" }, .{ .name = "input_names", .dependency = "ke_input_names", .module = "input_names" }, .{ .name = "pending_reads", .dependency = "ke_io_pending_reads", .module = "pending_reads" }, .{ .name = "settings_schema", .dependency = "ke_settings_schema", .module = "settings_schema" }, .{ .name = "zsub", .dependency = "zsub", .module = "zsub" }},
+        .packages = &.{ .{ .name = "node_catalogue", .dependency = "ke_node_catalogue", .module = "node_catalogue" }, .{ .name = "part", .dependency = "ke_part", .module = "part" }, .{ .name = "input_names", .dependency = "ke_input_names", .module = "input_names" }, .{ .name = "pending_reads", .dependency = "ke_io_pending_reads", .module = "pending_reads" }, .{ .name = "settings_schema", .dependency = "ke_settings_schema", .module = "settings_schema" }, .{ .name = "zsub", .dependency = "zsub", .module = "zsub" }},
         .third_party = thirdParty,
         .tests = "Run unit tests",
     });

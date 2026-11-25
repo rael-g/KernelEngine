@@ -4,7 +4,7 @@
     .fingerprint = 0xd6584a593e4af6aa,
     .minimum_zig_version = "0.14.0",
     .dependencies = .{
-        .ke_part = .{ .path = "../../part" },
+        .ke_part = .{ .path = "../../assembly/part" },
         .ke_hooked_systems = .{ .path = "../../hooked_systems" },
         .abi_completion = .{ .path = "../../abi/completion" },
         .abi_extraction = .{ .path = "../../abi/extraction" },
@@ -21,7 +21,7 @@
         .abi_render = .{ .path = "../../abi/render" },
         .abi_result = .{ .path = "../../abi/result" },
         .abi_settings = .{ .path = "../../abi/settings" },
-        .ke_settings_schema = .{ .path = "../../settings/schema" },
+        .ke_settings_schema = .{ .path = "../../configuration/settings_schema" },
         .abi_spatial = .{ .path = "../../abi/spatial" },
         .abi_render_shadow_factory = .{ .path = "abi" },
         .ke_common = .{ .path = "../../common" },

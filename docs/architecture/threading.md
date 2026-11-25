@@ -1,9 +1,9 @@
 # Threading
 
 This is a map: the systems that own threads, who submits to them and where work lands. The contracts
-are `ke_job_system` under `src/c/job/`, `ke_async` under `src/c/async/` and `ke_completion` under
-`src/c/completion/`; each system has an enkiTS implementation (`src/zig/job/enki/src/job_system_enki.zig`,
-`src/zig/async/enki/src/async_enki.zig`) and an inline one that runs everything on the creating thread.
+are `ke_job_system` under `src/c/tasks/`, `ke_async` under `src/c/tasks/` and `ke_completion` under
+`src/c/tasks/`; each system has an enkiTS implementation (`src/zig/tasks/job_enki/src/job_system_enki.zig`,
+`src/zig/tasks/async_enki/src/async_enki.zig`) and an inline one that runs everything on the creating thread.
 
 ## The parts
 

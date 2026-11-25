@@ -1,0 +1,76 @@
+﻿#ifndef KERNEL_ENGINE_ASSET_FONT_H_
+#define KERNEL_ENGINE_ASSET_FONT_H_
+
+#include <kernel_engine/result/result.h>
+#include <stdint.h>
+
+#ifdef __cplusplus
+extern "C"
+{
+#endif
+
+    /** [value] Per-glyph layout + atlas-sampling info, in pixels at the baked size.
+     * `bearing_x` shifts the quad right of the pen; `bearing_y` shifts up from the baseline.
+     * `width`/`height` is the quad size; `u0,v0,u1,v1` is the source rect in the atlas. */
+    typedef struct ke_glyph_metrics {
+        uint32_t codepoint;
+        float    u0, v0, u1, v1;
+        float    bearing_x, bearing_y;
+        float    width, height;
+        float    advance_x;
+    } ke_glyph_metrics;
+
+    /** [view] CPU-side font data produced by a loader. Caller owns; release via the loader's
+     * free_font. Atlas is RGBA8 (white RGB + alpha from coverage). */
+    typedef struct ke_font_data {
+        uint8_t          *atlas_rgba;     ///< [array_of:atlas_byte_count] RGBA8 samples, row-major
+        uint32_t          atlas_byte_count; ///< Bytes atlas_rgba reaches: atlas_width * atlas_height * 4
+        uint32_t          atlas_width;
+        uint32_t          atlas_height;
+        ke_glyph_metrics *glyphs;          ///< [array_of:glyph_count]
+        uint32_t          glyph_count;
+        float             line_height;     ///< Recommended line spacing in pixels
+        float             ascent;          ///< Pixels above baseline to top of tallest glyph
+    } ke_font_data;
+
+    /** [interface] Decodes font files (TTF/OTF/…) on the CPU. Async dispatch is the caller's concern. */
+    typedef struct ke_font_loader
+    {
+        void *handle;
+
+        /** Loads @p path and bakes a glyph atlas at @p pixel_size for the codepoint range
+         * [first_codepoint, first_codepoint + codepoint_count).
+         * @param path [utf8] TTF/OTF file path to decode.
+         * @param out_font [out] Receives a ke_font_data (atlas RGBA8 + metrics) the caller
+         *        releases via free_font; left NULL on failure.
+         * @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null path or out_font, a non-positive
+         *         size, or a zero atlas size or codepoint count; KE_RESULT_PENDING while the file
+         *         is read on a thread that may not wait for it, a later call with the same path
+         *         collecting it; KE_RESULT_IO when the file cannot be read; KE_RESULT_OUT_OF_MEMORY; KE_RESULT_GENERAL when the font cannot be
+         *         packed. */
+        ke_result (*load_font)(struct ke_font_loader *self,
+                               const char *path,
+                               float pixel_size,
+                               uint32_t first_codepoint,
+                               uint32_t codepoint_count,
+                               uint32_t atlas_size,
+                               ke_font_data **out_font);
+
+        /** [releases:BakedFont] Frees a ke_font_data previously returned by load_font. A null @p data
+         * is ignored. */
+        void (*free_font)(struct ke_font_loader *self, ke_font_data *data);
+
+    } ke_font_loader;
+
+    /// [owner]
+    typedef struct ke_font_loader_handle
+    {
+        ke_font_loader *ref;
+        void (*destroy)(ke_font_loader *self);
+    } ke_font_loader_handle;
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif

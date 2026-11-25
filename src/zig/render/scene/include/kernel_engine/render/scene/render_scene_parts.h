@@ -4,7 +4,7 @@
 #include <kernel_engine/render/scene/label_resolve_create.h>
 #include <kernel_engine/render/scene/scene_resolve_create.h>
 #include <kernel_engine/render/scene/scene_resolve_systems_create.h>
-#include <kernel_engine/part/part.h>
+#include <kernel_engine/assembly/part.h>
 
 #include <stddef.h>
 

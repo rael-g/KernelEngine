@@ -3,10 +3,10 @@
 //! lies behind them. It also owns the creation and teardown of that pass, behind the one factory it
 //! exports.
 
-const abi_asset_resolver = @import("abi_asset_resolver");
 const abi_render_components = @import("abi_render_components");
 const abi_render_gpu = @import("abi_render_gpu");
 const abi_render_handles = @import("abi_render_handles");
+const abi_render_material = @import("abi_render_material");
 const std = @import("std");
 
 pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @import("log").Destination("ke_render_forward").logFn };
@@ -71,7 +71,7 @@ fn collectDraws(
         var i: usize = 0;
         while (i < segs[s].count) : (i += 1) {
             if (meshes[i].layers & cam.cull_mask == 0) continue;
-            if (core.material_alpha_mode.?(core, meshes[i].material) != abi_render_handles.c.KE_ALPHA_MODE_BLEND) continue;
+            if (core.material_alpha_mode.?(core, meshes[i].material) != abi_render_material.c.KE_ALPHA_MODE_BLEND) continue;
             const wm = wts[i].matrix.m;
             const wp = zm.f32x4(wm[12], wm[13], wm[14], 1.0);
             const view_pos = zm.mul(wp, view);
@@ -86,10 +86,10 @@ const Objects = @import("object_uniforms").ObjectUniforms(PerObject);
 
 /// One draw `queueSystem` prepared and `record` issues.
 const Prepared = struct {
-    pipeline: abi_asset_resolver.c.ke_gpu_pipeline,
-    material: abi_asset_resolver.c.ke_render_material_binding,
-    vbo: abi_asset_resolver.c.ke_gpu_buffer,
-    ibo: abi_asset_resolver.c.ke_gpu_buffer,
+    pipeline: abi_render.c.ke_gpu_pipeline,
+    material: abi_render.c.ke_render_material_binding,
+    vbo: abi_render.c.ke_gpu_buffer,
+    ibo: abi_render.c.ke_gpu_buffer,
     index_count: u32,
     slot: u32,
 };
@@ -110,7 +110,7 @@ const ForwardModule = struct {
     attrs: [4]abi_render_gpu.c.ke_gpu_vertex_attribute = undefined,
     vbl: abi_render_gpu.c.ke_gpu_vertex_buffer_layout = undefined,
     groups: Groups = .{},
-    frame_set: abi_asset_resolver.c.ke_render_resource_set = abi_render_gpu.c.KE_RENDER_BINDING_INVALID,
+    frame_set: abi_render.c.ke_render_resource_set = abi_render_gpu.c.KE_RENDER_BINDING_INVALID,
     objects: ?Objects = null,
     env_cubemap: abi_render_handles.c.ke_texture_handle = .{ .bits = abi_render_handles.c.KE_HANDLE_NONE },
     color: rg.ke_render_graph_resource = rg.KE_RENDER_GRAPH_RESOURCE_INVALID,
@@ -132,9 +132,9 @@ const ForwardModule = struct {
     fn resolvePipeline(fwd: *ForwardModule, shader: [*c]const u8) bool {
         var name_buf: [MAX_SHADER_QUALIFIED]u8 = undefined;
         const name = std.fmt.bufPrintZ(&name_buf, "{s}.{s}", .{ std.mem.span(shader), PASS_NAME }) catch return false;
-        var vs: abi_asset_resolver.c.ke_gpu_shader_module = undefined;
+        var vs: abi_render.c.ke_gpu_shader_module = undefined;
         if (fwd.core.*.load_shader.?(fwd.core, name.ptr, abi_render_gpu.c.KE_GPU_SHADER_STAGE_VERTEX, &vs) != R.ok) return false;
-        var fs: abi_asset_resolver.c.ke_gpu_shader_module = undefined;
+        var fs: abi_render.c.ke_gpu_shader_module = undefined;
         if (fwd.core.*.load_shader.?(fwd.core, name.ptr, abi_render_gpu.c.KE_GPU_SHADER_STAGE_FRAGMENT, &fs) != R.ok) return false;
         fwd.pipeline_template.vertex_module = vs;
         fwd.pipeline_template.fragment_module = fs;
@@ -239,8 +239,8 @@ fn queueSystem(ctx: ?*abi_schedule.c.ke_schedule_ctx, user: ?*anyopaque, _: f32)
     fwd.prepared.clearRetainingCapacity();
     var slot: u32 = 0;
     for (fwd.draws.items) |draw| {
-        var vbo: abi_asset_resolver.c.ke_gpu_buffer = 0;
-        var ibo: abi_asset_resolver.c.ke_gpu_buffer = 0;
+        var vbo: abi_render.c.ke_gpu_buffer = 0;
+        var ibo: abi_render.c.ke_gpu_buffer = 0;
         var idx_count: u32 = 0;
         if (!core.*.mesh_buffers.?(core, draw.mesh.mesh, &vbo, &ibo, &idx_count)) continue;
         if (!fwd.resolvePipeline(core.*.material_shader.?(core, draw.mesh.material))) continue;
@@ -463,8 +463,8 @@ fn testComponentIds(_: ?*abi_render.c.ke_render_scene_resolve) callconv(.c) ?*co
 
 var test_scene: abi_render.c.ke_render_scene_resolve = .{ .handle = null, .component_ids = testComponentIds, .render_component_ids = testComponentIds };
 
-fn blendUnlessZero(_: ?*abi_render.c.ke_render_service, m: abi_render_handles.c.ke_material_handle) callconv(.c) abi_render_handles.c.ke_alpha_mode {
-    return if (m.bits == 0) abi_render_handles.c.KE_ALPHA_MODE_OPAQUE else abi_render_handles.c.KE_ALPHA_MODE_BLEND;
+fn blendUnlessZero(_: ?*abi_render.c.ke_render_service, m: abi_render_handles.c.ke_material_handle) callconv(.c) abi_render_material.c.ke_alpha_mode {
+    return if (m.bits == 0) abi_render_material.c.KE_ALPHA_MODE_OPAQUE else abi_render_material.c.KE_ALPHA_MODE_BLEND;
 }
 
 fn blendingService() abi_render.c.ke_render_service {
@@ -711,8 +711,8 @@ fn sceneView(_: ?*abi_schedule.c.ke_schedule_ctx, index: u32, out_count: ?*usize
 var scene_ctx: abi_schedule.c.ke_schedule_ctx = .{ .handle = null, .commands = null, .view = sceneView, .slice = null };
 var zero_globals = std.mem.zeroes(abi_render.c.ke_render_frame_globals);
 
-fn blendAll(_: zsub.For(abi_render.c.ke_render_service).Args(.material_alpha_mode)) abi_render_handles.c.ke_alpha_mode {
-    return abi_render_handles.c.KE_ALPHA_MODE_BLEND;
+fn blendAll(_: zsub.For(abi_render.c.ke_render_service).Args(.material_alpha_mode)) abi_render_material.c.ke_alpha_mode {
+    return abi_render_material.c.KE_ALPHA_MODE_BLEND;
 }
 
 fn meshFound(args: zsub.For(abi_render.c.ke_render_service).Args(.mesh_buffers)) bool {

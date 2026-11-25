@@ -2,9 +2,9 @@
 #define KERNEL_ENGINE_IO_STD_IO_STD_CREATE_H_
 
 #include <kernel_engine/common/export.h>
-#include <kernel_engine/file_system/file_system.h>
+#include <kernel_engine/io/file_system.h>
 #include <kernel_engine/io/io.h>
-#include <kernel_engine/settings/settings.h>
+#include <kernel_engine/configuration/settings.h>
 
 #ifdef __cplusplus
 extern "C"

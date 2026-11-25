@@ -1,7 +1,6 @@
 //! The parameters every shader shares and the service provides itself: the frame globals, the
 //! scene's light and the common samplers, kept on the CPU for the passes and uploaded for the GPU.
 
-const abi_asset_resolver = @import("abi_asset_resolver");
 const abi_render_gpu = @import("abi_render_gpu");
 const std = @import("std");
 const rc = @import("render_service.zig");
@@ -33,9 +32,9 @@ const samplers = [_]Sampler{
 pub const Globals = struct {
     frame: abi_render.c.ke_render_frame_globals = std.mem.zeroes(abi_render.c.ke_render_frame_globals),
     lighting: abi_render.c.ke_render_lighting = std.mem.zeroes(abi_render.c.ke_render_lighting),
-    frame_buffer: abi_asset_resolver.c.ke_gpu_buffer = abi_render_gpu.c.KE_GPU_INVALID_HANDLE,
-    lighting_buffer: abi_asset_resolver.c.ke_gpu_buffer = abi_render_gpu.c.KE_GPU_INVALID_HANDLE,
-    samplers: [samplers.len]abi_asset_resolver.c.ke_gpu_sampler = [_]abi_asset_resolver.c.ke_gpu_sampler{abi_render_gpu.c.KE_GPU_INVALID_HANDLE} ** samplers.len,
+    frame_buffer: abi_render.c.ke_gpu_buffer = abi_render_gpu.c.KE_GPU_INVALID_HANDLE,
+    lighting_buffer: abi_render.c.ke_gpu_buffer = abi_render_gpu.c.KE_GPU_INVALID_HANDLE,
+    samplers: [samplers.len]abi_render.c.ke_gpu_sampler = [_]abi_render.c.ke_gpu_sampler{abi_render_gpu.c.KE_GPU_INVALID_HANDLE} ** samplers.len,
 
     /// Creates the buffers and the samplers. On failure it fails with the device's code, and what
     /// it created stays for `release`.
@@ -109,7 +108,7 @@ pub const Globals = struct {
     }
 };
 
-fn uniformBuffer(dev: *abi_render_gpu.c.ke_gpu_device, label: [*c]const u8, size: usize, out: *abi_asset_resolver.c.ke_gpu_buffer) R.Error!void {
+fn uniformBuffer(dev: *abi_render_gpu.c.ke_gpu_device, label: [*c]const u8, size: usize, out: *abi_render.c.ke_gpu_buffer) R.Error!void {
     try R.check(dev.create_buffer.?(dev, &abi_render_gpu.c.ke_gpu_buffer_desc{
         .label = label,
         .initial_data = null,

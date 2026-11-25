@@ -3,7 +3,6 @@
 //! frame's color. It also owns the creation and teardown of that pass, behind the one factory it
 //! exports.
 
-const abi_asset_resolver = @import("abi_asset_resolver");
 const abi_render_components = @import("abi_render_components");
 const abi_render_gpu = @import("abi_render_gpu");
 const abi_render_handles = @import("abi_render_handles");
@@ -56,9 +55,9 @@ const DeferredLightingModule = struct {
 
     pipeline_params: abi_render_gpu.c.ke_gpu_render_pipeline_desc = undefined,
     binder: *abi_render_gpu.c.ke_render_resource_binder = undefined,
-    layout: abi_asset_resolver.c.ke_render_shader_layout = abi_render_gpu.c.KE_RENDER_BINDING_INVALID,
-    frame_set: abi_asset_resolver.c.ke_render_resource_set = abi_render_gpu.c.KE_RENDER_BINDING_INVALID,
-    gbuffer_set: abi_asset_resolver.c.ke_render_resource_set = abi_render_gpu.c.KE_RENDER_BINDING_INVALID,
+    layout: abi_render.c.ke_render_shader_layout = abi_render_gpu.c.KE_RENDER_BINDING_INVALID,
+    frame_set: abi_render.c.ke_render_resource_set = abi_render_gpu.c.KE_RENDER_BINDING_INVALID,
+    gbuffer_set: abi_render.c.ke_render_resource_set = abi_render_gpu.c.KE_RENDER_BINDING_INVALID,
     env_cubemap: abi_render_handles.c.ke_texture_handle = .{ .bits = abi_render_handles.c.KE_HANDLE_NONE },
 
     access: [1]abi_ecs.c.ke_ecs_query_term = undefined,
@@ -178,9 +177,9 @@ fn setup(dl: *DeferredLightingModule, service: *abi_render.c.ke_render_service, 
     dl.binder = core.*.resource_binder.?(core).?;
     try R.check(dl.binder.create_shader_layout.?(dl.binder, &shader_layout, &dl.layout));
 
-    var vs: abi_asset_resolver.c.ke_gpu_shader_module = undefined;
+    var vs: abi_render.c.ke_gpu_shader_module = undefined;
     try R.check(core.*.load_shader.?(core, "deferred_lighting", abi_render_gpu.c.KE_GPU_SHADER_STAGE_VERTEX, &vs));
-    var fs: abi_asset_resolver.c.ke_gpu_shader_module = undefined;
+    var fs: abi_render.c.ke_gpu_shader_module = undefined;
     try R.check(core.*.load_shader.?(core, "deferred_lighting", abi_render_gpu.c.KE_GPU_SHADER_STAGE_FRAGMENT, &fs));
 
     var pp = std.mem.zeroes(abi_render_gpu.c.ke_gpu_render_pipeline_desc);

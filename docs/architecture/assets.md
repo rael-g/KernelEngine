@@ -2,8 +2,8 @@
 
 This is a map: the parts between a path and a resource on the GPU, what each receives and what it
 hands on. How a part works inside is on the generated page of its file. Contracts are under
-`src/c/asset/`, `src/c/text/` and `src/c/resource_cache/`, plugins under `src/zig/asset/`,
-`src/zig/text/`, `src/zig/resource_cache/` and `src/zig/framework/`.
+`src/c/asset/` and `src/c/resource_cache/`, plugins under `src/zig/asset/`,
+`src/zig/resource_cache/` and `src/zig/framework/`.
 
 ## The parts
 
@@ -12,16 +12,18 @@ hands on. How a part works inside is on the generated page of its file. Contract
 | image loader | `ke_image_loader` | stb_image | a file path | RGBA8 pixels in a `ke_texture_data` |
 | font loader | `ke_font_loader` | stb_truetype | a path, a size, a codepoint range | an atlas and glyph metrics in a `ke_font_data` |
 | model loader | `ke_asset_loader` | assimp | a model path | meshes, materials and textures in a `ke_model_data` |
-| resolver | `ke_asset_resolver` | framework | the image and font loaders, a project root | decoded data, or handles of the render service |
+| resolver | `ke_asset_resolver` | framework | the image and font loaders, a project root | decoded data |
+| render assets | `ke_render_assets` | framework | the resolver and the render service | handles of textures, meshes and materials |
 | cache | `ke_resource_cache` | default | handles, path keys, a destroy callback | the handle for a key, with a reference |
 | render service | `ke_render_service` | service | decoded data, a key | handles of meshes, textures and materials |
 
-**The resolver turns an authored path into data or into a handle.** The `resolve_*` slots decode
-and return data the caller frees and touch no GPU. The `resolve_texture_into`, `resolve_mesh_into` and `resolve_material_into` slots take the render
-service, ask it for the key first, and upload only on a miss. The key is the path as authored,
-so the same file under two spellings is two resources. The prefix "res://" stands for the project
-root given to `ke_asset_resolver_create`; "res://primitives/" names the meshes the resolver bakes
-itself.
+**The resolver turns an authored path into data.** Its `resolve_*` slots decode and return data
+the caller frees and touch no GPU. The prefix "res://" stands for the project root given to
+`ke_asset_resolver_create`; "res://primitives/" names the meshes the resolver bakes itself.
+
+**The render assets turn a path into a handle.** Each `resolve_*` slot asks the render service for
+the key first and reads through the resolver and uploads only on a miss. The key is the path as
+authored, so the same file under two spellings is two resources.
 
 **The render service remembers by key.** It owns one `ke_resource_cache` for meshes, one for
 textures, one for materials and one for shaders. An upload under a key already cached returns the
@@ -40,7 +42,7 @@ and its records never refer to the imported scene.
 
 ## Who asks
 
-The system "render.sprite2d.resolve" calls `resolve_texture_into` for a sprite's texture path.
+The system "render.sprite2d.resolve" asks the render assets' `resolve_texture` for a sprite's texture path.
 The system "render.label.resolve" bakes a label's font through `resolve_font` and uploads the
 atlas. The system "render.mesh.resolve" bakes the primitive a mesh component names and uploads it
 without the resolver. Models are loaded by `ke_asset_loader` and uploaded by managed code.

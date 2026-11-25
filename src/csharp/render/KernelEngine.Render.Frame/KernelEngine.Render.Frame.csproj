@@ -9,10 +9,10 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\common\KernelEngine.Common\KernelEngine.Common.csproj" />
-    <ProjectReference Include="..\..\part\KernelEngine.Part\KernelEngine.Part.csproj" />
+    <ProjectReference Include="..\..\assembly\KernelEngine.Part\KernelEngine.Part.csproj" />
     <ProjectReference Include="..\..\result\KernelEngine.Result\KernelEngine.Result.csproj" />
     <ProjectReference Include="..\..\ecs\KernelEngine.Ecs\KernelEngine.Ecs.csproj" />
     <ProjectReference Include="..\KernelEngine.Render.Abstractions\KernelEngine.Render.Abstractions.csproj" />
-    <ProjectReference Include="..\..\render_graph\KernelEngine.RenderGraph\KernelEngine.RenderGraph.csproj" />
+    <ProjectReference Include="..\..\render\KernelEngine.RenderGraph\KernelEngine.RenderGraph.csproj" />
   </ItemGroup>
 </Project>

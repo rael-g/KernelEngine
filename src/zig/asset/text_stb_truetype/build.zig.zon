@@ -1,0 +1,24 @@
+.{
+    .name = .ke_text_stb_truetype,
+    .version = "0.1.0",
+    .fingerprint = 0xf42084ef3f811492,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .ke_part = .{ .path = "../../assembly/part" },
+        .abi_part = .{ .path = "../../abi/part" },
+        .ke_io_pending_reads = .{ .path = "../../io/pending_reads" },
+        .abi_io = .{ .path = "../../abi/io" },
+        .abi_result = .{ .path = "../../abi/result" },
+        .abi_text = .{ .path = "../../abi/text" },
+        .abi_text_stb_truetype_factory = .{ .path = "abi" },
+        .ke_common = .{ .path = "../../common" },
+        .ke_build = .{ .path = "../../build" },
+        .ke_logger = .{ .path = "../../logger" },
+        .ke_result = .{ .path = "../../result" },
+        .zsub = .{
+            .url = "https://github.com/rael-g/zsub/archive/10fee26318ed2ef628f6fada5f3c39f4572381ba.tar.gz",
+            .hash = "zsub-0.0.0-c8a1QlLVAABkTAwiY20uW_c1jJDIb3Ke92-LuXFWiXmU",
+        },
+    },
+    .paths = .{"."},
+}

@@ -1,6 +1,7 @@
 using System.Numerics;
 using System.Runtime.CompilerServices;
 
+using global::KernelEngine.Common;
 using global::KernelEngine.Ecs;
 
 using KernelEngine.Asset.Native;

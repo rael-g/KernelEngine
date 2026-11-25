@@ -2,7 +2,7 @@
 #define KERNEL_ENGINE_IO_INLINE_IO_INLINE_PARTS_H_
 
 #include <kernel_engine/io/inline/io_inline_create.h>
-#include <kernel_engine/part/part.h>
+#include <kernel_engine/assembly/part.h>
 
 #include <stddef.h>
 

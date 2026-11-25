@@ -6,8 +6,8 @@
 #include <kernel_engine/framework/node_types.h>
 #include <kernel_engine/framework/scene_files.h>
 #include <kernel_engine/io/io.h>
-#include <kernel_engine/schedule/schedule.h>
-#include <kernel_engine/settings/settings.h>
+#include <kernel_engine/scheduling/schedule.h>
+#include <kernel_engine/configuration/settings.h>
 
 #ifdef __cplusplus
 extern "C"

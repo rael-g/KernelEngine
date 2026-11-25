@@ -2,11 +2,11 @@
 #define KERNEL_ENGINE_RENDER_TONEMAP_TONEMAP_CREATE_H_
 
 #include <kernel_engine/result/result.h>
-#include <kernel_engine/part/part.h>
+#include <kernel_engine/assembly/part.h>
 #include <kernel_engine/render/frame.h>
 #include <kernel_engine/render/service/render_service.h>
 #include <kernel_engine/render/gpu/gpu_device.h>
-#include <kernel_engine/schedule/schedule.h>
+#include <kernel_engine/scheduling/schedule.h>
 
 #if defined(_WIN32) || defined(__CYGWIN__)
     #ifdef KE_RENDER_TONEMAP_EXPORT

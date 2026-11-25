@@ -10,11 +10,13 @@ pub const _DllMainCRTStartup = @import("dll_entry")._DllMainCRTStartup;
 comptime {
     _ = @import("mesh_shape.zig");
     _ = @import("asset_resolver.zig");
+    _ = @import("render_assets.zig");
     _ = @import("scene_tree.zig");
     _ = @import("scene_hierarchy.zig");
     _ = @import("node_types.zig");
     _ = @import("input_actions.zig");
     _ = @import("scene_files.zig");
+    _ = @import("spatial_nodes.zig");
     _ = @import("scene_values.zig");
     _ = @import("scene_names.zig");
     _ = @import("framework_parts.zig");

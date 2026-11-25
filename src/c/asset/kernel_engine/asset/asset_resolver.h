@@ -1,14 +1,14 @@
 #ifndef KERNEL_ENGINE_ASSET_ASSET_RESOLVER_H_
 #define KERNEL_ENGINE_ASSET_ASSET_RESOLVER_H_
 
-#include <kernel_engine/render/material_file.h>
-#include <kernel_engine/render/handles.h>
-#include <kernel_engine/render/service/render_service.h>
+#include <kernel_engine/asset/material.h>
 #include <kernel_engine/asset/mesh_shape.h>
 #include <kernel_engine/asset/image_loader.h>
 #include <kernel_engine/asset/mesh_data.h>
-#include <kernel_engine/text/font.h>
+#include <kernel_engine/asset/font.h>
 #include <kernel_engine/result/result.h>
+#include <stddef.h>
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C"
@@ -89,44 +89,6 @@ extern "C"
         /** [releases:ResolvedFont] Frees a ke_font_data resolve_font returned. A null @p data is
          * ignored. */
         void (*free_font)(struct ke_asset_resolver *self, ke_font_data *data);
-
-        /**
-         * Resolves and uploads a texture, deduped by `path`. On a cache hit,
-         * nothing is decoded.
-         * @param core [borrowed] The render service to upload into.
-         * @param path [utf8]
-         * @param out_texture [out] Receives the texture; KE_TEXTURE_NONE on failure.
-         * @return KE_OK, resolve_texture's codes, or KE_RESULT_GENERAL when the upload fails.
-         */
-        ke_result (*resolve_texture_into)(struct ke_asset_resolver *self,
-                                          ke_render_service *core, const char *path,
-                                          ke_texture_handle *out_texture);
-
-        /**
-         * Resolves and uploads a mesh, deduped by `path`. Resolution is that of
-         * resolve_mesh.
-         * @param core [borrowed] The render service to upload into.
-         * @param path [utf8]
-         * @param out_mesh [out] Receives the mesh; KE_MESH_NONE on failure.
-         * @return KE_OK, resolve_mesh's codes, or KE_RESULT_GENERAL when the upload fails.
-         */
-        ke_result (*resolve_mesh_into)(struct ke_asset_resolver *self,
-                                       ke_render_service *core, const char *path,
-                                       ke_mesh_handle *out_mesh);
-
-        /**
-         * Resolves a `.material` file, resolving/uploading its albedo and normal
-         * textures (each deduped by their own path) and creating the material,
-         * deduped by `path`.
-         * @param core [borrowed] The render service to upload into.
-         * @param path [utf8]
-         * @param out_material [out] Receives the material; KE_MATERIAL_NONE on failure.
-         * @return KE_OK, the codes of resolve_material and resolve_texture, or
-         *         KE_RESULT_GENERAL when an upload or the material creation fails.
-         */
-        ke_result (*resolve_material_into)(struct ke_asset_resolver *self,
-                                           ke_render_service *core, const char *path,
-                                           ke_material_handle *out_material);
 
         /**
          * Writes the file path `path` names into `out`, terminated: a path that begins with

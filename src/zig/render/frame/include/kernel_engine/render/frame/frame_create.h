@@ -1,7 +1,7 @@
 #ifndef KERNEL_ENGINE_RENDER_FRAME_FRAME_CREATE_H_
 #define KERNEL_ENGINE_RENDER_FRAME_FRAME_CREATE_H_
 
-#include <kernel_engine/settings/settings.h>
+#include <kernel_engine/configuration/settings.h>
 #include <kernel_engine/result/result.h>
 #include <kernel_engine/ecs/ke_ecs.h>
 #include <kernel_engine/render/camera.h>
@@ -9,7 +9,7 @@
 #include <kernel_engine/render/scene_resolve.h>
 #include <kernel_engine/render/service/render_service.h>
 #include <kernel_engine/math/math.h>
-#include <kernel_engine/render_graph/render_graph.h>
+#include <kernel_engine/render/render_graph.h>
 
 #if defined(_WIN32) || defined(__CYGWIN__)
     #ifdef KE_RENDER_FRAME_EXPORT

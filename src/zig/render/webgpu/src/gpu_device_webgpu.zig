@@ -1,7 +1,6 @@
 //! The WebGPU backend of the `ke_gpu_device` contract, on wgpu-native, with its error types and the
 //! factory that creates it.
 
-const abi_asset_resolver = @import("abi_asset_resolver");
 const abi_render_gpu = @import("abi_render_gpu");
 const std = @import("std");
 const abi_part = @import("abi_part");
@@ -106,7 +105,7 @@ fn toWgpuTextureViewDimension(d: abi_render_gpu.c.ke_gpu_texture_dimension) wgpu
     };
 }
 
-fn toWgpuTextureAspect(a: abi_asset_resolver.c.ke_gpu_texture_aspect) wgpu.WGPUTextureAspect {
+fn toWgpuTextureAspect(a: abi_render.c.ke_gpu_texture_aspect) wgpu.WGPUTextureAspect {
     if (a & abi_render_gpu.c.KE_GPU_TEXTURE_ASPECT_DEPTH != 0) return wgpu.WGPUTextureAspect_DepthOnly;
     if (a & abi_render_gpu.c.KE_GPU_TEXTURE_ASPECT_STENCIL != 0) return wgpu.WGPUTextureAspect_StencilOnly;
     return wgpu.WGPUTextureAspect_All;
@@ -461,7 +460,7 @@ fn deviceCallback(
 }
 
 /// Returns the wgpu queue of the device, stored as the handle.
-pub fn getDefaultQueue(dev: [*c]abi_render_gpu.c.ke_gpu_device) callconv(.c) abi_asset_resolver.c.ke_gpu_queue {
+pub fn getDefaultQueue(dev: [*c]abi_render_gpu.c.ke_gpu_device) callconv(.c) abi_render.c.ke_gpu_queue {
     return @intFromPtr(state(dev).queue);
 }
 
@@ -469,7 +468,7 @@ pub fn getDefaultQueue(dev: [*c]abi_render_gpu.c.ke_gpu_device) callconv(.c) abi
 /// with no error set.
 fn queueSubmit(
     _: [*c]abi_render_gpu.c.ke_gpu_device,
-    q: abi_asset_resolver.c.ke_gpu_queue,
+    q: abi_render.c.ke_gpu_queue,
     cmds: [*c]const ?*abi_render_gpu.c.ke_gpu_command_buffer,
     cmd_count: u32,
 ) callconv(.c) void {
@@ -500,18 +499,18 @@ fn reapCompletedCompiles(s: *DeviceState) void {
 
 /// Reaps the finished compile tasks, then pumps the wgpu event loop without blocking, so the
 /// callbacks of completed work fire on the calling thread.
-fn queuePoll(dev: [*c]abi_render_gpu.c.ke_gpu_device, _: abi_asset_resolver.c.ke_gpu_queue) callconv(.c) void {
+fn queuePoll(dev: [*c]abi_render_gpu.c.ke_gpu_device, _: abi_render.c.ke_gpu_queue) callconv(.c) void {
     const s = state(dev);
     reapCompletedCompiles(s);
     _ = wgpu.wgpuDevicePoll(s.device, 0, null);
 }
 
 /// Blocks the caller until the wgpu device has no work in flight.
-fn queueWaitIdle(dev: [*c]abi_render_gpu.c.ke_gpu_device, _: abi_asset_resolver.c.ke_gpu_queue) callconv(.c) void {
+fn queueWaitIdle(dev: [*c]abi_render_gpu.c.ke_gpu_device, _: abi_render.c.ke_gpu_queue) callconv(.c) void {
     _ = wgpu.wgpuDevicePoll(state(dev).device, 1, null);
 }
 
-fn mapBufferUsage(ke_usage: abi_asset_resolver.c.ke_gpu_buffer_usage) wgpu.WGPUBufferUsage {
+fn mapBufferUsage(ke_usage: abi_render.c.ke_gpu_buffer_usage) wgpu.WGPUBufferUsage {
     var u: wgpu.WGPUBufferUsage = wgpu.WGPUBufferUsage_None;
     if (ke_usage & abi_render_gpu.c.KE_GPU_BUFFER_USAGE_MAP_READ != 0) u |= wgpu.WGPUBufferUsage_MapRead;
     if (ke_usage & abi_render_gpu.c.KE_GPU_BUFFER_USAGE_MAP_WRITE != 0) u |= wgpu.WGPUBufferUsage_MapWrite;
@@ -525,7 +524,7 @@ fn mapBufferUsage(ke_usage: abi_asset_resolver.c.ke_gpu_buffer_usage) wgpu.WGPUB
     return u;
 }
 
-fn mapTextureUsage(ke_usage: abi_asset_resolver.c.ke_gpu_texture_usage) wgpu.WGPUTextureUsage {
+fn mapTextureUsage(ke_usage: abi_render.c.ke_gpu_texture_usage) wgpu.WGPUTextureUsage {
     var u: wgpu.WGPUTextureUsage = wgpu.WGPUTextureUsage_None;
     if (ke_usage & abi_render_gpu.c.KE_GPU_TEXTURE_USAGE_COPY_SRC != 0) u |= wgpu.WGPUTextureUsage_CopySrc;
     if (ke_usage & abi_render_gpu.c.KE_GPU_TEXTURE_USAGE_COPY_DST != 0) u |= wgpu.WGPUTextureUsage_CopyDst;
@@ -536,7 +535,7 @@ fn mapTextureUsage(ke_usage: abi_asset_resolver.c.ke_gpu_texture_usage) wgpu.WGP
     return u;
 }
 
-fn mapShaderStage(ke_stage: abi_asset_resolver.c.ke_gpu_shader_stage) wgpu.WGPUShaderStage {
+fn mapShaderStage(ke_stage: abi_render.c.ke_gpu_shader_stage) wgpu.WGPUShaderStage {
     var s: wgpu.WGPUShaderStage = wgpu.WGPUShaderStage_None;
     if (ke_stage & abi_render_gpu.c.KE_GPU_SHADER_STAGE_VERTEX != 0) s |= wgpu.WGPUShaderStage_Vertex;
     if (ke_stage & abi_render_gpu.c.KE_GPU_SHADER_STAGE_FRAGMENT != 0) s |= wgpu.WGPUShaderStage_Fragment;
@@ -589,7 +588,7 @@ fn encInsertDebugMarker(enc: [*c]abi_render_gpu.c.ke_gpu_command_encoder, label:
 /// captured message releases the buffer, fails as general, logging the message, and writes
 /// the invalid handle. Initial data is copied in with a queue write only after the error scope has
 /// passed, so a rejected buffer receives no data.
-fn createBuffer(dev: [*c]abi_render_gpu.c.ke_gpu_device, p: [*c]const abi_render_gpu.c.ke_gpu_buffer_desc, out: ?*abi_asset_resolver.c.ke_gpu_buffer) callconv(.c) abi_result.c.ke_result {
+fn createBuffer(dev: [*c]abi_render_gpu.c.ke_gpu_device, p: [*c]const abi_render_gpu.c.ke_gpu_buffer_desc, out: ?*abi_render.c.ke_gpu_buffer) callconv(.c) abi_result.c.ke_result {
     const o = out orelse return R.code(error.InvalidArgument);
     o.* = abi_render_gpu.c.KE_GPU_INVALID_HANDLE;
     const pp = @as(*const abi_render_gpu.c.ke_gpu_buffer_desc, @ptrCast(p));
@@ -618,7 +617,7 @@ fn createBuffer(dev: [*c]abi_render_gpu.c.ke_gpu_device, p: [*c]const abi_render
 
 /// Shares the error scope protocol of `createBuffer`. A repack buffer that cannot be allocated
 /// returns the texture with the layers from that one on not uploaded.
-fn createTexture(dev: [*c]abi_render_gpu.c.ke_gpu_device, p: [*c]const abi_render_gpu.c.ke_gpu_texture_desc, out: ?*abi_asset_resolver.c.ke_gpu_texture) callconv(.c) abi_result.c.ke_result {
+fn createTexture(dev: [*c]abi_render_gpu.c.ke_gpu_device, p: [*c]const abi_render_gpu.c.ke_gpu_texture_desc, out: ?*abi_render.c.ke_gpu_texture) callconv(.c) abi_result.c.ke_result {
     const o = out orelse return R.code(error.InvalidArgument);
     o.* = abi_render_gpu.c.KE_GPU_INVALID_HANDLE;
     const pp = @as(*const abi_render_gpu.c.ke_gpu_texture_desc, @ptrCast(p));
@@ -690,7 +689,7 @@ fn createTexture(dev: [*c]abi_render_gpu.c.ke_gpu_device, p: [*c]const abi_rende
 }
 
 /// Shares the error scope protocol of `createBuffer`.
-fn createTextureView(dev: [*c]abi_render_gpu.c.ke_gpu_device, tex: abi_asset_resolver.c.ke_gpu_texture, p: [*c]const abi_render_gpu.c.ke_gpu_texture_view_desc, out: ?*abi_asset_resolver.c.ke_gpu_texture_view) callconv(.c) abi_result.c.ke_result {
+fn createTextureView(dev: [*c]abi_render_gpu.c.ke_gpu_device, tex: abi_render.c.ke_gpu_texture, p: [*c]const abi_render_gpu.c.ke_gpu_texture_view_desc, out: ?*abi_render.c.ke_gpu_texture_view) callconv(.c) abi_result.c.ke_result {
     const o = out orelse return R.code(error.InvalidArgument);
     o.* = abi_render_gpu.c.KE_GPU_INVALID_HANDLE;
     const pp = @as(*const abi_render_gpu.c.ke_gpu_texture_view_desc, @ptrCast(p));
@@ -719,7 +718,7 @@ fn createTextureView(dev: [*c]abi_render_gpu.c.ke_gpu_device, tex: abi_asset_res
 
 /// Returns the sampler as a handle, with each filter and address mode translated to wgpu's.
 /// Shares the error scope protocol of `createBuffer`.
-fn createSampler(dev: [*c]abi_render_gpu.c.ke_gpu_device, p: [*c]const abi_render_gpu.c.ke_gpu_sampler_desc, out: ?*abi_asset_resolver.c.ke_gpu_sampler) callconv(.c) abi_result.c.ke_result {
+fn createSampler(dev: [*c]abi_render_gpu.c.ke_gpu_device, p: [*c]const abi_render_gpu.c.ke_gpu_sampler_desc, out: ?*abi_render.c.ke_gpu_sampler) callconv(.c) abi_result.c.ke_result {
     const o = out orelse return R.code(error.InvalidArgument);
     o.* = abi_render_gpu.c.KE_GPU_INVALID_HANDLE;
     const pp = @as(*const abi_render_gpu.c.ke_gpu_sampler_desc, @ptrCast(p));
@@ -821,7 +820,7 @@ fn scopeFailed(device: wgpu.WGPUDevice, made: bool, comptime what: []const u8) b
 /// Reads the code as SPIR-V when it is at least four bytes long and its first word is
 /// `SPIRV_MAGIC`, otherwise as WGSL. The module is created inside a validation error scope that
 /// is polled before returning; a captured error releases the module and fails as general, logging the message.
-fn createShaderModule(dev: [*c]abi_render_gpu.c.ke_gpu_device, p: [*c]const abi_render_gpu.c.ke_gpu_shader_module_desc, out: ?*abi_asset_resolver.c.ke_gpu_shader_module) callconv(.c) abi_result.c.ke_result {
+fn createShaderModule(dev: [*c]abi_render_gpu.c.ke_gpu_device, p: [*c]const abi_render_gpu.c.ke_gpu_shader_module_desc, out: ?*abi_render.c.ke_gpu_shader_module) callconv(.c) abi_result.c.ke_result {
     const o = out orelse return R.code(error.InvalidArgument);
     o.* = abi_render_gpu.c.KE_GPU_INVALID_HANDLE;
     const pp = @as(*const abi_render_gpu.c.ke_gpu_shader_module_desc, @ptrCast(p));
@@ -1017,7 +1016,7 @@ fn colorTargetsDeclared(p: [*c]const abi_render_gpu.c.ke_gpu_render_pipeline_des
 /// Compiles on the calling thread and never submits to the async system. A fragment target with no
 /// mappable format fails as an invalid argument; otherwise it shares the error scope protocol of
 /// `createBuffer`.
-fn createRenderPipeline(dev: [*c]abi_render_gpu.c.ke_gpu_device, p: [*c]const abi_render_gpu.c.ke_gpu_render_pipeline_desc, out: ?*abi_asset_resolver.c.ke_gpu_pipeline) callconv(.c) abi_result.c.ke_result {
+fn createRenderPipeline(dev: [*c]abi_render_gpu.c.ke_gpu_device, p: [*c]const abi_render_gpu.c.ke_gpu_render_pipeline_desc, out: ?*abi_render.c.ke_gpu_pipeline) callconv(.c) abi_result.c.ke_result {
     const o = out orelse return R.code(error.InvalidArgument);
     o.* = abi_render_gpu.c.KE_GPU_INVALID_HANDLE;
     if (!colorTargetsDeclared(p)) {
@@ -1054,7 +1053,7 @@ const AsyncCompileJob = struct {
     fragment_entry: ?[:0]u8,
     device: wgpu.WGPUDevice,
     build: RenderPipelineDescBuild,
-    on_ready: *const fn (abi_result.c.ke_result, abi_asset_resolver.c.ke_gpu_pipeline, ?*anyopaque) callconv(.c) void,
+    on_ready: *const fn (abi_result.c.ke_result, abi_render.c.ke_gpu_pipeline, ?*anyopaque) callconv(.c) void,
     user: ?*anyopaque,
 };
 
@@ -1097,7 +1096,7 @@ fn runAsyncCompileJob(data: ?*anyopaque, _: ?*abi_async.c.ke_async_ctx) callconv
     return @intCast(abi_result.c.KE_OK);
 }
 
-fn reportPipeline(on_ready: *const fn (abi_result.c.ke_result, abi_asset_resolver.c.ke_gpu_pipeline, ?*anyopaque) callconv(.c) void, pipeline: wgpu.WGPURenderPipeline, user: ?*anyopaque) void {
+fn reportPipeline(on_ready: *const fn (abi_result.c.ke_result, abi_render.c.ke_gpu_pipeline, ?*anyopaque) callconv(.c) void, pipeline: wgpu.WGPURenderPipeline, user: ?*anyopaque) void {
     if (pipeline == null) {
         log.warn("the device could not compile a render pipeline", .{});
         on_ready(R.code(error.General), abi_render_gpu.c.KE_GPU_INVALID_HANDLE, user);
@@ -1194,7 +1193,7 @@ fn flushPipelineCompiles(dev: [*c]abi_render_gpu.c.ke_gpu_device) callconv(.c) v
 
 /// Compiles on the calling thread. The pipeline is released with `destroyComputePipeline`. Shares
 /// the error scope protocol of `createBuffer`.
-fn createComputePipeline(dev: [*c]abi_render_gpu.c.ke_gpu_device, p: [*c]const abi_render_gpu.c.ke_gpu_compute_pipeline_desc, out: ?*abi_asset_resolver.c.ke_gpu_pipeline) callconv(.c) abi_result.c.ke_result {
+fn createComputePipeline(dev: [*c]abi_render_gpu.c.ke_gpu_device, p: [*c]const abi_render_gpu.c.ke_gpu_compute_pipeline_desc, out: ?*abi_render.c.ke_gpu_pipeline) callconv(.c) abi_result.c.ke_result {
     const o = out orelse return R.code(error.InvalidArgument);
     o.* = abi_render_gpu.c.KE_GPU_INVALID_HANDLE;
     const pp = @as(*const abi_render_gpu.c.ke_gpu_compute_pipeline_desc, @ptrCast(p));
@@ -1240,7 +1239,7 @@ fn createComputePipeline(dev: [*c]abi_render_gpu.c.ke_gpu_device, p: [*c]const a
 /// Maps each binding type to a wgpu layout entry; entries beyond the local capacity are
 /// dropped with no error. A storage texture is fixed to write-only RGBA8 2D. Shares the error
 /// scope protocol of `createBuffer`.
-fn createBindGroupLayout(dev: [*c]abi_render_gpu.c.ke_gpu_device, p: [*c]const abi_render_gpu.c.ke_gpu_bind_group_layout_desc, out: ?*abi_asset_resolver.c.ke_gpu_bind_group_layout) callconv(.c) abi_result.c.ke_result {
+fn createBindGroupLayout(dev: [*c]abi_render_gpu.c.ke_gpu_device, p: [*c]const abi_render_gpu.c.ke_gpu_bind_group_layout_desc, out: ?*abi_render.c.ke_gpu_bind_group_layout) callconv(.c) abi_result.c.ke_result {
     const o = out orelse return R.code(error.InvalidArgument);
     o.* = abi_render_gpu.c.KE_GPU_INVALID_HANDLE;
     const pp = @as(*const abi_render_gpu.c.ke_gpu_bind_group_layout_desc, @ptrCast(p));
@@ -1311,7 +1310,7 @@ fn createBindGroupLayout(dev: [*c]abi_render_gpu.c.ke_gpu_device, p: [*c]const a
 /// Shares the error scope protocol of `createBuffer`: a validation error captured while the group
 /// is made releases it and fails as general, logging the message.
 /// Entries beyond the capacity of the local entry array are dropped with no error.
-fn createBindGroup(dev: [*c]abi_render_gpu.c.ke_gpu_device, p: [*c]const abi_render_gpu.c.ke_gpu_bind_group_desc, out: ?*abi_asset_resolver.c.ke_gpu_bind_group) callconv(.c) abi_result.c.ke_result {
+fn createBindGroup(dev: [*c]abi_render_gpu.c.ke_gpu_device, p: [*c]const abi_render_gpu.c.ke_gpu_bind_group_desc, out: ?*abi_render.c.ke_gpu_bind_group) callconv(.c) abi_result.c.ke_result {
     const o = out orelse return R.code(error.InvalidArgument);
     o.* = abi_render_gpu.c.KE_GPU_INVALID_HANDLE;
     const pp = @as(*const abi_render_gpu.c.ke_gpu_bind_group_desc, @ptrCast(p));
@@ -1356,58 +1355,58 @@ fn createBindGroup(dev: [*c]abi_render_gpu.c.ke_gpu_device, p: [*c]const abi_ren
 }
 
 /// Destroys the buffer's GPU memory and drops the handle's reference.
-fn destroyBuffer(_: [*c]abi_render_gpu.c.ke_gpu_device, h: abi_asset_resolver.c.ke_gpu_buffer) callconv(.c) void {
+fn destroyBuffer(_: [*c]abi_render_gpu.c.ke_gpu_device, h: abi_render.c.ke_gpu_buffer) callconv(.c) void {
     wgpu.wgpuBufferDestroy(@ptrFromInt(h));
     wgpu.wgpuBufferRelease(@ptrFromInt(h));
 }
 /// Destroys the texture's GPU memory and drops the handle's reference.
-fn destroyTexture(_: [*c]abi_render_gpu.c.ke_gpu_device, h: abi_asset_resolver.c.ke_gpu_texture) callconv(.c) void {
+fn destroyTexture(_: [*c]abi_render_gpu.c.ke_gpu_device, h: abi_render.c.ke_gpu_texture) callconv(.c) void {
     wgpu.wgpuTextureDestroy(@ptrFromInt(h));
     wgpu.wgpuTextureRelease(@ptrFromInt(h));
 }
 /// Drops the handle's reference to the view.
-fn destroyTextureView(_: [*c]abi_render_gpu.c.ke_gpu_device, h: abi_asset_resolver.c.ke_gpu_texture_view) callconv(.c) void {
+fn destroyTextureView(_: [*c]abi_render_gpu.c.ke_gpu_device, h: abi_render.c.ke_gpu_texture_view) callconv(.c) void {
     wgpu.wgpuTextureViewRelease(@ptrFromInt(h));
 }
 /// Drops the handle's reference to the sampler.
-fn destroySampler(_: [*c]abi_render_gpu.c.ke_gpu_device, h: abi_asset_resolver.c.ke_gpu_sampler) callconv(.c) void {
+fn destroySampler(_: [*c]abi_render_gpu.c.ke_gpu_device, h: abi_render.c.ke_gpu_sampler) callconv(.c) void {
     wgpu.wgpuSamplerRelease(@ptrFromInt(h));
 }
 /// Drops the handle's reference to the shader module.
-fn destroyShaderModule(_: [*c]abi_render_gpu.c.ke_gpu_device, h: abi_asset_resolver.c.ke_gpu_shader_module) callconv(.c) void {
+fn destroyShaderModule(_: [*c]abi_render_gpu.c.ke_gpu_device, h: abi_render.c.ke_gpu_shader_module) callconv(.c) void {
     wgpu.wgpuShaderModuleRelease(@ptrFromInt(h));
 }
 /// Drops the reference to a render pipeline; a compute pipeline needs `destroyComputePipeline`.
-fn destroyPipeline(_: [*c]abi_render_gpu.c.ke_gpu_device, h: abi_asset_resolver.c.ke_gpu_pipeline) callconv(.c) void {
+fn destroyPipeline(_: [*c]abi_render_gpu.c.ke_gpu_device, h: abi_render.c.ke_gpu_pipeline) callconv(.c) void {
     wgpu.wgpuRenderPipelineRelease(@ptrFromInt(h));
 }
 /// Drops the reference to a compute pipeline.
-fn destroyComputePipeline(_: [*c]abi_render_gpu.c.ke_gpu_device, h: abi_asset_resolver.c.ke_gpu_pipeline) callconv(.c) void {
+fn destroyComputePipeline(_: [*c]abi_render_gpu.c.ke_gpu_device, h: abi_render.c.ke_gpu_pipeline) callconv(.c) void {
     wgpu.wgpuComputePipelineRelease(@ptrFromInt(h));
 }
 /// Drops the handle's reference to the layout.
-fn destroyBindGroupLayout(_: [*c]abi_render_gpu.c.ke_gpu_device, h: abi_asset_resolver.c.ke_gpu_bind_group_layout) callconv(.c) void {
+fn destroyBindGroupLayout(_: [*c]abi_render_gpu.c.ke_gpu_device, h: abi_render.c.ke_gpu_bind_group_layout) callconv(.c) void {
     wgpu.wgpuBindGroupLayoutRelease(@ptrFromInt(h));
 }
 /// Drops the handle's reference to the bind group.
-fn destroyBindGroup(_: [*c]abi_render_gpu.c.ke_gpu_device, h: abi_asset_resolver.c.ke_gpu_bind_group) callconv(.c) void {
+fn destroyBindGroup(_: [*c]abi_render_gpu.c.ke_gpu_device, h: abi_render.c.ke_gpu_bind_group) callconv(.c) void {
     wgpu.wgpuBindGroupRelease(@ptrFromInt(h));
 }
 
 /// Records the command on the raw render pass.
-fn rpSetPipeline(rp: [*c]abi_render_gpu.c.ke_gpu_render_pass, pipe: abi_asset_resolver.c.ke_gpu_pipeline) callconv(.c) void {
+fn rpSetPipeline(rp: [*c]abi_render_gpu.c.ke_gpu_render_pass, pipe: abi_render.c.ke_gpu_pipeline) callconv(.c) void {
     wgpu.wgpuRenderPassEncoderSetPipeline(@ptrCast(rp.*.handle), @ptrFromInt(pipe));
 }
 /// Records the command on the raw render pass; the offsets are read during the call.
-fn rpSetBindGroup(rp: [*c]abi_render_gpu.c.ke_gpu_render_pass, group_index: u32, bg: abi_asset_resolver.c.ke_gpu_bind_group, dynamic_offsets: [*c]const u32, dyn_count: u32) callconv(.c) void {
+fn rpSetBindGroup(rp: [*c]abi_render_gpu.c.ke_gpu_render_pass, group_index: u32, bg: abi_render.c.ke_gpu_bind_group, dynamic_offsets: [*c]const u32, dyn_count: u32) callconv(.c) void {
     wgpu.wgpuRenderPassEncoderSetBindGroup(@ptrCast(rp.*.handle), group_index, @ptrFromInt(bg), dyn_count, dynamic_offsets);
 }
 /// Records the command on the raw render pass, binding the buffer from the offset to its end.
-fn rpSetVertexBuffer(rp: [*c]abi_render_gpu.c.ke_gpu_render_pass, slot: u32, b: abi_asset_resolver.c.ke_gpu_buffer, offset: usize) callconv(.c) void {
+fn rpSetVertexBuffer(rp: [*c]abi_render_gpu.c.ke_gpu_render_pass, slot: u32, b: abi_render.c.ke_gpu_buffer, offset: usize) callconv(.c) void {
     wgpu.wgpuRenderPassEncoderSetVertexBuffer(@ptrCast(rp.*.handle), slot, @ptrFromInt(b), offset, wgpu.WGPU_WHOLE_SIZE);
 }
 /// Records the command on the raw render pass, binding the buffer from the offset to its end.
-fn rpSetIndexBuffer(rp: [*c]abi_render_gpu.c.ke_gpu_render_pass, b: abi_asset_resolver.c.ke_gpu_buffer, fmt: abi_render_gpu.c.ke_gpu_index_format, offset: usize) callconv(.c) void {
+fn rpSetIndexBuffer(rp: [*c]abi_render_gpu.c.ke_gpu_render_pass, b: abi_render.c.ke_gpu_buffer, fmt: abi_render_gpu.c.ke_gpu_index_format, offset: usize) callconv(.c) void {
     const wfmt: wgpu.WGPUIndexFormat = switch (fmt) {
         abi_render_gpu.c.KE_GPU_INDEX_FORMAT_UINT16 => wgpu.WGPUIndexFormat_Uint16,
         abi_render_gpu.c.KE_GPU_INDEX_FORMAT_UINT32 => wgpu.WGPUIndexFormat_Uint32,
@@ -1432,7 +1431,7 @@ fn rpDrawIndexed(rp: [*c]abi_render_gpu.c.ke_gpu_render_pass, idx_count: u32, in
     wgpu.wgpuRenderPassEncoderDrawIndexed(@ptrCast(rp.*.handle), idx_count, inst_count, first_idx, base_vert, first_inst);
 }
 /// Records the command on the raw render pass.
-fn rpDrawIndirect(rp: [*c]abi_render_gpu.c.ke_gpu_render_pass, indirect_buf: abi_asset_resolver.c.ke_gpu_buffer, offset: usize) callconv(.c) void {
+fn rpDrawIndirect(rp: [*c]abi_render_gpu.c.ke_gpu_render_pass, indirect_buf: abi_render.c.ke_gpu_buffer, offset: usize) callconv(.c) void {
     wgpu.wgpuRenderPassEncoderDrawIndirect(@ptrCast(rp.*.handle), @ptrFromInt(indirect_buf), offset);
 }
 /// Ends the raw pass, releases it and frees the wrapper `encBeginRenderPass` allocated, so the
@@ -1444,11 +1443,11 @@ fn rpEnd(rp: [*c]abi_render_gpu.c.ke_gpu_render_pass) callconv(.c) void {
 }
 
 /// Records the command on the raw compute pass.
-fn cpSetPipeline(cp: [*c]abi_render_gpu.c.ke_gpu_compute_pass, pipe: abi_asset_resolver.c.ke_gpu_pipeline) callconv(.c) void {
+fn cpSetPipeline(cp: [*c]abi_render_gpu.c.ke_gpu_compute_pass, pipe: abi_render.c.ke_gpu_pipeline) callconv(.c) void {
     wgpu.wgpuComputePassEncoderSetPipeline(@ptrCast(cp.*.handle), @ptrFromInt(pipe));
 }
 /// Records the command on the raw compute pass; the offsets are read during the call.
-fn cpSetBindGroup(cp: [*c]abi_render_gpu.c.ke_gpu_compute_pass, group_index: u32, bg: abi_asset_resolver.c.ke_gpu_bind_group, dynamic_offsets: [*c]const u32, dyn_count: u32) callconv(.c) void {
+fn cpSetBindGroup(cp: [*c]abi_render_gpu.c.ke_gpu_compute_pass, group_index: u32, bg: abi_render.c.ke_gpu_bind_group, dynamic_offsets: [*c]const u32, dyn_count: u32) callconv(.c) void {
     wgpu.wgpuComputePassEncoderSetBindGroup(@ptrCast(cp.*.handle), group_index, @ptrFromInt(bg), dyn_count, dynamic_offsets);
 }
 /// Records the command on the raw compute pass.
@@ -1456,7 +1455,7 @@ fn cpDispatch(cp: [*c]abi_render_gpu.c.ke_gpu_compute_pass, x: u32, y: u32, z: u
     wgpu.wgpuComputePassEncoderDispatchWorkgroups(@ptrCast(cp.*.handle), x, y, z);
 }
 /// Records the command on the raw compute pass.
-fn cpDispatchIndirect(cp: [*c]abi_render_gpu.c.ke_gpu_compute_pass, indirect_buf: abi_asset_resolver.c.ke_gpu_buffer, offset: usize) callconv(.c) void {
+fn cpDispatchIndirect(cp: [*c]abi_render_gpu.c.ke_gpu_compute_pass, indirect_buf: abi_render.c.ke_gpu_buffer, offset: usize) callconv(.c) void {
     wgpu.wgpuComputePassEncoderDispatchWorkgroupsIndirect(@ptrCast(cp.*.handle), @ptrFromInt(indirect_buf), offset);
 }
 /// Ends the raw pass, releases it and frees the wrapper `encBeginComputePass` allocated, so the
@@ -1564,7 +1563,7 @@ fn encBeginComputePass(enc: [*c]abi_render_gpu.c.ke_gpu_command_encoder, label: 
 }
 
 /// Records the copy on the raw encoder; wgpu validates the ranges.
-fn encCopyBufferToBuffer(enc: [*c]abi_render_gpu.c.ke_gpu_command_encoder, src: abi_asset_resolver.c.ke_gpu_buffer, src_off: usize, dst: abi_asset_resolver.c.ke_gpu_buffer, dst_off: usize, size: usize) callconv(.c) void {
+fn encCopyBufferToBuffer(enc: [*c]abi_render_gpu.c.ke_gpu_command_encoder, src: abi_render.c.ke_gpu_buffer, src_off: usize, dst: abi_render.c.ke_gpu_buffer, dst_off: usize, size: usize) callconv(.c) void {
     wgpu.wgpuCommandEncoderCopyBufferToBuffer(@ptrCast(enc.*.handle), @ptrFromInt(src), src_off, @ptrFromInt(dst), dst_off, size);
 }
 
@@ -1576,7 +1575,7 @@ fn rowPitchValid(bytes_per_row: u32) bool {
 
 /// Refuses a row pitch that is not a multiple of `copy_row_alignment`: it fails as an invalid
 /// argument and records nothing.
-fn encCopyBufferToTexture(enc: [*c]abi_render_gpu.c.ke_gpu_command_encoder, src: abi_asset_resolver.c.ke_gpu_buffer, src_off: usize, bytes_per_row: u32, dst: abi_asset_resolver.c.ke_gpu_texture, x: u32, y: u32, z: u32, width: u32, height: u32) callconv(.c) abi_result.c.ke_result {
+fn encCopyBufferToTexture(enc: [*c]abi_render_gpu.c.ke_gpu_command_encoder, src: abi_render.c.ke_gpu_buffer, src_off: usize, bytes_per_row: u32, dst: abi_render.c.ke_gpu_texture, x: u32, y: u32, z: u32, width: u32, height: u32) callconv(.c) abi_result.c.ke_result {
     if (!rowPitchValid(bytes_per_row)) return R.code(error.InvalidArgument);
     const src_info = wgpu.WGPUTexelCopyBufferInfo{
         .layout = .{ .offset = src_off, .bytesPerRow = bytes_per_row, .rowsPerImage = height },
@@ -1595,7 +1594,7 @@ fn encCopyBufferToTexture(enc: [*c]abi_render_gpu.c.ke_gpu_command_encoder, src:
 
 /// Refuses a row pitch that is not a multiple of `copy_row_alignment`, as `encCopyBufferToTexture`
 /// does.
-fn encCopyTextureToBuffer(enc: [*c]abi_render_gpu.c.ke_gpu_command_encoder, src: abi_asset_resolver.c.ke_gpu_texture, x: u32, y: u32, z: u32, dst: abi_asset_resolver.c.ke_gpu_buffer, dst_off: usize, bytes_per_row: u32, width: u32, height: u32) callconv(.c) abi_result.c.ke_result {
+fn encCopyTextureToBuffer(enc: [*c]abi_render_gpu.c.ke_gpu_command_encoder, src: abi_render.c.ke_gpu_texture, x: u32, y: u32, z: u32, dst: abi_render.c.ke_gpu_buffer, dst_off: usize, bytes_per_row: u32, width: u32, height: u32) callconv(.c) abi_result.c.ke_result {
     if (!rowPitchValid(bytes_per_row)) return R.code(error.InvalidArgument);
     const src_info = wgpu.WGPUTexelCopyTextureInfo{
         .texture = @ptrFromInt(src),
@@ -1614,7 +1613,7 @@ fn encCopyTextureToBuffer(enc: [*c]abi_render_gpu.c.ke_gpu_command_encoder, src:
 
 /// Not checked against `copy_row_alignment` and reports no error. The copy always starts at the
 /// origin of both textures and covers mip level zero.
-fn encCopyTextureToTexture(enc: [*c]abi_render_gpu.c.ke_gpu_command_encoder, src: abi_asset_resolver.c.ke_gpu_texture, dst: abi_asset_resolver.c.ke_gpu_texture, width: u32, height: u32) callconv(.c) void {
+fn encCopyTextureToTexture(enc: [*c]abi_render_gpu.c.ke_gpu_command_encoder, src: abi_render.c.ke_gpu_texture, dst: abi_render.c.ke_gpu_texture, width: u32, height: u32) callconv(.c) void {
     const src_info = wgpu.WGPUTexelCopyTextureInfo{
         .texture = @ptrFromInt(src),
         .mipLevel = 0,
@@ -1691,13 +1690,13 @@ fn createCommandEncoder(dev: [*c]abi_render_gpu.c.ke_gpu_device, label: [*c]cons
 }
 
 /// Queues a write that wgpu applies before the next submit; the data is copied during the call.
-fn writeBuffer(dev: [*c]abi_render_gpu.c.ke_gpu_device, h: abi_asset_resolver.c.ke_gpu_buffer, offset: u64, data: ?*const anyopaque, size: usize) callconv(.c) void {
+fn writeBuffer(dev: [*c]abi_render_gpu.c.ke_gpu_device, h: abi_render.c.ke_gpu_buffer, offset: u64, data: ?*const anyopaque, size: usize) callconv(.c) void {
     wgpu.wgpuQueueWriteBuffer(state(dev).queue, @ptrFromInt(h), offset, data, size);
 }
 
 /// Returns the mapped range of a buffer created with `mapped_at_creation` or mapped by
 /// `mapBufferRead`, or null when it is not mapped. Valid until `unmapBuffer`.
-fn mapBuffer(_: [*c]abi_render_gpu.c.ke_gpu_device, h: abi_asset_resolver.c.ke_gpu_buffer, offset: usize, size: usize) callconv(.c) ?*anyopaque {
+fn mapBuffer(_: [*c]abi_render_gpu.c.ke_gpu_device, h: abi_render.c.ke_gpu_buffer, offset: usize, size: usize) callconv(.c) ?*anyopaque {
     const buffer: wgpu.WGPUBuffer = @ptrFromInt(h);
     if (wgpu.wgpuBufferGetMappedRange(buffer, offset, size)) |range| return range;
     return @constCast(wgpu.wgpuBufferGetConstMappedRange(buffer, offset, size));
@@ -1706,8 +1705,8 @@ fn mapBuffer(_: [*c]abi_render_gpu.c.ke_gpu_device, h: abi_asset_resolver.c.ke_g
 /// Owned by `mapBufferRead` until `mapReadDone` frees it. The wgpu callback receives only this
 /// request, so it is where the caller's callback and user pointer are kept.
 const MapReadRequest = struct {
-    buffer: abi_asset_resolver.c.ke_gpu_buffer,
-    on_ready: *const fn (abi_result.c.ke_result, abi_asset_resolver.c.ke_gpu_buffer, ?*anyopaque) callconv(.c) void,
+    buffer: abi_render.c.ke_gpu_buffer,
+    on_ready: *const fn (abi_result.c.ke_result, abi_render.c.ke_gpu_buffer, ?*anyopaque) callconv(.c) void,
     user: ?*anyopaque,
 };
 
@@ -1723,7 +1722,7 @@ fn mapReadDone(status: wgpu.WGPUMapAsyncStatus, _: wgpu.WGPUStringView, userdata
 /// The callback runs from device event processing, since the request uses the allow-process-events
 /// mode. The one exception is a request that cannot be allocated: the callback then runs at once
 /// with false.
-fn mapBufferRead(_: [*c]abi_render_gpu.c.ke_gpu_device, h: abi_asset_resolver.c.ke_gpu_buffer, offset: usize, size: usize, on_ready: abi_render_gpu.c.ke_gpu_buffer_mapped_func, user: ?*anyopaque) callconv(.c) void {
+fn mapBufferRead(_: [*c]abi_render_gpu.c.ke_gpu_device, h: abi_render.c.ke_gpu_buffer, offset: usize, size: usize, on_ready: abi_render_gpu.c.ke_gpu_buffer_mapped_func, user: ?*anyopaque) callconv(.c) void {
     const cb = on_ready orelse return;
     const req = gpa.create(MapReadRequest) catch {
         cb(R.code(error.OutOfMemory), h, user);
@@ -1739,11 +1738,11 @@ fn mapBufferRead(_: [*c]abi_render_gpu.c.ke_gpu_device, h: abi_asset_resolver.c.
     });
 }
 /// Returns the writable mapped range of a buffer, or null when it is not mapped.
-fn mapBufferWrite(_: [*c]abi_render_gpu.c.ke_gpu_device, h: abi_asset_resolver.c.ke_gpu_buffer, offset: usize, size: usize) callconv(.c) ?*anyopaque {
+fn mapBufferWrite(_: [*c]abi_render_gpu.c.ke_gpu_device, h: abi_render.c.ke_gpu_buffer, offset: usize, size: usize) callconv(.c) ?*anyopaque {
     return wgpu.wgpuBufferGetMappedRange(@ptrFromInt(h), offset, size);
 }
 /// Unmaps the buffer; any pointer returned by `mapBuffer` or `mapBufferWrite` is invalid after.
-fn unmapBuffer(_: [*c]abi_render_gpu.c.ke_gpu_device, h: abi_asset_resolver.c.ke_gpu_buffer) callconv(.c) void {
+fn unmapBuffer(_: [*c]abi_render_gpu.c.ke_gpu_device, h: abi_render.c.ke_gpu_buffer) callconv(.c) void {
     wgpu.wgpuBufferUnmap(@ptrFromInt(h));
 }
 
@@ -1827,7 +1826,7 @@ const ReadbackProbe = struct {
     ok: bool = false,
 };
 
-fn readbackProbeDone(result: abi_result.c.ke_result, _: abi_asset_resolver.c.ke_gpu_buffer, user: ?*anyopaque) callconv(.c) void {
+fn readbackProbeDone(result: abi_result.c.ke_result, _: abi_render.c.ke_gpu_buffer, user: ?*anyopaque) callconv(.c) void {
     const probe: *ReadbackProbe = @ptrCast(@alignCast(user.?));
     probe.fired = true;
     probe.ok = result == R.ok;
@@ -1845,7 +1844,7 @@ test "a texture's pixels are read back through a copy to a buffer and an asynchr
     var pixels: [row_bytes * height]u8 = undefined;
     for (&pixels, 0..) |*b, i| b.* = @truncate(i *% 7);
 
-    var tex: abi_asset_resolver.c.ke_gpu_texture = abi_render_gpu.c.KE_GPU_INVALID_HANDLE;
+    var tex: abi_render.c.ke_gpu_texture = abi_render_gpu.c.KE_GPU_INVALID_HANDLE;
     try std.testing.expectEqual(R.ok, dev.?.create_texture.?(dev, &abi_render_gpu.c.ke_gpu_texture_desc{
         .width = width,
         .height = height,
@@ -1860,7 +1859,7 @@ test "a texture's pixels are read back through a copy to a buffer and an asynchr
     }, &tex));
     defer dev.?.destroy_texture.?(dev, tex);
 
-    var buf: abi_asset_resolver.c.ke_gpu_buffer = abi_render_gpu.c.KE_GPU_INVALID_HANDLE;
+    var buf: abi_render.c.ke_gpu_buffer = abi_render_gpu.c.KE_GPU_INVALID_HANDLE;
     try std.testing.expectEqual(R.ok, dev.?.create_buffer.?(dev, &abi_render_gpu.c.ke_gpu_buffer_desc{
         .initial_data = null,
         .size = row_bytes * height,

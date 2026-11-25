@@ -4,7 +4,10 @@
     .fingerprint = 0xd4197b4697831ad5,
     .minimum_zig_version = "0.14.0",
     .dependencies = .{
-        .ke_part = .{ .path = "../../part" },
+        .abi_ui_node_types = .{ .path = "../../abi/ui_node_types" },
+        .abi_framework = .{ .path = "../../abi/framework" },
+        .ke_node_catalogue = .{ .path = "../../framework/node_catalogue" },
+        .ke_part = .{ .path = "../../assembly/part" },
         .ke_hooked_systems = .{ .path = "../../hooked_systems" },
         .abi_completion = .{ .path = "../../abi/completion" },
         .abi_extraction = .{ .path = "../../abi/extraction" },

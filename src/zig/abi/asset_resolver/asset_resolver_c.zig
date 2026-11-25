@@ -2,8 +2,6 @@
 
 const std = @import("std");
 const abi_mesh_data = @import("mesh_data");
-const abi_render = @import("render");
-const abi_render_handles = @import("render_handles");
 const abi_render_material = @import("render_material");
 const abi_result = @import("result");
 const abi_text = @import("text");
@@ -23,9 +21,6 @@ pub const ke_gpu_texture = u64;
 pub const ke_gpu_texture_aspect = u32;
 pub const ke_gpu_texture_usage = u32;
 pub const ke_gpu_texture_view = u64;
-pub const ke_render_material_binding = u64;
-pub const ke_render_resource_set = u64;
-pub const ke_render_shader_layout = u64;
 
 /// Receives a pipeline compiled asynchronously.
 pub const ke_gpu_pipeline_ready_func = ?*const fn (abi_result.c.ke_result, ke_gpu_pipeline, ?*anyopaque) callconv(.c) void;
@@ -54,13 +49,6 @@ pub const ke_asset_resolver = extern struct {
     resolve_font: ?*const fn (?*ke_asset_resolver, ?[*:0]const u8, f32, u32, u32, u32, ?*?*abi_text.c.ke_font_data) callconv(.c) abi_result.c.ke_result = null,
     /// Frees a ke_font_data resolve_font returned. A null data is ignored.
     free_font: ?*const fn (?*ke_asset_resolver, ?*abi_text.c.ke_font_data) callconv(.c) void = null,
-    /// Resolves and uploads a texture, deduped by `path`. On a cache hit, nothing is decoded.
-    resolve_texture_into: ?*const fn (?*ke_asset_resolver, ?*abi_render.c.ke_render_service, ?[*:0]const u8, ?*abi_render_handles.c.ke_texture_handle) callconv(.c) abi_result.c.ke_result = null,
-    /// Resolves and uploads a mesh, deduped by `path`. Resolution is that of resolve_mesh.
-    resolve_mesh_into: ?*const fn (?*ke_asset_resolver, ?*abi_render.c.ke_render_service, ?[*:0]const u8, ?*abi_render_handles.c.ke_mesh_handle) callconv(.c) abi_result.c.ke_result = null,
-    /// Resolves a `.material` file, resolving/uploading its albedo and normal textures (each deduped
-    /// by their own path) and creating the material, deduped by `path`.
-    resolve_material_into: ?*const fn (?*ke_asset_resolver, ?*abi_render.c.ke_render_service, ?[*:0]const u8, ?*abi_render_handles.c.ke_material_handle) callconv(.c) abi_result.c.ke_result = null,
     /// Writes the file path `path` names into `out`, terminated: a path that begins with "res://" is
     /// joined to the project root the resolver was created with, or stands as its remainder when
     /// none was given; any other path is copied as written. Nothing checks that the file exists.

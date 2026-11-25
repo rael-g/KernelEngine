@@ -2,7 +2,7 @@
 
 This is a map: the parts that decide what a view or projection matrix looks like, and what each
 hands on. How a part works inside is on the generated page of its file. Contracts are under
-`src/c/view/` and `src/c/render/`, plugins under `src/zig/view/` and `src/zig/render/`.
+`src/c/render/`, plugins under `src/zig/render/`.
 
 ## The parts
 

@@ -2,7 +2,7 @@
 #define KERNEL_ENGINE_CONFIGURATION_TOML_CONFIGURATION_TOML_H_
 
 #include <kernel_engine/configuration/configuration_source.h>
-#include <kernel_engine/file_system/file_system.h>
+#include <kernel_engine/io/file_system.h>
 
 #if defined(_WIN32) || defined(__CYGWIN__)
     #ifdef KE_CONFIGURATION_TOML_EXPORT

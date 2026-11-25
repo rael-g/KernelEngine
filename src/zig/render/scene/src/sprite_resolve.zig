@@ -1,8 +1,8 @@
 //! Gives each 2D sprite a mesh component carrying a quad and a material that match its fields.
 
-const abi_asset_resolver = @import("abi_asset_resolver");
 const abi_render_components = @import("abi_render_components");
 const abi_render_handles = @import("abi_render_handles");
+const abi_render_material = @import("abi_render_material");
 const abi_ecs = @import("abi_ecs");
 const abi_mesh = @import("abi_mesh");
 const abi_math = @import("abi_math");
@@ -27,13 +27,13 @@ const Vertex = extern struct {
 };
 
 /// The user data of `system`, stored inside the scene resolve's state, whose address the runtime
-/// is given. `core` and `resolver` are pointers its creator passed in, and this type does not own
-/// them. `resolver` is null when no asset resolver was supplied, and then no texture is ever
+/// is given. `core` and `assets` are pointers its creator passed in, and this type does not own
+/// them. `assets` is null when no render assets were supplied, and then no texture is ever
 /// loaded.
 pub const State = struct {
     core: *abi_render.c.ke_render_service,
-    mesh_cid: abi_asset_resolver.c.ke_component_id,
-    resolver: ?*abi_asset_resolver.c.ke_asset_resolver,
+    mesh_cid: abi_ecs.c.ke_component_id,
+    assets: ?*abi_render.c.ke_render_assets,
 };
 
 /// Uploads a quad for the sprite's shape and returns its handle, which `swapMesh` takes over.
@@ -77,14 +77,14 @@ fn quadFor(core: *abi_render.c.ke_render_service, sp: *const abi_render_componen
 }
 
 /// Keeps the resolved handle in `texture_handle` and returns it, so a handle that is not empty
-/// skips the resolver from then on. With no resolver the sprite gets the empty texture and
+/// skips the render assets from then on. Without them the sprite gets the empty texture and
 /// nothing is stored, so the next call tries again.
 fn resolveTexture(st: *State, sp: *abi_render_components.c.ke_sprite2d_component) abi_render_handles.c.ke_texture_handle {
     if (sp.texture[0] == 0) return abi_render_handles.c.KE_TEXTURE_NONE;
     if (sp.texture_handle.bits != abi_render_handles.c.KE_HANDLE_NONE) return sp.texture_handle;
 
-    const resolver = st.resolver orelse return abi_render_handles.c.KE_TEXTURE_NONE;
-    if (resolver.resolve_texture_into.?(resolver, st.core, @ptrCast(&sp.texture), &sp.texture_handle) != abi_result.c.KE_OK)
+    const assets = st.assets orelse return abi_render_handles.c.KE_TEXTURE_NONE;
+    if (assets.resolve_texture.?(assets, @ptrCast(&sp.texture), &sp.texture_handle) != abi_result.c.KE_OK)
         sp.texture_handle = abi_render_handles.c.KE_TEXTURE_NONE;
     return sp.texture_handle;
 }
@@ -342,16 +342,16 @@ test "two sprites of the same shape share one cache key, and a different shape d
     try testing.expect(!std.mem.eql(u8, first[0..first_len], Capture.keySlice()));
 }
 
-test "a sprite naming no image resolves to no texture without consulting a resolver" {
+test "a sprite naming no image resolves to no texture without consulting the render assets" {
     var svc = fakeService();
-    var st = State{ .core = &svc, .mesh_cid = 0, .resolver = null };
+    var st = State{ .core = &svc, .mesh_cid = 0, .assets = null };
     var sp = defaultSprite();
     try testing.expectEqual(abi_render_handles.c.KE_TEXTURE_NONE, resolveTexture(&st, &sp));
 }
 
-test "a sprite naming an image draws untextured where no resolver was wired" {
+test "a sprite naming an image draws untextured where no render assets were wired" {
     var svc = fakeService();
-    var st = State{ .core = &svc, .mesh_cid = 0, .resolver = null };
+    var st = State{ .core = &svc, .mesh_cid = 0, .assets = null };
     var sp = defaultSprite();
     @memcpy(sp.texture[0.."res://sprite.png".len], "res://sprite.png");
     try testing.expectEqual(abi_render_handles.c.KE_TEXTURE_NONE, resolveTexture(&st, &sp));
@@ -359,7 +359,7 @@ test "a sprite naming an image draws untextured where no resolver was wired" {
 
 test "an image already uploaded is not resolved a second time" {
     var svc = fakeService();
-    var st = State{ .core = &svc, .mesh_cid = 0, .resolver = null };
+    var st = State{ .core = &svc, .mesh_cid = 0, .assets = null };
     var sp = defaultSprite();
     @memcpy(sp.texture[0.."res://sprite.png".len], "res://sprite.png");
     sp.texture_handle = .{ .bits = 9 };
@@ -402,7 +402,7 @@ fn refCreateMaterial(
     _: f32,
     _: abi_render_handles.c.ke_texture_handle,
     _: abi_render_handles.c.ke_texture_handle,
-    _: abi_render_handles.c.ke_alpha_mode,
+    _: abi_render_material.c.ke_alpha_mode,
     _: f32,
     _: f32,
     _: f32,
@@ -424,7 +424,7 @@ fn refReleaseMaterial(_: [*c]abi_render.c.ke_render_service, _: abi_render_handl
 
 var view_sprites: [1]abi_render_components.c.ke_sprite2d_component = undefined;
 var view_meshes: [1]abi_render_components.c.ke_mesh_component = undefined;
-var view_entities: [1]abi_asset_resolver.c.ke_entity = .{1};
+var view_entities: [1]abi_ecs.c.ke_entity = .{1};
 var view_segment: abi_ecs.c.ke_ecs_segment = undefined;
 var view_columns: [2]?*anyopaque = undefined;
 
@@ -450,7 +450,7 @@ test "a sprite resolved every tick holds one reference to its mesh and material,
     svc.create_material = refCreateMaterial;
     svc.release_mesh = refReleaseMesh;
     svc.release_material = refReleaseMaterial;
-    var st = State{ .core = &svc, .mesh_cid = 0, .resolver = null };
+    var st = State{ .core = &svc, .mesh_cid = 0, .assets = null };
 
     view_sprites[0] = defaultSprite();
     view_sprites[0].attached = 1;

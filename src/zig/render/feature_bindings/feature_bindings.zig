@@ -2,7 +2,6 @@
 //! directional shadow, the environment and the clustered lights, from the resources their passes
 //! published in the frame.
 
-const abi_asset_resolver = @import("abi_asset_resolver");
 const abi_render_gpu = @import("abi_render_gpu");
 const abi_render = @import("abi_render");
 const abi_render_frame = @import("abi_render_frame");
@@ -70,7 +69,7 @@ fn useOf(r: rg.ke_render_graph_resource, usage: rg.ke_render_graph_usage) rg.ke_
 /// Fills `out` with every feature binding, from what `ctx` holds behind the published resources. An
 /// absent resource binds the neutral value: the white texture for the shadow map and no buffer
 /// otherwise. `environment` is the view the environment is sampled from.
-pub fn fill(core: *abi_render.c.ke_render_service, ctx: *rg.ke_render_graph_ctx, environment: abi_asset_resolver.c.ke_gpu_texture_view, p: Published, out: *[count]abi_render_gpu.c.ke_render_shader_binding) void {
+pub fn fill(core: *abi_render.c.ke_render_service, ctx: *rg.ke_render_graph_ctx, environment: abi_render.c.ke_gpu_texture_view, p: Published, out: *[count]abi_render_gpu.c.ke_render_shader_binding) void {
     const white_view = core.*.texture_view.?(core, core.*.white_texture.?(core));
     out[0] = binding("shadowParams");
     out[0].buffer = ctx.buffer.?(ctx, p.shadow_light);

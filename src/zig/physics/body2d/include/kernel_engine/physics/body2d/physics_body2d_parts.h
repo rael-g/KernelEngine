@@ -2,7 +2,7 @@
 #define KERNEL_ENGINE_PHYSICS_BODY2D_PHYSICS_BODY2D_PARTS_H_
 
 #include <kernel_engine/physics/body2d/body2d_module.h>
-#include <kernel_engine/part/part.h>
+#include <kernel_engine/assembly/part.h>
 
 #include <stddef.h>
 

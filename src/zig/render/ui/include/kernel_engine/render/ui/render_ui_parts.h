@@ -3,7 +3,7 @@
 
 #include <kernel_engine/render/ui/ui_create.h>
 #include <kernel_engine/render/ui/ui_systems_create.h>
-#include <kernel_engine/part/part.h>
+#include <kernel_engine/assembly/part.h>
 
 #include <stddef.h>
 

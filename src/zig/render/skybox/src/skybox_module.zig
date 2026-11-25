@@ -3,7 +3,6 @@
 //! the far plane. It also owns the creation and teardown of that pass, behind the one factory it
 //! exports.
 
-const abi_asset_resolver = @import("abi_asset_resolver");
 const abi_render_components = @import("abi_render_components");
 const abi_render_gpu = @import("abi_render_gpu");
 const abi_render_handles = @import("abi_render_handles");
@@ -51,21 +50,21 @@ const shader_layout = abi_render_gpu.c.ke_render_shader_layout_desc{
 const SkyboxModule = struct {
     systems: hooked_systems.Systems(1) = .{},
     frame: *abi_render_frame.c.ke_render_frame = undefined,
-    env_view: abi_asset_resolver.c.ke_gpu_texture_view = abi_render_gpu.c.KE_GPU_INVALID_HANDLE,
+    env_view: abi_render.c.ke_gpu_texture_view = abi_render_gpu.c.KE_GPU_INVALID_HANDLE,
     depth: rg.ke_render_graph_resource = rg.KE_RENDER_GRAPH_RESOURCE_INVALID,
     core: *abi_render.c.ke_render_service = undefined,
     device: *abi_render_gpu.c.ke_gpu_device = undefined,
     camera: *abi_render.c.ke_render_camera = undefined,
 
-    camera_cid: abi_asset_resolver.c.ke_component_id = undefined,
-    world_transform_cid: abi_asset_resolver.c.ke_component_id = undefined,
-    skybox_cid: abi_asset_resolver.c.ke_component_id = undefined,
+    camera_cid: abi_ecs.c.ke_component_id = undefined,
+    world_transform_cid: abi_ecs.c.ke_component_id = undefined,
+    skybox_cid: abi_ecs.c.ke_component_id = undefined,
 
     pipeline_params: abi_render_gpu.c.ke_gpu_render_pipeline_desc = undefined,
     binder: *abi_render_gpu.c.ke_render_resource_binder = undefined,
-    layout: abi_asset_resolver.c.ke_render_shader_layout = abi_render_gpu.c.KE_RENDER_BINDING_INVALID,
-    set: abi_asset_resolver.c.ke_render_resource_set = abi_render_gpu.c.KE_RENDER_BINDING_INVALID,
-    frame_uniform: abi_asset_resolver.c.ke_gpu_buffer = abi_render_gpu.c.KE_GPU_INVALID_HANDLE,
+    layout: abi_render.c.ke_render_shader_layout = abi_render_gpu.c.KE_RENDER_BINDING_INVALID,
+    set: abi_render.c.ke_render_resource_set = abi_render_gpu.c.KE_RENDER_BINDING_INVALID,
+    frame_uniform: abi_render.c.ke_gpu_buffer = abi_render_gpu.c.KE_GPU_INVALID_HANDLE,
 
     access: [1]abi_ecs.c.ke_ecs_query_term = undefined,
     queries_terms: [3]abi_ecs.c.ke_ecs_query_term = undefined,
@@ -180,9 +179,9 @@ fn setup(sm: *SkyboxModule, service: *abi_render.c.ke_render_service, device: *a
     sm.binder = core.*.resource_binder.?(core).?;
     try R.check(sm.binder.create_shader_layout.?(sm.binder, &shader_layout, &sm.layout));
 
-    var sky_vs: abi_asset_resolver.c.ke_gpu_shader_module = undefined;
+    var sky_vs: abi_render.c.ke_gpu_shader_module = undefined;
     try R.check(core.*.load_shader.?(core, "skybox", abi_render_gpu.c.KE_GPU_SHADER_STAGE_VERTEX, &sky_vs));
-    var sky_fs: abi_asset_resolver.c.ke_gpu_shader_module = undefined;
+    var sky_fs: abi_render.c.ke_gpu_shader_module = undefined;
     try R.check(core.*.load_shader.?(core, "skybox", abi_render_gpu.c.KE_GPU_SHADER_STAGE_FRAGMENT, &sky_fs));
 
     var skp = std.mem.zeroes(abi_render_gpu.c.ke_gpu_render_pipeline_desc);

@@ -1,5 +1,5 @@
 #include <stddef.h>
-#include <kernel_engine/render/material_file.h>
+#include <kernel_engine/asset/material.h>
 const unsigned long long layout_values[] = {
     sizeof(ke_material_spec),
     offsetof(ke_material_spec, base_color),

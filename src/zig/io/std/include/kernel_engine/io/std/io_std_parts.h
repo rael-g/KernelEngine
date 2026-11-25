@@ -2,7 +2,7 @@
 #define KERNEL_ENGINE_IO_STD_IO_STD_PARTS_H_
 
 #include <kernel_engine/io/std/io_std_create.h>
-#include <kernel_engine/part/part.h>
+#include <kernel_engine/assembly/part.h>
 
 #include <stddef.h>
 

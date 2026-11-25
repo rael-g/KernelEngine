@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\framework\KernelEngine.Framework.Nodes\KernelEngine.Framework.Nodes.csproj" />
+    <ProjectReference Include="..\KernelEngine.Render\KernelEngine.Render.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <NativeDep Include="ke_render_scene" />
+  </ItemGroup>
+
+  <Import Project="../../NativeDependencies.targets" />
+</Project>

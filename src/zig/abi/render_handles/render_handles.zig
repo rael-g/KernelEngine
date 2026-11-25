@@ -10,13 +10,6 @@ pub const Error = abi_result.Error;
 const checkResult = abi_result.checkResult;
 const resultOf = abi_result.resultOf;
 
-pub const AlphaMode = enum(c.ke_alpha_mode) {
-    @"opaque" = 0,
-    mask = 1,
-    blend = 2,
-    _,
-};
-
 pub const MeshHandle = c.ke_mesh_handle;
 pub const TextureHandle = c.ke_texture_handle;
 pub const MaterialHandle = c.ke_material_handle;

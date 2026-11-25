@@ -2,7 +2,6 @@
 //! light matrix, and declare at the prepass stage the pass drawing the meshes of the scene into that
 //! map. It also owns the creation and teardown of that pass, behind the one factory it exports.
 
-const abi_asset_resolver = @import("abi_asset_resolver");
 const abi_render_components = @import("abi_render_components");
 const abi_render_gpu = @import("abi_render_gpu");
 const std = @import("std");
@@ -67,7 +66,7 @@ const shader_layout = abi_render_gpu.c.ke_render_shader_layout_desc{
 };
 
 /// One draw `queueSystem` prepared and `record` issues.
-const Prepared = struct { vbo: abi_asset_resolver.c.ke_gpu_buffer, ibo: abi_asset_resolver.c.ke_gpu_buffer, index_count: u32, slot: u32 };
+const Prepared = struct { vbo: abi_render.c.ke_gpu_buffer, ibo: abi_render.c.ke_gpu_buffer, index_count: u32, slot: u32 };
 
 /// The state of one shadow pass, allocated by `ke_render_shadow_create` and freed by
 /// `destroyOwner` after it unregisters `systems`. Fields that `setup` has not reached keep their
@@ -87,10 +86,10 @@ const ShadowModule = struct {
     light: rg.ke_render_graph_resource = rg.KE_RENDER_GRAPH_RESOURCE_INVALID,
 
     pipeline_params: abi_render_gpu.c.ke_gpu_render_pipeline_desc = undefined,
-    lvp_uniform: abi_asset_resolver.c.ke_gpu_buffer = abi_render_gpu.c.KE_GPU_INVALID_HANDLE,
+    lvp_uniform: abi_render.c.ke_gpu_buffer = abi_render_gpu.c.KE_GPU_INVALID_HANDLE,
     binder: *abi_render_gpu.c.ke_render_resource_binder = undefined,
-    layout: abi_asset_resolver.c.ke_render_shader_layout = abi_render_gpu.c.KE_RENDER_BINDING_INVALID,
-    light_set: abi_asset_resolver.c.ke_render_resource_set = abi_render_gpu.c.KE_RENDER_BINDING_INVALID,
+    layout: abi_render.c.ke_render_shader_layout = abi_render_gpu.c.KE_RENDER_BINDING_INVALID,
+    light_set: abi_render.c.ke_render_resource_set = abi_render_gpu.c.KE_RENDER_BINDING_INVALID,
     objects: ?Objects = null,
     prepared: std.ArrayList(Prepared) = .empty,
 
@@ -215,8 +214,8 @@ fn queueSystem(ctx: ?*abi_schedule.c.ke_schedule_ctx, user: ?*anyopaque, _: f32)
         const wts: [*c]const abi_spatial.c.ke_world_transform_component = @ptrCast(@alignCast(segs.?[s].columns.?[1]));
         var i: usize = 0;
         while (i < segs.?[s].count) : (i += 1) {
-            var vbo: abi_asset_resolver.c.ke_gpu_buffer = 0;
-            var ibo: abi_asset_resolver.c.ke_gpu_buffer = 0;
+            var vbo: abi_render.c.ke_gpu_buffer = 0;
+            var ibo: abi_render.c.ke_gpu_buffer = 0;
             var idx_count: u32 = 0;
             if (!core.*.mesh_buffers.?(core, meshes[i].mesh, &vbo, &ibo, &idx_count)) continue;
             var u: ShadowObj = undefined;
@@ -269,9 +268,9 @@ fn setup(sh: *ShadowModule, service: *abi_render.c.ke_render_service, device: *a
 
     try R.check(dev.create_buffer.?(dev, &abi_render_gpu.c.ke_gpu_buffer_desc{ .label = "shadow.lvp_uniform", .initial_data = null, .size = 64, .usage = abi_render_gpu.c.KE_GPU_BUFFER_USAGE_UNIFORM | abi_render_gpu.c.KE_GPU_BUFFER_USAGE_COPY_DST, .mapped_at_creation = false }, &sh.lvp_uniform));
 
-    var sh_vs: abi_asset_resolver.c.ke_gpu_shader_module = undefined;
+    var sh_vs: abi_render.c.ke_gpu_shader_module = undefined;
     try R.check(core.*.load_shader.?(core, "shadow", abi_render_gpu.c.KE_GPU_SHADER_STAGE_VERTEX, &sh_vs));
-    var sh_fs: abi_asset_resolver.c.ke_gpu_shader_module = undefined;
+    var sh_fs: abi_render.c.ke_gpu_shader_module = undefined;
     try R.check(core.*.load_shader.?(core, "shadow", abi_render_gpu.c.KE_GPU_SHADER_STAGE_FRAGMENT, &sh_fs));
 
     sh.binder = core.*.resource_binder.?(core).?;

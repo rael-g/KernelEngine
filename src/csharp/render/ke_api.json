@@ -841,7 +841,7 @@
     },
     {
       "name": "ke_alpha_mode",
-      "doc": null,
+      "doc": "How a material\u0027s alpha combines with what is behind it.",
       "values": [
         {
           "name": "KE_ALPHA_MODE_OPAQUE",
@@ -1423,6 +1423,70 @@
       "external": true
     },
     {
+      "name": "ke_material_spec",
+      "doc": "A material as a \u0060.material\u0060 file describes it; its textures are paths.",
+      "tags": [
+        "value"
+      ],
+      "fields": [
+        {
+          "name": "base_color",
+          "type": "float[4]",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "metallic",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "roughness",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "albedo_path",
+          "type": "char[256]",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "normal_path",
+          "type": "char[256]",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "alpha_mode",
+          "type": "ke_alpha_mode",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "alpha_cutoff",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "ior",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "distortion_strength",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
       "name": "ke_mesh_handle",
       "doc": null,
       "tags": [],
@@ -1488,88 +1552,6 @@
           "type": "uint32_t",
           "tags": [],
           "doc": null
-        }
-      ],
-      "external": true
-    },
-    {
-      "name": "ke_vertex",
-      "doc": "Per-vertex data of a mesh, as authored.",
-      "tags": [
-        "value"
-      ],
-      "fields": [
-        {
-          "name": "x",
-          "type": "float",
-          "tags": [],
-          "doc": "Object-space position"
-        },
-        {
-          "name": "y",
-          "type": "float",
-          "tags": [],
-          "doc": "Object-space position"
-        },
-        {
-          "name": "z",
-          "type": "float",
-          "tags": [],
-          "doc": "Object-space position"
-        },
-        {
-          "name": "nx",
-          "type": "float",
-          "tags": [],
-          "doc": "Object-space normal (normalized)"
-        },
-        {
-          "name": "ny",
-          "type": "float",
-          "tags": [],
-          "doc": "Object-space normal (normalized)"
-        },
-        {
-          "name": "nz",
-          "type": "float",
-          "tags": [],
-          "doc": "Object-space normal (normalized)"
-        },
-        {
-          "name": "u",
-          "type": "float",
-          "tags": [],
-          "doc": "UV texture coordinates"
-        },
-        {
-          "name": "v",
-          "type": "float",
-          "tags": [],
-          "doc": "UV texture coordinates"
-        },
-        {
-          "name": "tx",
-          "type": "float",
-          "tags": [],
-          "doc": "Object-space tangent (normalized)"
-        },
-        {
-          "name": "ty",
-          "type": "float",
-          "tags": [],
-          "doc": "Object-space tangent (normalized)"
-        },
-        {
-          "name": "tz",
-          "type": "float",
-          "tags": [],
-          "doc": "Object-space tangent (normalized)"
-        },
-        {
-          "name": "tw",
-          "type": "float",
-          "tags": [],
-          "doc": "Bitangent sign: \u002B1 or -1 (bitangent = cross(N,T)*tw)"
         }
       ],
       "external": true
@@ -3176,6 +3158,125 @@
           "return_doc": null,
           "params": [],
           "receiver": "ke_render_service *"
+        }
+      ]
+    },
+    {
+      "name": "ke_render_assets",
+      "doc": "The resources a render service holds, each made once from the asset a path names and found by that path afterwards.",
+      "tags": [],
+      "fields": [
+        {
+          "name": "handle",
+          "type": "void *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "resolve_texture",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "The texture the image at \u0060path\u0060 makes. On a path the service already holds, nothing is read.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a null argument; the resolver\u0027s code for the image, KE_RESULT_PENDING among them while the file is still being read; KE_RESULT_GENERAL when the upload fails.",
+          "params": [
+            {
+              "name": "path",
+              "type": "const char *",
+              "tags": [
+                "utf8"
+              ],
+              "doc": "The path as authored; the texture is found by it."
+            },
+            {
+              "name": "out_texture",
+              "type": "ke_texture_handle *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the texture; KE_TEXTURE_NONE on failure."
+            }
+          ],
+          "receiver": "struct ke_render_assets *"
+        },
+        {
+          "name": "resolve_mesh",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "The mesh the asset at \u0060path\u0060 makes. On a path the service already holds, nothing is baked.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a null argument; the resolver\u0027s code for the mesh; KE_RESULT_OUT_OF_MEMORY; KE_RESULT_GENERAL when the upload fails.",
+          "params": [
+            {
+              "name": "path",
+              "type": "const char *",
+              "tags": [
+                "utf8"
+              ],
+              "doc": "The path as authored; the mesh is found by it."
+            },
+            {
+              "name": "out_mesh",
+              "type": "ke_mesh_handle *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the mesh; KE_MESH_NONE on failure."
+            }
+          ],
+          "receiver": "struct ke_render_assets *"
+        },
+        {
+          "name": "resolve_material",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "The material the \u0060.material\u0060 file at \u0060path\u0060 makes, its albedo and normal textures each found by its own path as resolve_texture finds them.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a null argument; the codes of the resolver and of resolve_texture; KE_RESULT_GENERAL when the material creation fails.",
+          "params": [
+            {
+              "name": "path",
+              "type": "const char *",
+              "tags": [
+                "utf8"
+              ],
+              "doc": "The path as authored; the material is found by it."
+            },
+            {
+              "name": "out_material",
+              "type": "ke_material_handle *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the material; KE_MATERIAL_NONE on failure."
+            }
+          ],
+          "receiver": "struct ke_render_assets *"
+        }
+      ]
+    },
+    {
+      "name": "ke_render_assets_handle",
+      "doc": null,
+      "tags": [
+        "owner"
+      ],
+      "fields": [
+        {
+          "name": "ref",
+          "type": "ke_render_assets *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "destroy",
+          "returns": "void",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [],
+          "receiver": "ke_render_assets *"
         }
       ]
     },

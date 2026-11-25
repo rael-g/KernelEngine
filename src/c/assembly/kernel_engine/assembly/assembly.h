@@ -2,7 +2,7 @@
 #define KERNEL_ENGINE_ASSEMBLY_ASSEMBLY_H_
 
 #include <kernel_engine/logger/log_callback.h>
-#include <kernel_engine/part/part.h>
+#include <kernel_engine/assembly/part.h>
 #include <kernel_engine/result/result.h>
 
 #ifdef __cplusplus

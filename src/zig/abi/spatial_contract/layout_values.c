@@ -1,6 +1,6 @@
 #include <stddef.h>
-#include <kernel_engine/spatial/component_fields.h>
-#include <kernel_engine/spatial/transform.h>
+#include <kernel_engine/ecs/component_fields.h>
+#include <kernel_engine/ecs/transform.h>
 const unsigned long long layout_values[] = {
     sizeof(ke_transform_component),
     offsetof(ke_transform_component, position),

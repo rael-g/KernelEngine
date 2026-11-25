@@ -4,7 +4,9 @@
     .fingerprint = 0x1863021bdcc2fca3,
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
-        .ke_part = .{ .path = "../../part" },
+        .abi_audio_node_types = .{ .path = "../../abi/audio_node_types" },
+        .ke_node_catalogue = .{ .path = "../../framework/node_catalogue" },
+        .ke_part = .{ .path = "../../assembly/part" },
         .abi_framework = .{ .path = "../../abi/framework" },
         .abi_audio_contract = .{ .path = "../../abi/audio_contract" },
         .abi_audio_components = .{ .path = "../../abi/audio_components" },

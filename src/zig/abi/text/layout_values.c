@@ -1,5 +1,5 @@
 #include <stddef.h>
-#include <kernel_engine/text/font.h>
+#include <kernel_engine/asset/font.h>
 const unsigned long long layout_values[] = {
     sizeof(ke_glyph_metrics),
     offsetof(ke_glyph_metrics, codepoint),

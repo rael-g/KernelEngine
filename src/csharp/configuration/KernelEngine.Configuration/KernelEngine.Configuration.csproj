@@ -16,8 +16,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\common\KernelEngine.Common\KernelEngine.Common.csproj" />
-    <ProjectReference Include="..\..\settings\KernelEngine.Settings\KernelEngine.Settings.csproj" />
-    <ProjectReference Include="..\..\file_system\KernelEngine.FileSystem\KernelEngine.FileSystem.csproj" />
+    <ProjectReference Include="..\..\configuration\KernelEngine.Settings\KernelEngine.Settings.csproj" />
+    <ProjectReference Include="..\..\io\KernelEngine.FileSystem\KernelEngine.FileSystem.csproj" />
     <ProjectReference Include="..\..\logger\KernelEngine.Logger.Abstractions\KernelEngine.Logger.Abstractions.csproj" />
   </ItemGroup>
 

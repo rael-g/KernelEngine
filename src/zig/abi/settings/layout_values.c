@@ -1,5 +1,5 @@
 #include <stddef.h>
-#include <kernel_engine/settings/settings.h>
+#include <kernel_engine/configuration/settings.h>
 const unsigned long long layout_values[] = {
     sizeof(ke_settings),
     offsetof(ke_settings, handle),

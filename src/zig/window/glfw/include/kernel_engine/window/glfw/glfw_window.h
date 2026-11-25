@@ -2,7 +2,7 @@
 #ifndef KERNEL_ENGINE_WINDOW_GLFW_GLFW_WINDOW_H_
 #define KERNEL_ENGINE_WINDOW_GLFW_GLFW_WINDOW_H_
 
-#include <kernel_engine/settings/settings.h>
+#include <kernel_engine/configuration/settings.h>
 #include <kernel_engine/window/window.h>
 
 #ifndef KE_WINDOW_API

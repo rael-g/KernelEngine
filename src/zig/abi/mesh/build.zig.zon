@@ -5,7 +5,6 @@
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
         .abi_math = .{ .path = "../math" },
-        .abi_render_handles = .{ .path = "../render_handles" },
         .abi_result = .{ .path = "../result" },
     },
     .paths = .{"."},

@@ -2,7 +2,7 @@
 #define KERNEL_ENGINE_CONFIGURATION_CONFIGURATION_H_
 
 #include <kernel_engine/result/result.h>
-#include <kernel_engine/settings/settings.h>
+#include <kernel_engine/configuration/settings.h>
 #include <stdbool.h>
 #include <stdint.h>
 

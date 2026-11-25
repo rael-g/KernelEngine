@@ -1,7 +1,6 @@
 //! The per-draw uniform buffer of a pass, one slot of `stride` bytes per draw reached by a dynamic
 //! offset, grown to the number of draws a frame asks for.
 
-const abi_asset_resolver = @import("abi_asset_resolver");
 const abi_render_gpu = @import("abi_render_gpu");
 const abi_render = @import("abi_render");
 const abi_result = @import("abi_result");
@@ -19,11 +18,11 @@ pub fn ObjectUniforms(comptime Record: type) type {
 
         device: *abi_render_gpu.c.ke_gpu_device,
         binder: *abi_render_gpu.c.ke_render_resource_binder,
-        layout: abi_asset_resolver.c.ke_render_shader_layout,
+        layout: abi_render.c.ke_render_shader_layout,
         buffer_label: [*c]const u8,
         set_label: [*c]const u8,
-        buffer: abi_asset_resolver.c.ke_gpu_buffer = abi_render_gpu.c.KE_GPU_INVALID_HANDLE,
-        set: abi_asset_resolver.c.ke_render_resource_set = abi_render_gpu.c.KE_RENDER_BINDING_INVALID,
+        buffer: abi_render.c.ke_gpu_buffer = abi_render_gpu.c.KE_GPU_INVALID_HANDLE,
+        set: abi_render.c.ke_render_resource_set = abi_render_gpu.c.KE_RENDER_BINDING_INVALID,
         capacity: u32 = 0,
 
         /// Makes room for `count` draws, replacing the buffer and the set with ones of the next
@@ -33,7 +32,7 @@ pub fn ObjectUniforms(comptime Record: type) type {
             if (count <= self.capacity) return abi_result.c.KE_OK;
             const slots = @import("std").math.ceilPowerOfTwoAssert(u32, @max(count, 1));
             const dev = self.device;
-            var buffer: abi_asset_resolver.c.ke_gpu_buffer = abi_render_gpu.c.KE_GPU_INVALID_HANDLE;
+            var buffer: abi_render.c.ke_gpu_buffer = abi_render_gpu.c.KE_GPU_INVALID_HANDLE;
             const made = dev.create_buffer.?(dev, &abi_render_gpu.c.ke_gpu_buffer_desc{
                 .label = self.buffer_label,
                 .initial_data = null,
@@ -50,7 +49,7 @@ pub fn ObjectUniforms(comptime Record: type) type {
                 .texture_view = 0,
                 .sampler = 0,
             }};
-            var set: abi_asset_resolver.c.ke_render_resource_set = abi_render_gpu.c.KE_RENDER_BINDING_INVALID;
+            var set: abi_render.c.ke_render_resource_set = abi_render_gpu.c.KE_RENDER_BINDING_INVALID;
             const bound = self.binder.create_set.?(self.binder, self.layout, "object", self.set_label, &binding, binding.len, &set);
             if (bound != abi_result.c.KE_OK) {
                 dev.destroy_buffer.?(dev, buffer);

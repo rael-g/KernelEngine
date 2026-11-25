@@ -2,7 +2,7 @@
 #define KERNEL_ENGINE_ECS_ECS_FLECS_PARTS_H_
 
 #include <kernel_engine/ecs/ke_ecs_flecs.h>
-#include <kernel_engine/part/part.h>
+#include <kernel_engine/assembly/part.h>
 
 #include <stddef.h>
 

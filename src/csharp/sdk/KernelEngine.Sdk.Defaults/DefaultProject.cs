@@ -23,7 +23,7 @@ public sealed unsafe class DefaultProject : IDisposable
         Io.Std.Native.NativeMethods.io_std_parts, Input.Native.NativeMethods.input_default_parts,
         Ecs.Flecs.Native.NativeMethods.ecs_flecs_parts, Schedule.Native.NativeMethods.schedule_parts,
         Scheduler.Native.NativeMethods.scheduler_parts, Framework.Native.NativeMethods.framework_parts,
-        EngineNodes.Native.NativeMethods.engine_nodes_parts, Physics.Box2D.Native.NativeMethods.physics_2d_box2d_parts,
+        Physics.Box2D.Native.NativeMethods.physics_2d_box2d_parts,
         Physics.Native.NativeMethods.physics_body2d_parts, Extraction.Native.NativeMethods.extraction_default_parts,
         Window.Glfw.Native.NativeMethods.window_glfw_parts, Render.Webgpu.Native.NativeMethods.gpu_device_webgpu_parts,
         Render.Webgpu.Native.NativeMethods.render_binder_grouped_parts, Render.Webgpu.Native.NativeMethods.render_service_parts,

@@ -8,6 +8,7 @@ pub fn build(b: *std.Build) void {
     abi.addImport("asset_resolver", b.dependency("abi_asset_resolver", .{}).module("abi"));
     abi.addImport("ecs", b.dependency("abi_ecs", .{}).module("abi"));
     abi.addImport("extraction", b.dependency("abi_extraction", .{}).module("abi"));
+    abi.addImport("framework", b.dependency("abi_framework", .{}).module("abi"));
     abi.addImport("logger", b.dependency("abi_logger", .{}).module("abi"));
     abi.addImport("part", b.dependency("abi_part", .{}).module("abi"));
     abi.addImport("render", b.dependency("abi_render", .{}).module("abi"));
@@ -24,27 +25,24 @@ pub fn build(b: *std.Build) void {
         \\#include <kernel_engine/render/scene/scene_resolve_create.h>
         \\#include <kernel_engine/render/scene/scene_resolve_systems_create.h>
         \\#include <kernel_engine/render/scene/render_scene_parts.h>
+        \\#include <kernel_engine/render/scene/render_nodes_create.h>
     );
     const translated = b.addTranslateC(.{ .root_source_file = headers, .target = target, .optimize = optimize });
     translated.addIncludePath(b.path("../../../../c/asset"));
-    translated.addIncludePath(b.path("../../../../c/completion"));
+    translated.addIncludePath(b.path("../../../../c/tasks"));
     translated.addIncludePath(b.path("../../../../c/ecs"));
-    translated.addIncludePath(b.path("../../../../c/extraction"));
-    translated.addIncludePath(b.path("../../../../c/job"));
+    translated.addIncludePath(b.path("../../../../c/render"));
+    translated.addIncludePath(b.path("../../../../c/framework"));
     translated.addIncludePath(b.path("../../../../c/logger"));
     translated.addIncludePath(b.path("../../../../c/math"));
-    translated.addIncludePath(b.path("../../../../c/render"));
-    translated.addIncludePath(b.path("../../../../c/part"));
-    translated.addIncludePath(b.path("../../../../c/render_graph"));
+    translated.addIncludePath(b.path("../../../../c/assembly"));
     translated.addIncludePath(b.path("../include"));
     translated.addIncludePath(b.path("../../../common/include"));
     translated.addIncludePath(b.path("../../ui/include"));
     translated.addIncludePath(b.path("../../../../c/result"));
-    translated.addIncludePath(b.path("../../../../c/schedule"));
-    translated.addIncludePath(b.path("../../../schedule/include"));
-    translated.addIncludePath(b.path("../../../../c/settings"));
-    translated.addIncludePath(b.path("../../../../c/spatial"));
-    translated.addIncludePath(b.path("../../../../c/text"));
+    translated.addIncludePath(b.path("../../../../c/scheduling"));
+    translated.addIncludePath(b.path("../../../scheduling/schedule/include"));
+    translated.addIncludePath(b.path("../../../../c/configuration"));
     const tests = b.addTest(.{ .root_module = b.createModule(.{
         .root_source_file = b.path("layout_test.zig"),
         .link_libc = true,
@@ -57,23 +55,19 @@ pub fn build(b: *std.Build) void {
     }) });
     tests.root_module.addCSourceFile(.{ .file = b.path("layout_values.c") });
     tests.root_module.addIncludePath(b.path("../../../../c/asset"));
-    tests.root_module.addIncludePath(b.path("../../../../c/completion"));
+    tests.root_module.addIncludePath(b.path("../../../../c/tasks"));
     tests.root_module.addIncludePath(b.path("../../../../c/ecs"));
-    tests.root_module.addIncludePath(b.path("../../../../c/extraction"));
-    tests.root_module.addIncludePath(b.path("../../../../c/job"));
+    tests.root_module.addIncludePath(b.path("../../../../c/render"));
+    tests.root_module.addIncludePath(b.path("../../../../c/framework"));
     tests.root_module.addIncludePath(b.path("../../../../c/logger"));
     tests.root_module.addIncludePath(b.path("../../../../c/math"));
-    tests.root_module.addIncludePath(b.path("../../../../c/render"));
-    tests.root_module.addIncludePath(b.path("../../../../c/part"));
-    tests.root_module.addIncludePath(b.path("../../../../c/render_graph"));
+    tests.root_module.addIncludePath(b.path("../../../../c/assembly"));
     tests.root_module.addIncludePath(b.path("../include"));
     tests.root_module.addIncludePath(b.path("../../../common/include"));
     tests.root_module.addIncludePath(b.path("../../ui/include"));
     tests.root_module.addIncludePath(b.path("../../../../c/result"));
-    tests.root_module.addIncludePath(b.path("../../../../c/schedule"));
-    tests.root_module.addIncludePath(b.path("../../../schedule/include"));
-    tests.root_module.addIncludePath(b.path("../../../../c/settings"));
-    tests.root_module.addIncludePath(b.path("../../../../c/spatial"));
-    tests.root_module.addIncludePath(b.path("../../../../c/text"));
+    tests.root_module.addIncludePath(b.path("../../../../c/scheduling"));
+    tests.root_module.addIncludePath(b.path("../../../scheduling/schedule/include"));
+    tests.root_module.addIncludePath(b.path("../../../../c/configuration"));
     b.step("test", "Check the render_scene_factory ABI against its headers").dependOn(&b.addRunArtifact(tests).step);
 }

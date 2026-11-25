@@ -1,0 +1,15 @@
+.{
+    .name = .abi_audio_node_types,
+    .version = "0.1.0",
+    .fingerprint = 0x65a7d26ebac76704,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .abi_audio_components = .{ .path = "../audio_components" },
+        .abi_ecs = .{ .path = "../ecs" },
+        .abi_framework = .{ .path = "../framework" },
+        .abi_result = .{ .path = "../result" },
+        .abi_spatial = .{ .path = "../spatial" },
+        .abi_spatial_node_types = .{ .path = "../spatial_node_types" },
+    },
+    .paths = .{"."},
+}

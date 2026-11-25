@@ -1,6 +1,5 @@
 //! Opens and closes a frame of the render service, and carries the buffer uploads queued during it.
 
-const abi_asset_resolver = @import("abi_asset_resolver");
 const abi_render_gpu = @import("abi_render_gpu");
 const std = @import("std");
 const heap = @import("heap");
@@ -13,7 +12,7 @@ const R = rc.R;
 /// acquires the target, so a failed acquire leaves the frame closed and returns the target's code,
 /// and a target with nothing to draw into leaves it closed, writes the invalid view and succeeds.
 /// Once it has a view, it reads the target's size and the frame is live.
-pub fn beginFrame(self: [*c]abi_render.c.ke_render_service, out_view: [*c]abi_asset_resolver.c.ke_gpu_texture_view) callconv(.c) abi_result.c.ke_result {
+pub fn beginFrame(self: [*c]abi_render.c.ke_render_service, out_view: [*c]abi_render.c.ke_gpu_texture_view) callconv(.c) abi_result.c.ke_result {
     if (self == null or out_view == null) return R.code(error.InvalidArgument);
     out_view.* = abi_render_gpu.c.KE_GPU_INVALID_HANDLE;
     const st = rc.coreOf(self);
@@ -21,7 +20,7 @@ pub fn beginFrame(self: [*c]abi_render.c.ke_render_service, out_view: [*c]abi_as
     st.blit.releaseSets(st.binder);
     st.upload_count.store(0, .monotonic);
     st.upload_arena_offset.store(0, .monotonic);
-    var view: abi_asset_resolver.c.ke_gpu_texture_view = abi_render_gpu.c.KE_GPU_INVALID_HANDLE;
+    var view: abi_render.c.ke_gpu_texture_view = abi_render_gpu.c.KE_GPU_INVALID_HANDLE;
     const acquired = st.target.acquire.?(st.target, &view);
     if (acquired != R.ok or view == abi_render_gpu.c.KE_GPU_INVALID_HANDLE) return acquired;
     st.target.size.?(st.target, &st.backbuffer_w, &st.backbuffer_h);
@@ -52,7 +51,7 @@ pub fn endFrame(self: [*c]abi_render.c.ke_render_service) callconv(.c) abi_resul
 }
 
 /// The `blit` slot.
-pub fn blit(self: [*c]abi_render.c.ke_render_service, pass: [*c]abi_render_gpu.c.ke_gpu_render_pass, source: abi_asset_resolver.c.ke_gpu_texture_view, target_format: abi_render_gpu.c.ke_gpu_texture_format) callconv(.c) void {
+pub fn blit(self: [*c]abi_render.c.ke_render_service, pass: [*c]abi_render_gpu.c.ke_gpu_render_pass, source: abi_render.c.ke_gpu_texture_view, target_format: abi_render_gpu.c.ke_gpu_texture_format) callconv(.c) void {
     if (self == null or pass == null) return;
     const st = rc.coreOf(self);
     _ = st.blit.draw(self, st.binder, pass, source, target_format);
@@ -113,7 +112,7 @@ fn flushUploads(st: *rc.CoreState) void {
 /// the arena range are reserved with atomic counters before the copy. An upload that finds either
 /// full is copied into a block of its own and pushed onto the spill list instead; it is lost only
 /// when that block cannot be allocated. A zero size or null data does nothing.
-pub fn uploadBuffer(self: [*c]abi_render.c.ke_render_service, buffer: abi_asset_resolver.c.ke_gpu_buffer, offset: u64, data: ?*const anyopaque, size: usize) callconv(.c) void {
+pub fn uploadBuffer(self: [*c]abi_render.c.ke_render_service, buffer: abi_render.c.ke_gpu_buffer, offset: u64, data: ?*const anyopaque, size: usize) callconv(.c) void {
     if (size == 0 or data == null) return;
     const st = rc.coreOf(self);
     const src: [*]const u8 = @ptrCast(data);
@@ -130,7 +129,7 @@ pub fn uploadBuffer(self: [*c]abi_render.c.ke_render_service, buffer: abi_asset_
     spill(st, buffer, offset, src[0..size]);
 }
 
-fn spill(st: *rc.CoreState, buffer: abi_asset_resolver.c.ke_gpu_buffer, offset: u64, bytes: []const u8) void {
+fn spill(st: *rc.CoreState, buffer: abi_render.c.ke_gpu_buffer, offset: u64, bytes: []const u8) void {
     const data = heap.gpa.dupe(u8, bytes) catch return;
     const node = heap.gpa.create(rc.SpilledUpload) catch {
         heap.gpa.free(data);

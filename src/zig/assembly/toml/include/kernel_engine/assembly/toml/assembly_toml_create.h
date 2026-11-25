@@ -3,7 +3,7 @@
 
 #include <kernel_engine/assembly/composition_source.h>
 #include <kernel_engine/common/export.h>
-#include <kernel_engine/file_system/file_system.h>
+#include <kernel_engine/io/file_system.h>
 
 #ifdef __cplusplus
 extern "C"

@@ -2,6 +2,7 @@
 
 const abi_audio = @import("audio");
 const abi_ecs = @import("ecs");
+const abi_framework = @import("framework");
 const abi_logger = @import("logger");
 const abi_part = @import("part");
 const abi_result = @import("result");
@@ -40,6 +41,11 @@ pub const ke_schedule_execute_fn = ?*const fn (?*abi_schedule.c.ke_schedule_ctx,
 /// on the thread that called run. A failure fails the run before any wave starts.
 pub const ke_schedule_condition_fn = ?*const fn (?*anyopaque, ?*bool) callconv(.c) abi_result.c.ke_result;
 
+/// One call of a behaviour over the nodes of its type. The body walks them with next, which
+/// points self and fields at each node in turn; an on handler walks every pair of a node and an
+/// event, with event pointing at the event.
+pub const ke_node_behaviour_fn = ?*const fn (?*abi_framework.c.ke_node_ctx, ?*anyopaque) callconv(.c) abi_result.c.ke_result;
+
 /// Sends every line ke_audio_module logs to callback, with ctx; a NULL callback sends them back
 /// to stderr, where they go until this is called. Called once, before the library logs.
 pub extern fn ke_audio_module_set_log_callback(callback: ke_log_callback, ctx: ?*anyopaque) void;
@@ -52,3 +58,7 @@ pub extern fn ke_sound_create(ecs: ?*abi_ecs.c.ke_ecs, audio: ?*abi_audio.c.ke_a
 /// Gives the parts ke_audio_module contains: `sound`, providing nothing, with the slots `ecs`,
 /// `audio` and `post_update`, `post_update` the ke_schedule_set its systems join.
 pub extern fn ke_audio_module_parts(out_count: ?*usize) ?*const abi_part.c.ke_part;
+
+/// Registers every type of `ke_audio_node_types` through types, each with the components its
+/// `with` describes.
+pub extern fn ke_audio_nodes_create(types: ?*abi_framework.c.ke_node_types, out_owner: ?*abi_part.c.ke_owner) abi_result.c.ke_result;
