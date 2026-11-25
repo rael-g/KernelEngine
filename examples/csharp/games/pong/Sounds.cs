@@ -1,6 +1,5 @@
 using KernelEngine.Audio;
 using KernelEngine.Audio.Native;
-using KernelEngine.EngineNodes;
 
 namespace Pong;
 
@@ -10,7 +9,7 @@ static class Sounds
     /// <summary>A sound node's component that plays <paramref name="path"/> once at <paramref name="volume"/> and is removed when it ends.</summary>
     public static SoundComponent Once(string path, float volume)
     {
-        var sound = EngineNodeTypes.SoundNodeInitial;
+        var sound = AudioNodeTypes.SoundNodeInitial;
         sound.Path = path;
         sound.Volume = volume;
         sound.Playing = true;

@@ -10,6 +10,7 @@
 #include <kernel_engine/framework/node_types_systems_create.h>
 #include <kernel_engine/framework/scene_files_create.h>
 #include <kernel_engine/framework/framework_parts.h>
+#include <kernel_engine/framework/spatial_nodes_create.h>
 const unsigned long long layout_values[] = {
     0,
 };

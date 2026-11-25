@@ -15,7 +15,6 @@
     <Project Path="src/csharp/configuration/KernelEngine.Configuration/KernelEngine.Configuration.csproj" />
     <Project Path="src/csharp/framework/KernelEngine.Framework/KernelEngine.Framework.csproj" />
     <Project Path="src/csharp/framework/KernelEngine.Framework.Nodes/KernelEngine.Framework.Nodes.csproj" />
-    <Project Path="src/csharp/engine_nodes/KernelEngine.EngineNodes/KernelEngine.EngineNodes.csproj" />
     <Project Path="src/csharp/generators/KernelEngine.Framework.Nodes.Generator/KernelEngine.Framework.Nodes.Generator.csproj" />
     <Project Path="src/csharp/sdk/KernelEngine.Sdk/KernelEngine.Sdk.csproj" />
     <Project Path="src/csharp/sdk/KernelEngine.Sdk.Defaults/KernelEngine.Sdk.Defaults.csproj" />
@@ -27,6 +26,7 @@
     <Project Path="src/csharp/physics/KernelEngine.Physics/KernelEngine.Physics.csproj" />
     <Project Path="src/csharp/physics/KernelEngine.Physics.Box2D/KernelEngine.Physics.Box2D.csproj" />
     <Project Path="src/csharp/render/KernelEngine.Render/KernelEngine.Render.csproj" />
+    <Project Path="src/csharp/render/KernelEngine.Render.Nodes/KernelEngine.Render.Nodes.csproj" />
     <Project Path="src/csharp/render/KernelEngine.Render.Native/KernelEngine.Render.Native.csproj" />
     <Project Path="src/csharp/render/KernelEngine.Render.Webgpu/KernelEngine.Render.Webgpu.csproj" />
     <Project Path="src/csharp/result/KernelEngine.Result/KernelEngine.Result.csproj" />

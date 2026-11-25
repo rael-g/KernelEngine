@@ -4,6 +4,8 @@
     .fingerprint = 0x30f69361d86310a2,
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
+        .abi_spatial_node_types = .{ .path = "../abi/spatial_node_types" },
+        .ke_node_catalogue = .{ .path = "node_catalogue" },
         .ke_io_pending_reads = .{ .path = "../io/pending_reads" },
         .ke_input_names = .{ .path = "../input/names" },
         .ke_settings_schema = .{ .path = "../configuration/settings_schema" },

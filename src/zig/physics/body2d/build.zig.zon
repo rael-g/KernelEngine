@@ -4,6 +4,8 @@
     .fingerprint = 0x5ffee1f64f597ee6,
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
+        .abi_physics_node_types = .{ .path = "../../abi/physics_node_types" },
+        .ke_node_catalogue = .{ .path = "../../framework/node_catalogue" },
         .abi_framework_components = .{ .path = "../../abi/framework_components" },
         .abi_spatial_contract = .{ .path = "../../abi/spatial_contract" },
         .abi_physics_contract = .{ .path = "../../abi/physics_contract" },

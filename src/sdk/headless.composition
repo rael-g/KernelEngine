@@ -102,8 +102,20 @@ fixed_update = "fixed_update"
 update = "update"
 post_update = "post_update"
 
-[instance.engine_nodes]
-part = "engine_nodes"
+[instance.spatial_nodes]
+part = "spatial_nodes"
+
+[instance.render_nodes]
+part = "render_nodes"
+
+[instance.ui_nodes]
+part = "ui_nodes"
+
+[instance.audio_nodes]
+part = "audio_nodes"
+
+[instance.physics_nodes]
+part = "physics_nodes"
 
 [instance.assets]
 part = "asset_resolver"

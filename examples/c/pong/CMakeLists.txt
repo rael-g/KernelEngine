@@ -39,8 +39,7 @@ target_link_libraries(c_pong PRIVATE
     KernelEngine::ke_render_ui
     KernelEngine::ke_assembly_default
     KernelEngine::ke_assembly_toml
-    KernelEngine::ke_runner_window
-    KernelEngine::ke_engine_nodes)
+    KernelEngine::ke_runner_window)
 if(NOT WIN32)
     target_link_libraries(c_pong PRIVATE m)
 endif()

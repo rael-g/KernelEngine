@@ -2,6 +2,7 @@
 
 const abi_audio = @import("audio");
 const abi_ecs = @import("ecs");
+const abi_framework = @import("framework");
 const abi_logger = @import("logger");
 const abi_part = @import("part");
 const abi_result = @import("result");
@@ -33,4 +34,12 @@ pub fn soundCreate(ecs: ?*abi_ecs.c.ke_ecs, audio: ?*abi_audio.c.ke_audio, post_
 /// `audio` and `post_update`, `post_update` the ke_schedule_set its systems join.
 pub fn audioModuleParts(out_count: ?*usize) ?*const abi_part.c.ke_part {
     return c.ke_audio_module_parts(out_count);
+}
+
+/// Registers every type of `ke_audio_node_types` through types, each with the components its
+/// `with` describes.
+pub fn audioNodesCreate(types: ?*abi_framework.c.ke_node_types) Error!abi_part.c.ke_owner {
+    var written: abi_part.c.ke_owner = undefined;
+    try checkResult(c.ke_audio_nodes_create(types, &written));
+    return written;
 }

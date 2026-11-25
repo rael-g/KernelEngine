@@ -3,6 +3,7 @@
 const abi_asset_resolver = @import("asset_resolver");
 const abi_ecs = @import("ecs");
 const abi_extraction = @import("extraction");
+const abi_framework = @import("framework");
 const abi_logger = @import("logger");
 const abi_part = @import("part");
 const abi_render = @import("render");
@@ -83,6 +84,11 @@ pub const ke_schedule_execute_fn = ?*const fn (?*abi_schedule.c.ke_schedule_ctx,
 /// on the thread that called run. A failure fails the run before any wave starts.
 pub const ke_schedule_condition_fn = ?*const fn (?*anyopaque, ?*bool) callconv(.c) abi_result.c.ke_result;
 
+/// One call of a behaviour over the nodes of its type. The body walks them with next, which
+/// points self and fields at each node in turn; an on handler walks every pair of a node and an
+/// event, with event pointing at the event.
+pub const ke_node_behaviour_fn = ?*const fn (?*abi_framework.c.ke_node_ctx, ?*anyopaque) callconv(.c) abi_result.c.ke_result;
+
 /// Makes the label resolve, whose system "render.label.resolve", in update_set of update, gives
 /// each label of the main world the font it names. Every argument but out_resolve must outlive
 /// it.
@@ -109,3 +115,7 @@ pub extern fn ke_render_scene_resolve_systems_create(scene: ?*abi_render.c.ke_re
 /// `render_label_resolve` (nothing; `service`, `scene`, `ui`, `resolver`, optional, and
 /// `update`).
 pub extern fn ke_render_scene_parts(out_count: ?*usize) ?*const abi_part.c.ke_part;
+
+/// Registers every type of `ke_render_node_types` through types, each with the components its
+/// `with` describes.
+pub extern fn ke_render_nodes_create(types: ?*abi_framework.c.ke_node_types, out_owner: ?*abi_part.c.ke_owner) abi_result.c.ke_result;

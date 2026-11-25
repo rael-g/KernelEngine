@@ -12,6 +12,7 @@
     <ProjectReference Include="..\..\common\KernelEngine.Common\KernelEngine.Common.csproj" />
     <ProjectReference Include="..\..\assembly\KernelEngine.Part\KernelEngine.Part.csproj" />
     <ProjectReference Include="..\..\framework\KernelEngine.Framework\KernelEngine.Framework.csproj" />
+    <ProjectReference Include="..\..\framework\KernelEngine.Framework.Nodes\KernelEngine.Framework.Nodes.csproj" />
   </ItemGroup>
 
   <ItemGroup>

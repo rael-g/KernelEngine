@@ -11,7 +11,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\configuration\KernelEngine.Configuration\KernelEngine.Configuration.csproj" />
     <ProjectReference Include="..\..\framework\KernelEngine.Framework.Nodes\KernelEngine.Framework.Nodes.csproj" />
-    <ProjectReference Include="..\..\engine_nodes\KernelEngine.EngineNodes\KernelEngine.EngineNodes.csproj" />
+    <ProjectReference Include="..\..\render\KernelEngine.Render.Nodes\KernelEngine.Render.Nodes.csproj" />
     <ProjectReference Include="..\..\assembly\KernelEngine.Assembly\KernelEngine.Assembly.csproj" />
     <ProjectReference Include="..\..\scheduling\KernelEngine.Runner\KernelEngine.Runner.csproj" />
   </ItemGroup>

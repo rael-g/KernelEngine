@@ -1,8 +1,7 @@
 #include "pong.h"
 
-#include <kernel_engine/audio/component_fields.h>
-#include <kernel_engine/engine_nodes/engine_node_types.h>
-#include <kernel_engine/physics/component_fields.h>
+#include <kernel_engine/audio/node_types.h>
+#include <kernel_engine/physics/node_types.h>
 #include <kernel_engine/render/ui/component_fields.h>
 #include <kernel_engine/sdk/field.h>
 #include <kernel_engine/sdk/node.h>

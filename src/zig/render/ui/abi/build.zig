@@ -7,6 +7,7 @@ pub fn build(b: *std.Build) void {
     const abi = b.addModule("abi", .{ .root_source_file = b.path("render_ui_factory.zig") });
     abi.addImport("ecs", b.dependency("abi_ecs", .{}).module("abi"));
     abi.addImport("extraction", b.dependency("abi_extraction", .{}).module("abi"));
+    abi.addImport("framework", b.dependency("abi_framework", .{}).module("abi"));
     abi.addImport("logger", b.dependency("abi_logger", .{}).module("abi"));
     abi.addImport("part", b.dependency("abi_part", .{}).module("abi"));
     abi.addImport("render", b.dependency("abi_render", .{}).module("abi"));
@@ -24,11 +25,13 @@ pub fn build(b: *std.Build) void {
         \\#include <kernel_engine/render/ui/ui_create.h>
         \\#include <kernel_engine/render/ui/ui_systems_create.h>
         \\#include <kernel_engine/render/ui/render_ui_parts.h>
+        \\#include <kernel_engine/render/ui/ui_nodes_create.h>
     );
     const translated = b.addTranslateC(.{ .root_source_file = headers, .target = target, .optimize = optimize });
     translated.addIncludePath(b.path("../../../../c/tasks"));
     translated.addIncludePath(b.path("../../../../c/ecs"));
     translated.addIncludePath(b.path("../../../../c/render"));
+    translated.addIncludePath(b.path("../../../../c/framework"));
     translated.addIncludePath(b.path("../../../../c/logger"));
     translated.addIncludePath(b.path("../../../../c/math"));
     translated.addIncludePath(b.path("../../../../c/assembly"));
@@ -53,6 +56,7 @@ pub fn build(b: *std.Build) void {
     tests.root_module.addIncludePath(b.path("../../../../c/tasks"));
     tests.root_module.addIncludePath(b.path("../../../../c/ecs"));
     tests.root_module.addIncludePath(b.path("../../../../c/render"));
+    tests.root_module.addIncludePath(b.path("../../../../c/framework"));
     tests.root_module.addIncludePath(b.path("../../../../c/logger"));
     tests.root_module.addIncludePath(b.path("../../../../c/math"));
     tests.root_module.addIncludePath(b.path("../../../../c/assembly"));

@@ -6,6 +6,7 @@ pub fn build(b: *std.Build) void {
 
     const abi = b.addModule("abi", .{ .root_source_file = b.path("physics_body2d_factory.zig") });
     abi.addImport("ecs", b.dependency("abi_ecs", .{}).module("abi"));
+    abi.addImport("framework", b.dependency("abi_framework", .{}).module("abi"));
     abi.addImport("logger", b.dependency("abi_logger", .{}).module("abi"));
     abi.addImport("part", b.dependency("abi_part", .{}).module("abi"));
     abi.addImport("physics", b.dependency("abi_physics", .{}).module("abi"));
@@ -17,6 +18,7 @@ pub fn build(b: *std.Build) void {
         \\#include <kernel_engine/physics/body2d/body2d_module.h>
         \\#include <kernel_engine/physics/body2d/physics_body2d_log.h>
         \\#include <kernel_engine/physics/body2d/physics_body2d_parts.h>
+        \\#include <kernel_engine/physics/body2d/physics_nodes_create.h>
     );
     const translated = b.addTranslateC(.{ .root_source_file = headers, .target = target, .optimize = optimize });
     translated.addIncludePath(b.path("../../../../c/tasks"));

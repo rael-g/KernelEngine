@@ -9,6 +9,7 @@ using global::KernelEngine.Text;
 
 using KernelEngine.Ecs.Native;
 using KernelEngine.Extraction.Native;
+using KernelEngine.Framework.Nodes.Native;
 using KernelEngine.Part.Native;
 using KernelEngine.Render.Frame.Native;
 using KernelEngine.Render.Native;
@@ -33,4 +34,8 @@ public static unsafe partial class NativeMethods
     [DllImport("ke_render_ui", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_render_ui_parts", ExactSpelling = true)]
     [return: NativeTypeName("const ke_part *")]
     public static extern KernelEngine.Part.Native.ke_part* render_ui_parts([NativeTypeName("size_t *")] nuint* out_count);
+
+    [DllImport("ke_render_ui", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_ui_nodes_create", ExactSpelling = true)]
+    [return: NativeTypeName("ke_result")]
+    public static extern KernelEngine.Result.Native.Result ui_nodes_create([NativeTypeName("ke_node_types *")] KernelEngine.Framework.Nodes.Native.ke_node_types* types, [NativeTypeName("ke_owner *")] KernelEngine.Part.Native.ke_owner* out_owner);
 }

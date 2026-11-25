@@ -8,6 +8,7 @@ using global::KernelEngine.Text;
 
 using KernelEngine.Ecs.Native;
 using KernelEngine.Extraction.Native;
+using KernelEngine.Framework.Nodes.Native;
 using KernelEngine.Part.Native;
 using KernelEngine.Render.Frame.Native;
 using KernelEngine.Render.Native;

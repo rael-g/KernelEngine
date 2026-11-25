@@ -9,7 +9,6 @@
 #include <kernel_engine/configuration/configuration_create.h>
 #include <kernel_engine/configuration/toml/configuration_toml.h>
 #include <kernel_engine/ecs/ecs_flecs_parts.h>
-#include <kernel_engine/engine_nodes/engine_nodes_parts.h>
 #include <kernel_engine/extraction/default/extraction_default_parts.h>
 #include <kernel_engine/file_system/std/file_system_std_create.h>
 #include <kernel_engine/framework/framework_parts.h>
@@ -59,7 +58,7 @@ static inline ke_result ke_sdk_default_parts(ke_assembly *a)
 {
     static const ke_sdk_parts_fn libraries[] = {
         ke_job_system_enki_parts, ke_async_enki_parts, ke_io_std_parts, ke_input_default_parts, ke_ecs_flecs_parts,
-        ke_schedule_parts, ke_scheduler_parts, ke_framework_parts, ke_engine_nodes_parts, ke_physics_2d_box2d_parts,
+        ke_schedule_parts, ke_scheduler_parts, ke_framework_parts, ke_physics_2d_box2d_parts,
         ke_physics_body2d_parts, ke_extraction_default_parts, ke_window_glfw_parts, ke_gpu_device_webgpu_parts,
         ke_render_binder_grouped_parts, ke_render_service_parts, ke_render_graph_simple_parts, ke_view_space_parts,
         ke_render_camera_parts, ke_render_scene_parts, ke_render_frame_parts, ke_render_gbuffer_parts,

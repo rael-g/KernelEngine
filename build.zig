@@ -160,6 +160,7 @@ pub fn build(b: *std.Build) void {
     ctx.moduleTests("ke_input_names", .{ .target = target, .optimize = optimize }, .measured);
     ctx.moduleTests("ke_settings_schema", .{ .target = target, .optimize = optimize }, .measured);
     ctx.moduleTests("ke_part", .{ .target = target, .optimize = optimize }, .measured);
+    ctx.moduleTests("ke_node_catalogue", .{ .target = target, .optimize = optimize }, .measured);
 
     _ = ctx.member("ke_ecs_flecs", .{
         .target = target,
@@ -387,11 +388,6 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     }, &.{}, .has_tests);
 
-    _ = ctx.member("ke_engine_nodes", .{
-        .target = target,
-        .optimize = optimize,
-    }, &.{}, .has_tests);
-
     _ = ctx.member("ke_extraction_default", .{
         .target = target,
         .optimize = optimize,
@@ -611,7 +607,6 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ src_zig, "scheduling/schedule/include" }),
             b.pathJoin(&.{ src_c, "asset" }),
             b.pathJoin(&.{ src_c, "framework" }),
-            b.pathJoin(&.{ src_c, "engine_nodes" }),
             b.pathJoin(&.{ src_zig, "framework/include" }),
             vcpkg_include,
             b.pathJoin(&.{ src_c, "io" }),
@@ -659,7 +654,6 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ src_c, "ecs" }),
             b.pathJoin(&.{ src_c, "io" }),
             b.pathJoin(&.{ src_c, "framework" }),
-            b.pathJoin(&.{ src_c, "engine_nodes" }),
             b.pathJoin(&.{ src_c, "input" }),
             b.pathJoin(&.{ src_c, "io" }),
             b.pathJoin(&.{ src_c, "logger" }),
@@ -691,7 +685,6 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ src_zig, "assembly/default/include" }),
             b.pathJoin(&.{ src_zig, "assembly/toml/include" }),
             b.pathJoin(&.{ src_zig, "scheduling/runner_window/include" }),
-            b.pathJoin(&.{ src_zig, "engine_nodes/include" }),
             b.pathJoin(&.{ src_zig, "ecs/flecs/include" }),
             b.pathJoin(&.{ src_zig, "scheduling/scheduler/include" }),
             b.pathJoin(&.{ src_zig, "scheduling/schedule/include" }),
@@ -757,7 +750,6 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_assembly_default") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_assembly_toml") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_runner_window") }),
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_engine_nodes") }),
         }),
     }, &.{ctx.plugins_step});
     const pong_dir = b.pathJoin(&.{ root, "examples/c/pong" });
@@ -781,7 +773,6 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ src_c, "render" }),
             b.pathJoin(&.{ src_c, "io" }),
             b.pathJoin(&.{ src_c, "framework" }),
-            b.pathJoin(&.{ src_c, "engine_nodes" }),
             b.pathJoin(&.{ src_c, "input" }),
             b.pathJoin(&.{ src_c, "io" }),
             b.pathJoin(&.{ src_c, "tasks" }),
@@ -807,13 +798,15 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ src_zig, "configuration/include" }),
             b.pathJoin(&.{ src_zig, "configuration/toml/include" }),
             b.pathJoin(&.{ src_zig, "ecs/flecs/include" }),
-            b.pathJoin(&.{ src_zig, "engine_nodes/include" }),
             b.pathJoin(&.{ src_zig, "io/file_system_std/include" }),
             b.pathJoin(&.{ src_zig, "framework/include" }),
             b.pathJoin(&.{ src_zig, "input/default/include" }),
             b.pathJoin(&.{ src_zig, "io/std/include" }),
             b.pathJoin(&.{ src_zig, "tasks/job_enki/include" }),
             b.pathJoin(&.{ src_zig, "physics/body2d/include" }),
+            b.pathJoin(&.{ src_zig, "render/scene/include" }),
+            b.pathJoin(&.{ src_zig, "render/ui/include" }),
+            b.pathJoin(&.{ src_zig, "audio/module/include" }),
             b.pathJoin(&.{ src_zig, "physics/box2d/include" }),
             b.pathJoin(&.{ src_zig, "scheduling/runner_headless/include" }),
             b.pathJoin(&.{ src_zig, "scheduling/schedule/include" }),
@@ -826,7 +819,6 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_configuration") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_configuration_toml") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_ecs_flecs") }),
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_engine_nodes") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_file_system_std") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_framework") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_input_default") }),
@@ -834,6 +826,9 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_job_system_enki") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_physics_2d_box2d") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_physics_body2d") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_scene") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_ui") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_audio_module") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_runner_headless") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_schedule") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_scheduler") }),

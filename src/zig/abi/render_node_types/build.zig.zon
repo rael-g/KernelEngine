@@ -1,0 +1,16 @@
+.{
+    .name = .abi_render_node_types,
+    .version = "0.1.0",
+    .fingerprint = 0xd5f558a3784db050,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .abi_ecs = .{ .path = "../ecs" },
+        .abi_framework = .{ .path = "../framework" },
+        .abi_render_components = .{ .path = "../render_components" },
+        .abi_render_material = .{ .path = "../render_material" },
+        .abi_result = .{ .path = "../result" },
+        .abi_spatial = .{ .path = "../spatial" },
+        .abi_spatial_node_types = .{ .path = "../spatial_node_types" },
+    },
+    .paths = .{"."},
+}

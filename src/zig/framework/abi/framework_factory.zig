@@ -140,3 +140,11 @@ pub fn sceneFilesCreate(ecs: ?*abi_ecs.c.ke_ecs, node_types: ?*abi_framework.c.k
 pub fn frameworkParts(out_count: ?*usize) ?*const abi_part.c.ke_part {
     return c.ke_framework_parts(out_count);
 }
+
+/// Registers every type of `ke_spatial_node_types` through types, each with the components its
+/// `with` describes.
+pub fn spatialNodesCreate(types: ?*abi_framework.c.ke_node_types) Error!abi_part.c.ke_owner {
+    var written: abi_part.c.ke_owner = undefined;
+    try checkResult(c.ke_spatial_nodes_create(types, &written));
+    return written;
+}

@@ -4,6 +4,9 @@
     .fingerprint = 0x4bb1efb81c900ae3,
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
+        .abi_render_node_types = .{ .path = "../../abi/render_node_types" },
+        .abi_framework = .{ .path = "../../abi/framework" },
+        .ke_node_catalogue = .{ .path = "../../framework/node_catalogue" },
         .ke_part = .{ .path = "../../assembly/part" },
         .ke_hooked_systems = .{ .path = "../../hooked_systems" },
         .abi_part = .{ .path = "../../abi/part" },

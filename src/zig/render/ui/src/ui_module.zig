@@ -616,9 +616,14 @@ export fn ke_render_ui_systems_create(
     return R.ok;
 }
 
+comptime {
+    _ = @import("ui_nodes.zig");
+}
+
 pub const parts = [_]abi_part.c.ke_part{
     part.of(ke_render_ui_create, .{ .name = "render_ui", .slots = &.{"main", "render", "extraction", "service", "device", "frame"}, .set_log = @ptrCast(&@import("log").Destination("ke_render_ui").setLogCallback) }),
     part.of(ke_render_ui_systems_create, .{ .name = "render_ui_systems", .slots = &.{"ui"}, .hooks = &.{"render_prepare", "render_queue"}, .set_log = @ptrCast(&@import("log").Destination("ke_render_ui").setLogCallback) }),
+    part.of(@import("ui_nodes.zig").ke_ui_nodes_create, .{ .name = "ui_nodes", .slots = &.{"types"}, .set_log = @ptrCast(&@import("log").Destination("ke_render_ui").setLogCallback) }),
 };
 
 /// The library's parts.
@@ -804,7 +809,7 @@ test "creating and destroying ui passes leaves no block allocated" {
 test "the library's parts name render_ui, render_ui_systems and their slots" {
     var count: usize = 0;
     const all = ke_render_ui_parts(&count).?;
-    try std.testing.expectEqual(@as(usize, 2), count);
+    try std.testing.expectEqual(@as(usize, 3), count);
     try std.testing.expectEqualStrings("render_ui", std.mem.span(@as([*]const abi_part.c.ke_part, @ptrCast(all))[0].name.?));
     try std.testing.expectEqual(@as(usize, 6), @as([*]const abi_part.c.ke_part, @ptrCast(all))[0].slot_count);
     try std.testing.expectEqualStrings("render_ui_systems", std.mem.span(@as([*]const abi_part.c.ke_part, @ptrCast(all))[1].name.?));

@@ -262,10 +262,15 @@ export fn ke_render_label_resolve_create(
     return R.ok;
 }
 
+comptime {
+    _ = @import("render_nodes.zig");
+}
+
 pub const parts = [_]abi_part.c.ke_part{
     part.of(ke_render_scene_resolve_create, .{ .name = "render_scene_resolve", .slots = &.{"main", "render", "extraction", "service", "assets"}, .optional = &.{"assets"}, .set_log = @ptrCast(&@import("log").Destination("ke_render_scene").setLogCallback) }),
     part.of(ke_render_scene_resolve_systems_create, .{ .name = "render_scene_resolve_systems", .slots = &.{"scene"}, .hooks = &.{"update", "post_update"}, .set_log = @ptrCast(&@import("log").Destination("ke_render_scene").setLogCallback) }),
     part.of(ke_render_label_resolve_create, .{ .name = "render_label_resolve", .slots = &.{"service", "scene", "ui", "resolver"}, .hooks = &.{"update"}, .optional = &.{"resolver"}, .set_log = @ptrCast(&@import("log").Destination("ke_render_scene").setLogCallback) }),
+    part.of(@import("render_nodes.zig").ke_render_nodes_create, .{ .name = "render_nodes", .slots = &.{"types"}, .set_log = @ptrCast(&@import("log").Destination("ke_render_scene").setLogCallback) }),
 };
 
 /// The library's parts.
@@ -408,7 +413,7 @@ test "creating and destroying the scene resolve and the label resolve leaves no 
 test "the library's parts name render_scene_resolve, render_scene_resolve_systems, render_label_resolve and their slots" {
     var count: usize = 0;
     const all = ke_render_scene_parts(&count).?;
-    try std.testing.expectEqual(@as(usize, 3), count);
+    try std.testing.expectEqual(@as(usize, 4), count);
     try std.testing.expectEqualStrings("render_scene_resolve", std.mem.span(@as([*]const abi_part.c.ke_part, @ptrCast(all))[0].name.?));
     try std.testing.expectEqual(@as(usize, 5), @as([*]const abi_part.c.ke_part, @ptrCast(all))[0].slot_count);
     try std.testing.expectEqualStrings("render_scene_resolve_systems", std.mem.span(@as([*]const abi_part.c.ke_part, @ptrCast(all))[1].name.?));

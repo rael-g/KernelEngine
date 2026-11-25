@@ -154,3 +154,7 @@ pub extern fn ke_scene_files_create(ecs: ?*abi_ecs.c.ke_ecs, node_types: ?*abi_f
 /// `ecs`, `node_types`, `assets`, `io`, `first_scene`). A slot named after a phase takes the
 /// ke_schedule_set its systems join.
 pub extern fn ke_framework_parts(out_count: ?*usize) ?*const abi_part.c.ke_part;
+
+/// Registers every type of `ke_spatial_node_types` through types, each with the components its
+/// `with` describes.
+pub extern fn ke_spatial_nodes_create(types: ?*abi_framework.c.ke_node_types, out_owner: ?*abi_part.c.ke_owner) abi_result.c.ke_result;

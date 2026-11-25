@@ -1071,7 +1071,15 @@ ke_scene_files_handle size=16 align=8
   ref 0
   destroy 8
 
-[engine_node_types]
+[spatial_node_types]
+
+[render_node_types]
+
+[ui_node_types]
+
+[audio_node_types]
+
+[physics_node_types]
 
 [input_actions]
 ke_input_actions size=144 align=8

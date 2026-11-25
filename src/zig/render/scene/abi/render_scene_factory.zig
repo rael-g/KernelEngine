@@ -3,6 +3,7 @@
 const abi_asset_resolver = @import("asset_resolver");
 const abi_ecs = @import("ecs");
 const abi_extraction = @import("extraction");
+const abi_framework = @import("framework");
 const abi_logger = @import("logger");
 const abi_part = @import("part");
 const abi_render = @import("render");
@@ -60,4 +61,12 @@ pub fn renderSceneResolveSystemsCreate(scene: ?*abi_render.c.ke_render_scene_res
 /// `update`).
 pub fn renderSceneParts(out_count: ?*usize) ?*const abi_part.c.ke_part {
     return c.ke_render_scene_parts(out_count);
+}
+
+/// Registers every type of `ke_render_node_types` through types, each with the components its
+/// `with` describes.
+pub fn renderNodesCreate(types: ?*abi_framework.c.ke_node_types) Error!abi_part.c.ke_owner {
+    var written: abi_part.c.ke_owner = undefined;
+    try checkResult(c.ke_render_nodes_create(types, &written));
+    return written;
 }

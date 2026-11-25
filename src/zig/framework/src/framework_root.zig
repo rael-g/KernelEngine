@@ -16,6 +16,7 @@ comptime {
     _ = @import("node_types.zig");
     _ = @import("input_actions.zig");
     _ = @import("scene_files.zig");
+    _ = @import("spatial_nodes.zig");
     _ = @import("scene_values.zig");
     _ = @import("scene_names.zig");
     _ = @import("framework_parts.zig");
